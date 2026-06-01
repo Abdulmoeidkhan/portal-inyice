@@ -1,0 +1,274 @@
+{
+    "AA": {
+        "name": "American Airlines",
+        "prefix": "001"
+    },
+    "DL": {
+        "name": "Delta Air Lines",
+        "prefix": "006"
+    },
+    "UA": {
+        "name": "United Airlines",
+        "prefix": "016"
+    },
+    "AC": {
+        "name": "Air Canada",
+        "prefix": "014"
+    },
+    "BA": {
+        "name": "British Airways",
+        "prefix": "125"
+    },
+    "LH": {
+        "name": "Lufthansa",
+        "prefix": "220"
+    },
+    "AF": {
+        "name": "Air France",
+        "prefix": "057"
+    },
+    "KL": {
+        "name": "KLM Royal Dutch Airlines",
+        "prefix": "074"
+    },
+    "AZ": {
+        "name": "ITA Airways",
+        "prefix": "055"
+    },
+    "IB": {
+        "name": "Iberia",
+        "prefix": "075"
+    },
+    "LX": {
+        "name": "Swiss International Air Lines",
+        "prefix": "724"
+    },
+    "OS": {
+        "name": "Austrian Airlines",
+        "prefix": "257"
+    },
+    "SN": {
+        "name": "Brussels Airlines",
+        "prefix": "082"
+    },
+    "TP": {
+        "name": "TAP Air Portugal",
+        "prefix": "047"
+    },
+    "SK": {
+        "name": "Scandinavian Airlines",
+        "prefix": "117"
+    },
+    "AY": {
+        "name": "Finnair",
+        "prefix": "105"
+    },
+    "LO": {
+        "name": "LOT Polish Airlines",
+        "prefix": "080"
+    },
+    "EK": {
+        "name": "Emirates",
+        "prefix": "176"
+    },
+    "QR": {
+        "name": "Qatar Airways",
+        "prefix": "157"
+    },
+    "EY": {
+        "name": "Etihad Airways",
+        "prefix": "607"
+    },
+    "TK": {
+        "name": "Turkish Airlines",
+        "prefix": "235"
+    },
+    "SV": {
+        "name": "Saudia",
+        "prefix": "065"
+    },
+    "PK": {
+        "name": "Pakistan International Airlines",
+        "prefix": "214"
+    },
+    "KU": {
+        "name": "Kuwait Airways",
+        "prefix": "229"
+    },
+    "WY": {
+        "name": "Oman Air",
+        "prefix": "910"
+    },
+    "GF": {
+        "name": "Gulf Air",
+        "prefix": "072"
+    },
+    "RJ": {
+        "name": "Royal Jordanian",
+        "prefix": "512"
+    },
+    "ME": {
+        "name": "Middle East Airlines",
+        "prefix": "076"
+    },
+    "MS": {
+        "name": "EgyptAir",
+        "prefix": "077"
+    },
+    "ET": {
+        "name": "Ethiopian Airlines",
+        "prefix": "071"
+    },
+    "KQ": {
+        "name": "Kenya Airways",
+        "prefix": "706"
+    },
+    "SA": {
+        "name": "South African Airways",
+        "prefix": "083"
+    },
+    "AT": {
+        "name": "Royal Air Maroc",
+        "prefix": "147"
+    },
+    "AI": {
+        "name": "Air India",
+        "prefix": "098"
+    },
+    "UK": {
+        "name": "Vistara",
+        "prefix": "228"
+    },
+    "6E": {
+        "name": "IndiGo",
+        "prefix": "312"
+    },
+    "UL": {
+        "name": "SriLankan Airlines",
+        "prefix": "603"
+    },
+    "BG": {
+        "name": "Biman Bangladesh Airlines",
+        "prefix": "997"
+    },
+    "TG": {
+        "name": "Thai Airways",
+        "prefix": "217"
+    },
+    "MH": {
+        "name": "Malaysia Airlines",
+        "prefix": "232"
+    },
+    "SQ": {
+        "name": "Singapore Airlines",
+        "prefix": "618"
+    },
+    "GA": {
+        "name": "Garuda Indonesia",
+        "prefix": "126"
+    },
+    "PR": {
+        "name": "Philippine Airlines",
+        "prefix": "079"
+    },
+    "VN": {
+        "name": "Vietnam Airlines",
+        "prefix": "738"
+    },
+    "NH": {
+        "name": "All Nippon Airways",
+        "prefix": "205"
+    },
+    "JL": {
+        "name": "Japan Airlines",
+        "prefix": "131"
+    },
+    "KE": {
+        "name": "Korean Air",
+        "prefix": "180"
+    },
+    "OZ": {
+        "name": "Asiana Airlines",
+        "prefix": "988"
+    },
+    "CX": {
+        "name": "Cathay Pacific",
+        "prefix": "160"
+    },
+    "CI": {
+        "name": "China Airlines",
+        "prefix": "297"
+    },
+    "BR": {
+        "name": "EVA Air",
+        "prefix": "695"
+    },
+    "CA": {
+        "name": "Air China",
+        "prefix": "999"
+    },
+    "MU": {
+        "name": "China Eastern Airlines",
+        "prefix": "781"
+    },
+    "CZ": {
+        "name": "China Southern Airlines",
+        "prefix": "784"
+    },
+    "HU": {
+        "name": "Hainan Airlines",
+        "prefix": "880"
+    },
+    "QF": {
+        "name": "Qantas",
+        "prefix": "081"
+    },
+    "NZ": {
+        "name": "Air New Zealand",
+        "prefix": "086"
+    },
+    "FJ": {
+        "name": "Fiji Airways",
+        "prefix": "260"
+    },
+    "LA": {
+        "name": "LATAM Airlines",
+        "prefix": "045"
+    },
+    "JJ": {
+        "name": "LATAM Brasil",
+        "prefix": "957"
+    },
+    "AV": {
+        "name": "Avianca",
+        "prefix": "134"
+    },
+    "CM": {
+        "name": "Copa Airlines",
+        "prefix": "230"
+    },
+    "AM": {
+        "name": "Aeromexico",
+        "prefix": "139"
+    },
+    "AR": {
+        "name": "Aerolineas Argentinas",
+        "prefix": "044"
+    },
+    "UX": {
+        "name": "Air Europa",
+        "prefix": "996"
+    },
+    "SU": {
+        "name": "Aeroflot",
+        "prefix": "555"
+    },
+    "S7": {
+        "name": "S7 Airlines",
+        "prefix": "421"
+    },
+    "FV": {
+        "name": "Rossiya Airlines",
+        "prefix": "195"
+    }
+}

@@ -1,0 +1,320 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+@property --beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  --app-bg: #edf3fb;
+  --app-surface: #ffffff;
+  --app-surface-2: #f4f7fb;
+  --app-text: #0f1b2d;
+  --app-muted: #5c6b7f;
+  --app-primary: #1f7ae0;
+  --app-primary-2: #0ea5a1;
+  --app-border: rgba(15, 27, 45, 0.08);
+  --app-shadow: 0 12px 32px rgba(31, 61, 102, 0.16);
+  --hero-grad: radial-gradient(circle at 10% 20%, rgba(31, 122, 224, 0.22), transparent 40%),
+    radial-gradient(circle at 90% 12%, rgba(14, 165, 161, 0.2), transparent 42%),
+    linear-gradient(180deg, #f0f6ff 0%, #edf3fb 55%, #e7eef9 100%);
+  --aurora-a: #34d399;
+  --aurora-b: #38bdf8;
+  --aurora-c: #818cf8;
+}
+
+[data-style='slate'] {
+  --app-bg: #f1f5f9;
+  --app-surface: #ffffff;
+  --app-surface-2: #eef2f7;
+  --app-text: #0f172a;
+  --app-muted: #64748b;
+  --app-primary: #64748b;
+  --app-primary-2: #334155;
+  --hero-grad: radial-gradient(circle at 14% 16%, rgba(100, 116, 139, 0.2), transparent 40%),
+    radial-gradient(circle at 86% 12%, rgba(51, 65, 85, 0.18), transparent 42%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 55%, #e2e8f0 100%);
+  --aurora-a: #94a3b8;
+  --aurora-b: #64748b;
+  --aurora-c: #334155;
+}
+
+[data-style='sand'] {
+  --app-bg: #fbf5ea;
+  --app-surface: #fffdf8;
+  --app-surface-2: #f6efe1;
+  --app-text: #362714;
+  --app-muted: #8b6e49;
+  --app-primary: #b97316;
+  --app-primary-2: #8b5e34;
+  --hero-grad: radial-gradient(circle at 12% 18%, rgba(185, 115, 22, 0.2), transparent 40%),
+    radial-gradient(circle at 88% 10%, rgba(139, 94, 52, 0.18), transparent 42%),
+    linear-gradient(180deg, #fffaf0 0%, #fbf5ea 55%, #f5ebd7 100%);
+  --aurora-a: #f59e0b;
+  --aurora-b: #d97706;
+  --aurora-c: #c084fc;
+}
+
+[data-theme='dark'] {
+  --app-bg: #0c1320;
+  --app-surface: #101a2c;
+  --app-surface-2: #152238;
+  --app-text: #e4ecf8;
+  --app-muted: #9caec9;
+  --app-primary: #54a2ff;
+  --app-primary-2: #2dd4bf;
+  --app-border: rgba(148, 163, 184, 0.2);
+  --app-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
+  --hero-grad: radial-gradient(circle at 10% 20%, rgba(84, 162, 255, 0.18), transparent 40%),
+    radial-gradient(circle at 90% 12%, rgba(45, 212, 191, 0.14), transparent 42%),
+    linear-gradient(180deg, #0f1829 0%, #0d1522 50%, #0c1320 100%);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+}
+
+body {
+  background: var(--hero-grad);
+  color: var(--app-text);
+  transition: background 0.35s ease, color 0.35s ease;
+}
+
+.center-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.app-sider {
+  border-right: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow);
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent) !important;
+}
+
+.app-sider .ant-layout-sider-children {
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent) !important;
+}
+
+.app-nav-menu,
+.app-nav-menu.ant-menu-light,
+.app-nav-menu.ant-menu-dark {
+  background: transparent !important;
+}
+
+.brand-block {
+  position: relative;
+  padding: 22px 18px 14px;
+  overflow: hidden;
+}
+
+.brand-block h2 {
+  color: var(--app-text);
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.brand-caption {
+  color: var(--app-muted);
+}
+
+.brand-glow {
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  top: -90px;
+  left: -60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(31, 122, 224, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.app-main {
+  background: transparent;
+}
+
+.app-header {
+  height: 72px;
+  line-height: 72px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.route-transition {
+  animation: routeFade 0.35s ease;
+}
+
+.profile-btn {
+  color: var(--app-text) !important;
+}
+
+.app-content {
+  padding: 22px;
+}
+
+.page-shell {
+  min-height: calc(100vh - 126px);
+}
+
+.elevated-card {
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  box-shadow: var(--app-shadow);
+  padding: 22px;
+}
+
+.border-beam-aurora {
+  position: relative;
+  --beam-angle: 0deg;
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(color-mix(in srgb, var(--app-surface) 94%, transparent), color-mix(in srgb, var(--app-surface) 94%, transparent)) padding-box,
+    conic-gradient(from var(--beam-angle), var(--aurora-a), var(--aurora-b), var(--aurora-c), var(--aurora-a)) border-box;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  animation: auroraRotate 4.8s linear infinite;
+}
+
+.ant-card.border-beam-aurora {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(color-mix(in srgb, var(--app-surface) 96%, transparent), color-mix(in srgb, var(--app-surface) 96%, transparent)) padding-box,
+    conic-gradient(from var(--beam-angle), var(--aurora-a), var(--aurora-b), var(--aurora-c), var(--aurora-a)) border-box !important;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.ant-card.border-beam-aurora .ant-card-body,
+.ant-card.border-beam-aurora .ant-card-head {
+  background: transparent;
+}
+
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-grid {
+  width: 100%;
+  max-width: 1040px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1.1fr 0.9fr;
+}
+
+.auth-panel {
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  border: 1px solid var(--app-border);
+  border-radius: 20px;
+  box-shadow: var(--app-shadow);
+}
+
+.auth-hero {
+  padding: 34px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-hero::after {
+  content: '';
+  position: absolute;
+  right: -50px;
+  bottom: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(14, 165, 161, 0.3), transparent 68%);
+}
+
+.auth-form {
+  padding: 30px;
+}
+
+.page-fade-up {
+  animation: fadeUp 0.55s ease;
+}
+
+.page-fade-down {
+  animation: fadeDown 0.4s ease;
+}
+
+.stagger-1 { animation: fadeUp 0.45s ease both; }
+.stagger-2 { animation: fadeUp 0.55s ease both; }
+.stagger-3 { animation: fadeUp 0.65s ease both; }
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes routeFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auroraRotate {
+  from {
+    --beam-angle: 0deg;
+  }
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+@media (max-width: 960px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-content {
+    padding: 14px;
+  }
+}
+

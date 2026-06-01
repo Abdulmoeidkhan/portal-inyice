@@ -1,0 +1,114 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: inyice-laravel-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    # Expose locally for dev without Traefik. Set APP_HTTP_PORT= (empty) on VPS.
+    ports:
+      - "${APP_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./:/var/www/html
+      - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app_net
+
+  worker:
+    image: inyice-laravel-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: sh -c "php artisan queue:work --sleep=3 --tries=3 --timeout=90 --max-time=3600"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      app:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  scheduler:
+    image: inyice-laravel-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      app:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    # mysql_native_password plugin removed in 8.4; caching_sha2_password is default and works with PHP mysqlnd
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_DATABASE:-inyice}
+      MYSQL_USER: ${DB_USERNAME:-inyice}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-inyice}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "${DB_USERNAME:-inyice}", "-p${DB_PASSWORD:-inyice}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app_net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_net
+
+volumes:
+  mysql_data:
+
+networks:
+  app_net:
+    driver: bridge

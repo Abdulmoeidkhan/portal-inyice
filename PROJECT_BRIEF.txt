@@ -1,0 +1,135 @@
+================================================================================
+  inYice-Lite — PROJECT BRIEF
+  Last Updated: May 20, 2026
+================================================================================
+
+--------------------------------------------------------------------------------
+1. PROJECT PURPOSE
+--------------------------------------------------------------------------------
+inYice-Lite is a multi-tenant B2B and B2C order-bookkeeping platform for travel
+agencies. The product focus is intentionally narrow:
+
+- Company profile management
+- Limited agency staff management
+- Customer and vendor network management
+- Order bookkeeping with full lifecycle tracking
+- Full auditability of user actions and order changes
+
+This scope excludes expense management, attendance, and shift management.
+
+--------------------------------------------------------------------------------
+2. COMPANY INFO
+--------------------------------------------------------------------------------
+Each agency manages its own company profile and operational identity, including
+business details required for order and invoice operations.
+
+- Company-level setup and ownership
+- Company-linked orders, customers, and vendors
+- Company-scoped records for complete tenant isolation
+
+--------------------------------------------------------------------------------
+3. COMPANY STAFF (LIMITED TO 3 PER AGENCY)
+--------------------------------------------------------------------------------
+Each agency can create and operate with only three unique staff users,
+mapped to three business roles:
+
+- Admin
+- Sales
+- Accounts
+
+Rules:
+- Agency accounts are limited to these three users/roles.
+- The platform provider account can create unlimited employees.
+- Staff actions are always captured in activity/audit logs.
+
+--------------------------------------------------------------------------------
+4. CUSTOMER & VENDOR DATA MODEL
+--------------------------------------------------------------------------------
+The platform supports both B2B agency-to-agency relationships and agency-local
+B2C customer records.
+
+4.1 B2B AGENCY RELATIONSHIPS
+----------------------------
+- A company can mark itself as a vendor for other agencies.
+- Agencies can become each other's B2B customer/vendor counterpart.
+- B2B links are explicit and controlled by business records.
+
+4.2 B2C CUSTOMER OWNERSHIP
+--------------------------
+- Every agency keeps its own offline/direct customer database.
+- B2C customer data is private to the owning agency.
+- One agency cannot read or manage another agency's B2C customers.
+
+--------------------------------------------------------------------------------
+5. ORDER BOOKKEEPING & FULL LIFECYCLE
+--------------------------------------------------------------------------------
+The core business flow is lifecycle-based order bookkeeping.
+
+5.1 LIFECYCLE
+-------------
+Quote -> Order -> Confirm/Cancel -> Invoice/Refund/Void
+
+Business meaning:
+- Quote: Initial commercial offer.
+- Order: Accepted quote and active processing state.
+- Confirm: Operationally confirmed booking/order.
+- Cancel: Order cancelled before financial completion.
+- Invoice: Financial posting and customer billing.
+- Refund: Reversal after invoicing where applicable.
+- Void: Invoice/order invalidated as per control policy.
+
+5.2 ORDER RECORDING
+-------------------
+- Booking reference and order number tracking
+- Customer and vendor linkage
+- Staff ownership (who created/updated)
+- Notes and status history for audit-safe bookkeeping
+
+5.3 GDS-DRIVEN FLIGHT DATA CAPTURE
+----------------------------------
+Order capture supports GDS text parsing for flight-related bookkeeping.
+From GDS PNR content, the system can extract and structure:
+
+- Booking reference (PNR)
+- Passenger details and passenger type codes
+- Segment-level flight details (airline, route, dates/times, status)
+- GDS source markers (e.g., Sabre/Galileo)
+- Ticket-related details used in order records
+
+This parsed data is attached to order items to reduce manual entry and improve
+accuracy in quote/order/confirmation/invoice stages.
+
+--------------------------------------------------------------------------------
+6. TENANT ISOLATION & PLATFORM VISIBILITY
+--------------------------------------------------------------------------------
+Data visibility rules are strict:
+
+- Agency A cannot access Agency B data.
+- Agency B cannot access Agency A data.
+- Each agency operates in an isolated tenant space for customers, vendors,
+  and orders.
+- Only the platform provider has cross-tenant/global visibility.
+
+--------------------------------------------------------------------------------
+7. ACTIVITY LOGGING & AUDIT CONTROL
+--------------------------------------------------------------------------------
+System logging is mandatory for accountability and operations review.
+
+Track at minimum:
+- User sign-in activity
+- Order creation
+- Order lifecycle transitions (Quote, Order, Confirm, Cancel,
+  Invoice, Refund, Void)
+- Order edits
+- Order deletes
+
+Audit goals:
+- Who performed each action
+- What changed
+- When it changed
+
+================================================================================
+  NOTE: This brief intentionally covers project scope only.
+  Implementation packaging decision: single Laravel project, containerized
+  with Docker for isolated runtime environments.
+================================================================================
