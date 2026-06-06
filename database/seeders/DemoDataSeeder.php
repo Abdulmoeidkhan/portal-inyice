@@ -13,7 +13,6 @@ use App\Models\OrderItem;
 use App\Models\CashAccount;
 use App\Models\BankAccount;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DemoDataSeeder extends Seeder
 {
@@ -62,7 +61,7 @@ class DemoDataSeeder extends Seeder
             'role_id' => $adminRole->id,
             'name' => 'Admin User',
             'email' => 'admin@demoagency.com',
-            'password' => Hash::make('password123'),
+            'password' => 'password123',
         ]);
 
         $salesUser = User::create([
@@ -71,7 +70,7 @@ class DemoDataSeeder extends Seeder
             'role_id' => $salesRole->id,
             'name' => 'Sales User',
             'email' => 'sales@demoagency.com',
-            'password' => Hash::make('password123'),
+            'password' => 'password123',
         ]);
 
         // Create customers

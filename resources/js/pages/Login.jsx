@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Checkbox, Divider, Typography, Space } from 'antd';
+import { App as AntdApp, Form, Input, Button, Card, Checkbox, Divider, Typography, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const { message } = AntdApp.useApp();
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -26,8 +27,12 @@ export default function Login({ onLoginSuccess }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Invalid credentials');
+        const error = await response.json().catch(() => ({}));
+        const validationError = error?.errors
+          ? Object.values(error.errors).flat().join(' ')
+          : null;
+
+        throw new Error(validationError || error.error || 'Invalid credentials');
       }
 
       const data = await response.json();
@@ -53,7 +58,7 @@ export default function Login({ onLoginSuccess }) {
           <Paragraph>
             One focused workspace for sales, invoicing, payments, and reporting. Designed for fast operations and clear financial visibility.
           </Paragraph>
-          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             <TextRow label="Operational speed" value="Quote to payment flow" />
             <TextRow label="Finance control" value="Aging, revenue, settlements" />
             <TextRow label="Security" value="Tenant-isolated + role based" />

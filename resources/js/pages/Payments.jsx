@@ -111,7 +111,7 @@ export default function Payments() {
         onOk={recordPayment}
         onCancel={() => setPaymentModal(false)}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <InputNumber
             style={{ width: '100%' }}
             min={0}
@@ -127,7 +127,6 @@ export default function Payments() {
               { label: 'Cash', value: 'cash' },
               { label: 'Bank Transfer', value: 'bank_transfer' },
               { label: 'Check', value: 'check' },
-              { label: 'Card', value: 'card' },
             ]}
             onChange={(value) => setPaymentData((prev) => ({ ...prev, payment_method: value }))}
           />

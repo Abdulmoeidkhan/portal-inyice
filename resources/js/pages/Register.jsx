@@ -301,8 +301,8 @@ export default function Register({ onRegistered }) {
             </Paragraph>
 
             <div className="elevated-card" style={{ textAlign: 'left', marginBottom: 20 }}>
-              <Space direction="vertical" size={4}>
-                <Text><strong>Admin Email:</strong> {registered.user.email}</Text>
+              <Space orientation="vertical" size={4}>
+                  <Text><strong>Admin Email:</strong> {registered.user.email}</Text>
                 <Text><strong>Agency:</strong> {registered.user.tenant_name}</Text>
                 <Text><strong>Company:</strong> {registered.user.company_name}</Text>
               </Space>

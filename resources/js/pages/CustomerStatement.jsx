@@ -81,7 +81,7 @@ export default function CustomerStatement() {
       <h1>Customer Statement</h1>
 
       <Card style={{ marginBottom: '20px' }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
           <Select
             placeholder="Select Customer"
             style={{ width: '100%' }}

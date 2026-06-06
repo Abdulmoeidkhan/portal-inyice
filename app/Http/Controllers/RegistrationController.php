@@ -8,7 +8,6 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\CashAccount;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -102,7 +101,7 @@ class RegistrationController extends Controller
                     'role_id' => $adminRole->id,
                     'name' => $validated['admin_name'],
                     'email' => $validated['admin_email'],
-                    'password' => Hash::make($validated['admin_password']),
+                    'password' => $validated['admin_password'],
                 ]);
 
                 // Create default cash account

@@ -2,9 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
+use App\Models\Role;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -24,12 +26,44 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $tenant = Tenant::query()->first() ?? Tenant::query()->create([
+            'uid' => (string) Str::ulid(),
+            'code' => 'demo001',
+            'name' => 'Demo Tenant',
+            'is_active' => true,
+        ]);
+
+        $company = Company::query()->where('tenant_id', $tenant->id)->first()
+            ?? Company::query()->create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $tenant->id,
+                'legal_name' => 'Demo Company Ltd',
+                'display_name' => 'Demo Company',
+                'email' => 'info@demo.local',
+                'base_currency_code' => 'PKR',
+                'default_timezone' => 'UTC',
+                'is_active' => true,
+            ]);
+
+        $role = Role::query()->where('tenant_id', $tenant->id)->where('code', 'admin')->first()
+            ?? Role::query()->create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $tenant->id,
+                'code' => 'admin',
+                'name' => 'Admin',
+                'is_system' => false,
+            ]);
+
         return [
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $tenant->id,
+            'company_id' => $company->id,
+            'role_id' => $role->id,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'password' => static::$password ??= 'password',
+            'is_active' => true,
         ];
     }
 

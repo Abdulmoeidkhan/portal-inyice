@@ -2,10 +2,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd';
 import enUS from 'antd/locale/en_US';
 import '../css/app.css';
-import App from './pages/App';
+import MainApp from './pages/App';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
@@ -49,14 +49,16 @@ function RootApp() {
         },
       }}
     >
-      <BrowserRouter>
-        <App
-          themeMode={themeMode}
-          themeStyle={themeStyle}
-          onChangeThemeStyle={setThemeStyle}
-          onToggleTheme={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-        />
-      </BrowserRouter>
+      <AntdApp>
+        <BrowserRouter>
+          <MainApp
+            themeMode={themeMode}
+            themeStyle={themeStyle}
+            onChangeThemeStyle={setThemeStyle}
+            onToggleTheme={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+          />
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   );
 }
