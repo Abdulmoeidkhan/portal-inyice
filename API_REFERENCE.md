@@ -21,6 +21,165 @@ curl -X GET http://localhost:8000/api/v1/user \
 
 ---
 
+## Order / Quotation Management
+
+**Parse GDS Text (Sabre/Galileo)**
+```bash
+curl -X POST http://localhost:8000/api/v1/orders/parse-gds \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gds_source": "sabre",
+    "raw_text": "PASTE COMPLETE GDS TEXT"
+  }'
+```
+
+**Create Quotation/Order from Voucher Pattern**
+```bash
+curl -X POST http://localhost:8000/api/v1/orders/create-from-voucher \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": 1,
+    "company_id": 1,
+    "vendor_id": 1,
+    "currency_code": "PKR",
+    "status": "quote",
+    "notes": "Created from voucher",
+    "voucher": {
+      "voucher_no": "VCH-1001",
+      "issue_date": "2026-06-08",
+      "travel_type": "UMRAH",
+      "package_type": "HOTEL+TRANSFER",
+      "booking_reference": "ABC123",
+      "gds_source": "sabre",
+      "gds_parsed_record_id": 10,
+      "emergency_contact": "24/7 Help: +92-300-0000000",
+      "contact": {
+        "company_name": "inYice Travels",
+        "executive_name": "Ali Khan",
+        "email": "ops@inyice.com",
+        "phone": "+92-300-0000000",
+        "address": "Karachi, Pakistan"
+      },
+      "active_sections": [
+        "flights",
+        "passengers",
+        "pricing",
+        "hotels",
+        "transfers",
+        "city_tours",
+        "visa",
+        "other_services"
+      ],
+      "flights": [
+        {
+          "gds_pnr": "ABC123",
+          "pnr": "ABC123",
+          "date": "2026-07-01",
+          "flight_no": "SV701",
+          "from": "KHI",
+          "to": "JED",
+          "departure": "10:10",
+          "arrival": "12:45",
+          "cabin": "Economy",
+          "booking_class": "T",
+          "baggage": "30KG"
+        }
+      ],
+      "passengers": [
+        {
+          "name": "MUHAMMAD ALI",
+          "passport_no": "AB123456",
+          "ticket_no": "1761234567890",
+          "visa_publisher": "KSA",
+          "visa_no": "VISA123",
+          "notes": ""
+        }
+      ],
+      "pricing": [
+        {
+          "pax_name": "MUHAMMAD ALI",
+          "flight_fare": "120000",
+          "hotel_price": "85000",
+          "visa_price": "25000",
+          "transfer_price": "15000",
+          "city_tour_ziarat_price": "10000",
+          "total": ""
+        }
+      ],
+      "hotels": [
+        {
+          "hcn": "HCN-1001",
+          "city": "Makkah",
+          "hotel_name": "Hotel A",
+          "room_type": "QUAD",
+          "check_in": "2026-07-01",
+          "check_out": "2026-07-10",
+          "lead_passenger": "MUHAMMAD ALI",
+          "notes": "Near Haram",
+          "amount": "85000"
+        }
+      ],
+      "transfers": [
+        {
+          "tn": "TN-1001",
+          "service": "Airport Pickup",
+          "from_city": "JED",
+          "to_city": "Makkah",
+          "vehicle": "GMC",
+          "contact_person": "Driver 1",
+          "notes": "",
+          "amount": "15000"
+        }
+      ],
+      "city_tours": [
+        {
+          "city": "Madinah",
+          "title": "Ziarat Tour",
+          "attractions": "Quba, Uhud",
+          "date": "2026-07-05",
+          "notes": "",
+          "amount": "10000"
+        }
+      ],
+      "visa": [
+        {
+          "passenger_name": "MUHAMMAD ALI",
+          "visa_no": "VISA123",
+          "publisher": "KSA",
+          "notes": "",
+          "amount": "25000"
+        }
+      ],
+      "other_services": [
+        {
+          "description": "Zam Zam",
+          "amount": "5000"
+        }
+      ]
+    }
+  }'
+```
+
+**List Orders / Quotations**
+```bash
+curl -X GET "http://localhost:8000/api/v1/orders?per_page=20" \
+  -H "Authorization: Bearer {token}"
+```
+
+**Get Order / Quotation Detail**
+```bash
+curl -X GET http://localhost:8000/api/v1/orders/{uid} \
+  -H "Authorization: Bearer {token}"
+```
+
+Flow:
+1. Create record with `status: quote` or `status: order`.
+2. Convert to invoice with `/api/v1/invoices/create-from-order` using `order_id`.
+
+---
+
 ## Invoice Management
 
 **Create Invoice from Order**

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\StatementController;
+use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,14 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::patch('/{uid}/mark-sent', 'markAsSent')->middleware('role:admin,accounts')->name('invoices.markAsSent');
         Route::patch('/{uid}/void', 'void')->middleware('role:admin,accounts')->name('invoices.void');
         Route::get('/{uid}/aging-status', 'agingStatus')->name('invoices.agingStatus');
+    });
+
+    // ========== ORDERS ==========
+    Route::prefix('orders')->controller(OrderController::class)->group(function () {
+        Route::get('/', 'index')->name('orders.list');
+        Route::get('/{uid}', 'show')->name('orders.show');
+        Route::post('/parse-gds', 'parseGds')->middleware('role:admin,sales')->name('orders.parseGds');
+        Route::post('/create-from-voucher', 'createFromVoucher')->middleware('role:admin,sales')->name('orders.createFromVoucher');
     });
 
     // ========== PAYMENTS ==========

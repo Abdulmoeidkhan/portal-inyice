@@ -1,251 +1,205 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Steps, Typography, Form, InputNumber, Button, message, Alert, Tabs, Input, Space, Descriptions, Tag, Divider } from 'antd';
+import { Card, Form, Steps, Tabs, Typography, message } from 'antd';
+import { createInvoiceFromOrderApi, createOrderFromVoucherApi, parseGdsApi } from '../services/salesFlowApi';
+import {
+  buildVoucherFromParsed,
+  createInitialVoucher,
+} from './sales-flow/defaults';
+import GdsParserCard from './sales-flow/GdsParserCard';
+import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
+import VoucherRowsSections from './sales-flow/VoucherRowsSections';
+import { ConvertInvoiceCard, CreateOrderCard } from './sales-flow/OrderInvoiceCards';
 
 const { Title, Paragraph } = Typography;
-const { TextArea } = Input;
-
-function parseSabreText(text) {
-  const bookingReference = text.match(/PN\s+([A-Z0-9]{6})/i)?.[1] || null;
-  const passengers = Array.from(text.matchAll(/\d+\.\s+([A-Z\s\/]+)\s+([A-Z]+)(?:\s+(\d+))?/g)).map((match) => ({
-    name: match[1].trim(),
-    ptc: match[2] || 'PAX',
-    age: match[3] ? Number(match[3]) : null,
-  }));
-  const segments = Array.from(text.matchAll(/\d+\s+([A-Z]{2})\s*(\d+)\s+([A-Z]{3})\s+([A-Z]{3})\s+(\d{2}[A-Z]{3})/g)).map((match) => ({
-    airline_code: match[1],
-    flight_number: match[2],
-    departure_airport: match[3],
-    arrival_airport: match[4],
-    departure_date: match[5],
-  }));
-
-  return { booking_reference: bookingReference, passengers, segments, ticket_info: [] };
-}
-
-function parseGalileoText(text) {
-  const bookingReference = text.match(/\(([A-Z0-9]{6})\)/i)?.[1] || null;
-  const passengers = Array.from(text.matchAll(/([A-Z\s]+)\/([A-Z]+)/g)).map((match) => ({
-    name: match[1].trim(),
-    ptc: match[2].trim(),
-  }));
-  const segments = Array.from(text.matchAll(/([A-Z]{2})\s+(\d{3,4})\s+([A-Z]{3})\s+([A-Z]{3})\s+(\d{1,2}[A-Z]{3})/g)).map((match) => ({
-    airline_code: match[1],
-    flight_number: match[2],
-    departure_airport: match[3],
-    arrival_airport: match[4],
-    departure_date: match[5],
-  }));
-
-  return { booking_reference: bookingReference, passengers, segments, ticket_info: [] };
-}
 
 export default function SalesFlow() {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [parserForm] = Form.useForm();
-  const [quoteForm] = Form.useForm();
-  const [form] = Form.useForm();
-  const [parsedResult, setParsedResult] = useState(null);
-  const [quoteDraft, setQuoteDraft] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('quote_draft') || 'null');
-    } catch {
-      return null;
-    }
-  });
+  const [gdsForm] = Form.useForm();
+  const [orderForm] = Form.useForm();
+  const [invoiceForm] = Form.useForm();
 
-  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const [voucher, setVoucher] = useState(createInitialVoucher());
+  const [parseResult, setParseResult] = useState(null);
+  const [createdOrder, setCreatedOrder] = useState(null);
+  const [createdInvoice, setCreatedInvoice] = useState(null);
 
-  const quoteHint = useMemo(() => {
-    if (!parsedResult) {
-      return 'Paste Sabre or Galileo text in the GDS parser box, or create a manual quote draft below.';
+  const [loadingParse, setLoadingParse] = useState(false);
+  const [loadingOrder, setLoadingOrder] = useState(false);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+
+  const parsedHint = useMemo(() => {
+    if (!parseResult) {
+      return 'Parse Sabre/Galileo text to pre-fill booking reference, flights, and passengers.';
     }
 
-    return `Parsed ${parsedResult.passengers.length || 0} passenger(s) and ${parsedResult.segments.length || 0} segment(s). Start quote from this extracted travel data.`;
-  }, [parsedResult]);
+    const passengerCount = parseResult.parsed?.passengers?.length || 0;
+    const segmentCount = parseResult.parsed?.segments?.length || 0;
+    return `Parsed ${passengerCount} passenger(s) and ${segmentCount} flight segment(s).`;
+  }, [parseResult]);
 
-  const parseGds = async ({ gds_source, raw_text }) => {
+  const setVoucherField = (field, value) => {
+    setVoucher((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const setContactField = (field, value) => {
+    setVoucher((prev) => ({ ...prev, contact: { ...prev.contact, [field]: value } }));
+  };
+
+  const setRowField = (section, idx, field, value) => {
+    setVoucher((prev) => ({
+      ...prev,
+      [section]: prev[section].map((row, rowIdx) => (rowIdx === idx ? { ...row, [field]: value } : row)),
+    }));
+  };
+
+  const addRow = (section, factory) => {
+    setVoucher((prev) => ({ ...prev, [section]: [...prev[section], factory()] }));
+  };
+
+  const removeRow = (section, idx) => {
+    setVoucher((prev) => {
+      if (prev[section].length <= 1) {
+        return prev;
+      }
+      return { ...prev, [section]: prev[section].filter((_, rowIdx) => rowIdx !== idx) };
+    });
+  };
+
+  const handleParse = async ({ gds_source, raw_text }) => {
+    setLoadingParse(true);
     try {
-      const parsed = gds_source === 'sabre' ? parseSabreText(raw_text) : parseGalileoText(raw_text);
-      setParsedResult({ ...parsed, gds_source, raw_text });
-      message.success('GDS text parsed on frontend');
-    } catch {
-      message.error('Could not parse GDS text');
+      const data = await parseGdsApi({ gds_source, raw_text });
+      setParseResult(data);
+      setVoucher((prev) => {
+        const nextVoucher = buildVoucherFromParsed(prev, gds_source, data.parsed);
+        return {
+          ...nextVoucher,
+          gds_parsed_record_id: data.gds_record?.id || nextVoucher.gds_parsed_record_id,
+        };
+      });
+      message.success('GDS parsed and voucher fields pre-filled.');
+    } catch (error) {
+      message.error(error.message || 'GDS parse failed');
+    } finally {
+      setLoadingParse(false);
     }
   };
 
-  const startQuoteDraft = async (values) => {
-    const draft = {
-      ...values,
-      gds_source: parsedResult?.gds_source || null,
-      booking_reference: parsedResult?.booking_reference || null,
-      passengers: parsedResult?.passengers || [],
-      segments: parsedResult?.segments || [],
-      created_at: new Date().toISOString(),
-    };
-
-    localStorage.setItem('quote_draft', JSON.stringify(draft));
-    setQuoteDraft(draft);
-    message.success('Quote draft started on frontend');
-  };
-
-  const createInvoiceFromOrder = async ({ order_id }) => {
-    setLoading(true);
-    setResult(null);
-
+  const handleCreateOrder = async (values) => {
+    setLoadingOrder(true);
+    setCreatedOrder(null);
     try {
-      const response = await fetch('/api/v1/invoices/create-from-order', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ order_id }),
+      const data = await createOrderFromVoucherApi({
+        company_id: values.company_id || undefined,
+        customer_id: values.customer_id,
+        vendor_id: values.vendor_id || undefined,
+        currency_code: values.currency_code || undefined,
+        status: values.status || 'quote',
+        notes: values.notes || null,
+        voucher,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Could not create invoice from order');
-      }
-
-      setResult(data.invoice);
-      message.success('Invoice created from order');
+      setCreatedOrder(data.order);
+      invoiceForm.setFieldsValue({ order_id: data.order.id });
+      message.success('Order/quotation created from voucher data');
     } catch (error) {
-      message.error(error.message || 'Action failed');
+      message.error(error.message || 'Order creation failed');
     } finally {
-      setLoading(false);
+      setLoadingOrder(false);
+    }
+  };
+
+  const handleCreateInvoice = async ({ order_id }) => {
+    setLoadingInvoice(true);
+    setCreatedInvoice(null);
+    try {
+      const data = await createInvoiceFromOrderApi({ order_id });
+      setCreatedInvoice(data.invoice);
+      message.success('Invoice created successfully');
+    } catch (error) {
+      message.error(error.message || 'Invoice creation failed');
+    } finally {
+      setLoadingInvoice(false);
     }
   };
 
   return (
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Quotes Workspace</Title>
-        <Paragraph type="secondary" style={{ marginTop: 8 }}>
-          This is where you start making a quote. The GDS parser box is below on the frontend.
+        <Title level={2} style={{ margin: 0 }}>Voucher to Order Workspace</Title>
+        <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+          Follow this flow: Parse GDS, then create quotation/order, then convert to invoice.
         </Paragraph>
       </div>
 
       <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
         <Steps
-          current={2}
+          current={1}
           items={[
-            { title: 'Quote', description: 'Start quote draft' },
-            { title: 'Order', description: 'Confirm booking order' },
-            { title: 'Invoice', description: 'Generate invoice from order' },
+            { title: 'Parse GDS', description: 'Extract flights and passengers' },
+            { title: 'Create Quotation/Order', description: 'Submit full voucher payload' },
+            { title: 'Convert to Invoice', description: 'Generate invoice from order' },
           ]}
         />
       </Card>
 
-      <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
-        <Alert showIcon type="info" message="Quote Entry Point" description={quoteHint} />
-      </Card>
-
       <Tabs
-        defaultActiveKey="quote"
+        defaultActiveKey="voucher"
         items={[
           {
-            key: 'quote',
-            label: 'Start Quote',
+            key: 'gds',
+            label: 'GDS Parser',
             children: (
-              <Card className="border-beam-aurora" title="Manual Quote Draft">
-                <Form layout="vertical" form={quoteForm} onFinish={startQuoteDraft}>
-                  <Form.Item name="customer_name" label="Customer Name" rules={[{ required: true, message: 'Customer name required' }]}>
-                    <Input placeholder="Enter customer or agency name" />
-                  </Form.Item>
-                  <Form.Item name="trip_summary" label="Trip Summary" rules={[{ required: true, message: 'Trip summary required' }]}>
-                    <TextArea rows={4} placeholder="Karachi to Dubai return, 2 pax, hotel + transfer" />
-                  </Form.Item>
-                  <Space wrap>
-                    <Form.Item name="quoted_amount" label="Quoted Amount">
-                      <InputNumber min={0} step={0.01} style={{ width: 220 }} placeholder="0.00" />
-                    </Form.Item>
-                    <Form.Item name="currency_code" label="Currency">
-                      <Input style={{ width: 120 }} placeholder="PKR" />
-                    </Form.Item>
-                  </Space>
-                  <div>
-                    <Button type="primary" htmlType="submit">Start Quote</Button>
-                  </div>
-                </Form>
-
-                {quoteDraft && (
-                  <>
-                    <Divider />
-                    <Descriptions column={1} bordered size="small" title="Current Frontend Quote Draft">
-                      <Descriptions.Item label="Customer">{quoteDraft.customer_name}</Descriptions.Item>
-                      <Descriptions.Item label="Trip Summary">{quoteDraft.trip_summary}</Descriptions.Item>
-                      <Descriptions.Item label="Quoted Amount">{quoteDraft.quoted_amount || 'N/A'} {quoteDraft.currency_code || ''}</Descriptions.Item>
-                      <Descriptions.Item label="Booking Reference">{quoteDraft.booking_reference || 'N/A'}</Descriptions.Item>
-                    </Descriptions>
-                  </>
-                )}
-              </Card>
+              <GdsParserCard
+                form={gdsForm}
+                loading={loadingParse}
+                parsedHint={parsedHint}
+                parseResult={parseResult}
+                onParse={handleParse}
+              />
             ),
           },
           {
-            key: 'gds',
-            label: 'GDS Parser Box',
+            key: 'voucher',
+            label: 'Voucher Fields',
             children: (
-              <Card className="border-beam-aurora" title="Frontend GDS Parser Box">
-                <Form layout="vertical" form={parserForm} onFinish={parseGds} initialValues={{ gds_source: 'sabre' }}>
-                  <Form.Item name="gds_source" label="GDS Source" rules={[{ required: true }]}>
-                    <Input placeholder="Use sabre or galileo" />
-                  </Form.Item>
-                  <Form.Item name="raw_text" label="Paste PNR / GDS Text" rules={[{ required: true, message: 'Paste raw GDS text' }]}>
-                    <TextArea rows={10} placeholder="Paste Sabre or Galileo text here" />
-                  </Form.Item>
-                  <Button type="primary" htmlType="submit">Parse on Frontend</Button>
-                </Form>
-
-                {parsedResult && (
-                  <>
-                    <Divider />
-                    <Descriptions bordered column={1} size="small" title="Parsed Output">
-                      <Descriptions.Item label="GDS Source">
-                        <Tag color="processing">{parsedResult.gds_source}</Tag>
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Booking Reference">{parsedResult.booking_reference || 'Not found'}</Descriptions.Item>
-                      <Descriptions.Item label="Passengers">{parsedResult.passengers.length}</Descriptions.Item>
-                      <Descriptions.Item label="Segments">{parsedResult.segments.length}</Descriptions.Item>
-                    </Descriptions>
-                  </>
-                )}
-              </Card>
+              <>
+                <VoucherHeaderCard
+                  voucher={voucher}
+                  setVoucherField={setVoucherField}
+                  setContactField={setContactField}
+                />
+                <VoucherRowsSections
+                  voucher={voucher}
+                  setRowField={setRowField}
+                  addRow={addRow}
+                  removeRow={removeRow}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'order',
+            label: 'Create Quotation/Order',
+            children: (
+              <CreateOrderCard
+                form={orderForm}
+                loading={loadingOrder}
+                createdOrder={createdOrder}
+                onCreateOrder={handleCreateOrder}
+              />
             ),
           },
           {
             key: 'invoice',
-            label: 'Create Invoice',
+            label: 'Convert Invoice',
             children: (
-              <Card className="border-beam-aurora" title="Create Invoice from Existing Order">
-                <Paragraph type="secondary">
-                  Once an order exists, enter its order ID here to generate the invoice.
-                </Paragraph>
-                <Form layout="inline" form={form} onFinish={createInvoiceFromOrder}>
-                  <Form.Item
-                    name="order_id"
-                    rules={[{ required: true, message: 'Order ID required' }]}
-                  >
-                    <InputNumber placeholder="Order ID" min={1} style={{ width: 200 }} />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" htmlType="submit" loading={loading}>Create Invoice</Button>
-                  </Form.Item>
-                </Form>
-
-                {result && (
-                  <Alert
-                    style={{ marginTop: 16 }}
-                    type="success"
-                    message={`Invoice ${result.invoice_number} created`}
-                    description={`Invoice UID: ${result.uid}`}
-                    showIcon
-                  />
-                )}
-              </Card>
+              <ConvertInvoiceCard
+                form={invoiceForm}
+                loading={loadingInvoice}
+                createdInvoice={createdInvoice}
+                onCreateInvoice={handleCreateInvoice}
+                canConvert={Boolean(createdOrder?.id)}
+              />
             ),
           },
         ]}

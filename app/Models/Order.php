@@ -28,10 +28,12 @@ class Order extends Model
         'notes',
         'gds_source', // 'sabre', 'galileo', etc.
         'gds_parsed_record_id', // Link to parsed GDS data
+        'meta',
     ];
 
     protected $casts = [
         'total_amount' => 'decimal:4',
+        'meta' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
