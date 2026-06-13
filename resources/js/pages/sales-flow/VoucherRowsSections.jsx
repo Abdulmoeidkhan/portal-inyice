@@ -1,5 +1,6 @@
 import React from 'react';
 import { Col, Input, Row, Typography } from 'antd';
+import { getAirportLabel } from './airportLookup';
 import RowGroupCard from './RowGroupCard';
 import {
   blankCityTour,
@@ -13,6 +14,22 @@ import {
 } from './defaults';
 
 const { Text } = Typography;
+
+const AirportInput = ({ label, value, onChange }) => {
+  const airportLabel = getAirportLabel(value);
+
+  return (
+    <>
+      <Text>{label}</Text>
+      <Input value={value} onChange={(e) => onChange(e.target.value.toUpperCase())} />
+      {airportLabel && (
+        <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.25, marginTop: 4 }}>
+          {airportLabel}
+        </Text>
+      )}
+    </>
+  );
+};
 
 export default function VoucherRowsSections({ voucher, setRowField, addRow, removeRow }) {
   return (
@@ -52,8 +69,12 @@ export default function VoucherRowsSections({ voucher, setRowField, addRow, remo
               <Col xs={24} md={6}><Text>Airline PNR</Text><Input value={row.pnr} onChange={(e) => setRowField('flights', idx, 'pnr', e.target.value)} /></Col>
               <Col xs={24} md={6}><Text>Date</Text><Input value={row.date} onChange={(e) => setRowField('flights', idx, 'date', e.target.value)} /></Col>
               <Col xs={24} md={6}><Text>Flight No</Text><Input value={row.flight_no} onChange={(e) => setRowField('flights', idx, 'flight_no', e.target.value)} /></Col>
-              <Col xs={24} md={6}><Text>From</Text><Input value={row.from} onChange={(e) => setRowField('flights', idx, 'from', e.target.value.toUpperCase())} /></Col>
-              <Col xs={24} md={6}><Text>To</Text><Input value={row.to} onChange={(e) => setRowField('flights', idx, 'to', e.target.value.toUpperCase())} /></Col>
+              <Col xs={24} md={6}>
+                <AirportInput label="From" value={row.from} onChange={(value) => setRowField('flights', idx, 'from', value)} />
+              </Col>
+              <Col xs={24} md={6}>
+                <AirportInput label="To" value={row.to} onChange={(value) => setRowField('flights', idx, 'to', value)} />
+              </Col>
               <Col xs={24} md={6}><Text>Departure</Text><Input value={row.departure} onChange={(e) => setRowField('flights', idx, 'departure', e.target.value)} /></Col>
               <Col xs={24} md={6}><Text>Arrival</Text><Input value={row.arrival} onChange={(e) => setRowField('flights', idx, 'arrival', e.target.value)} /></Col>
               <Col xs={24} md={8}><Text>Cabin</Text><Input value={row.cabin} onChange={(e) => setRowField('flights', idx, 'cabin', e.target.value)} /></Col>

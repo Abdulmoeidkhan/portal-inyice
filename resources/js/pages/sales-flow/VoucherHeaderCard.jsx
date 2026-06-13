@@ -1,11 +1,11 @@
 import React from 'react';
-import { Card, Col, Divider, Input, InputNumber, Row, Select, Typography } from 'antd';
+import { Card, Col, Input, InputNumber, Row, Select, Typography } from 'antd';
 import { optionalVoucherSections } from './defaults';
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
-export default function VoucherHeaderCard({ voucher, setVoucherField, setContactField }) {
+export default function VoucherHeaderCard({ voucher, setVoucherField }) {
   return (
     <>
       <Card className="border-beam-aurora" style={{ marginBottom: 12 }} title="Basic Voucher Information">
@@ -66,21 +66,12 @@ export default function VoucherHeaderCard({ voucher, setVoucherField, setContact
             />
           </Col>
         </Row>
-      </Card>
-
-      <Card className="border-beam-aurora" size="small" title="Company Contact" style={{ marginBottom: 12 }}>
-        <Row gutter={12}>
-          <Col xs={24} md={8}><Text>Company Name</Text><Input value={voucher.contact.company_name} onChange={(e) => setContactField('company_name', e.target.value)} /></Col>
-          <Col xs={24} md={8}><Text>Executive Name</Text><Input value={voucher.contact.executive_name} onChange={(e) => setContactField('executive_name', e.target.value)} /></Col>
-          <Col xs={24} md={8}><Text>Email</Text><Input value={voucher.contact.email} onChange={(e) => setContactField('email', e.target.value)} /></Col>
-        </Row>
         <Row gutter={12} style={{ marginTop: 12 }}>
-          <Col xs={24} md={8}><Text>Phone</Text><Input value={voucher.contact.phone} onChange={(e) => setContactField('phone', e.target.value)} /></Col>
-          <Col xs={24} md={16}><Text>Address</Text><Input value={voucher.contact.address} onChange={(e) => setContactField('address', e.target.value)} /></Col>
+          <Col xs={24}>
+            <Text>Emergency Contact / Notes</Text>
+            <TextArea rows={3} value={voucher.emergency_contact} onChange={(e) => setVoucherField('emergency_contact', e.target.value)} />
+          </Col>
         </Row>
-        <Divider style={{ marginTop: 12, marginBottom: 12 }} />
-        <Text>Emergency Contact / Notes</Text>
-        <TextArea rows={3} value={voucher.emergency_contact} onChange={(e) => setVoucherField('emergency_contact', e.target.value)} />
       </Card>
     </>
   );

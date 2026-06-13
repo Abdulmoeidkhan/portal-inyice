@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Form, Steps, Tabs, Typography, message } from 'antd';
-import { createInvoiceFromOrderApi, createOrderFromVoucherApi, parseGdsApi } from '../services/salesFlowApi';
+import { createInvoiceFromOrderApi, createOrderFromVoucherApi } from '../services/salesFlowApi';
 import {
   buildVoucherFromParsed,
   createInitialVoucher,
 } from './sales-flow/defaults';
+import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
@@ -12,12 +13,39 @@ import { ConvertInvoiceCard, CreateOrderCard } from './sales-flow/OrderInvoiceCa
 
 const { Title, Paragraph } = Typography;
 
+const getProfileContact = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return {
+      company_name: user.company_name || user.tenant_name || '',
+      executive_name: user.name || '',
+      email: user.company_email || user.email || '',
+      phone: user.company_phone || user.phone || '',
+      address: user.company_address || user.billing_address || user.address || '',
+    };
+  } catch {
+    return {};
+  }
+};
+
+const createVoucherWithProfileContact = () => {
+  const initialVoucher = createInitialVoucher();
+  return {
+    ...initialVoucher,
+    contact: {
+      ...initialVoucher.contact,
+      ...getProfileContact(),
+    },
+  };
+};
+
 export default function SalesFlow() {
   const [gdsForm] = Form.useForm();
   const [orderForm] = Form.useForm();
   const [invoiceForm] = Form.useForm();
 
-  const [voucher, setVoucher] = useState(createInitialVoucher());
+  const [activeTab, setActiveTab] = useState('voucher');
+  const [voucher, setVoucher] = useState(createVoucherWithProfileContact());
   const [parseResult, setParseResult] = useState(null);
   const [createdOrder, setCreatedOrder] = useState(null);
   const [createdInvoice, setCreatedInvoice] = useState(null);
@@ -28,20 +56,16 @@ export default function SalesFlow() {
 
   const parsedHint = useMemo(() => {
     if (!parseResult) {
-      return 'Parse Sabre/Galileo text to pre-fill booking reference, flights, and passengers.';
+      return 'Parse GDS text locally to pre-fill booking reference, flights, and passengers.';
     }
 
     const passengerCount = parseResult.parsed?.passengers?.length || 0;
-    const segmentCount = parseResult.parsed?.segments?.length || 0;
+    const segmentCount = parseResult.parsed?.flights?.length || parseResult.parsed?.segments?.length || 0;
     return `Parsed ${passengerCount} passenger(s) and ${segmentCount} flight segment(s).`;
   }, [parseResult]);
 
   const setVoucherField = (field, value) => {
     setVoucher((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const setContactField = (field, value) => {
-    setVoucher((prev) => ({ ...prev, contact: { ...prev.contact, [field]: value } }));
   };
 
   const setRowField = (section, idx, field, value) => {
@@ -64,19 +88,36 @@ export default function SalesFlow() {
     });
   };
 
-  const handleParse = async ({ gds_source, raw_text }) => {
+  const handleParse = ({ raw_text }) => {
     setLoadingParse(true);
     try {
-      const data = await parseGdsApi({ gds_source, raw_text });
+      const parsed = parseGdsData(raw_text);
+      const detectedSource = parsed.gds_source || 'other';
+      const data = {
+        success: true,
+        gds_record: {
+          id: null,
+          uid: 'local',
+          booking_reference: parsed.booking_reference,
+          gds_source: detectedSource,
+        },
+        parsed,
+      };
+
+      if (!parsed.flights.length && !parsed.passengers.length) {
+        throw new Error('No valid flights or passengers detected. Check the pasted GDS text format.');
+      }
+
       setParseResult(data);
       setVoucher((prev) => {
-        const nextVoucher = buildVoucherFromParsed(prev, gds_source, data.parsed);
+        const nextVoucher = buildVoucherFromParsed(prev, detectedSource, data.parsed);
         return {
           ...nextVoucher,
-          gds_parsed_record_id: data.gds_record?.id || nextVoucher.gds_parsed_record_id,
+          gds_parsed_record_id: null,
         };
       });
-      message.success('GDS parsed and voucher fields pre-filled.');
+      setActiveTab('voucher');
+      message.success('GDS parsed locally and voucher fields pre-filled.');
     } catch (error) {
       message.error(error.message || 'GDS parse failed');
     } finally {
@@ -88,6 +129,14 @@ export default function SalesFlow() {
     setLoadingOrder(true);
     setCreatedOrder(null);
     try {
+      const voucherPayload = {
+        ...voucher,
+        contact: {
+          ...getProfileContact(),
+          ...voucher.contact,
+        },
+      };
+
       const data = await createOrderFromVoucherApi({
         company_id: values.company_id || undefined,
         customer_id: values.customer_id,
@@ -95,7 +144,7 @@ export default function SalesFlow() {
         currency_code: values.currency_code || undefined,
         status: values.status || 'quote',
         notes: values.notes || null,
-        voucher,
+        voucher: voucherPayload,
       });
 
       setCreatedOrder(data.order);
@@ -143,7 +192,8 @@ export default function SalesFlow() {
       </Card>
 
       <Tabs
-        defaultActiveKey="voucher"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
             key: 'gds',
@@ -166,7 +216,6 @@ export default function SalesFlow() {
                 <VoucherHeaderCard
                   voucher={voucher}
                   setVoucherField={setVoucherField}
-                  setContactField={setContactField}
                 />
                 <VoucherRowsSections
                   voucher={voucher}

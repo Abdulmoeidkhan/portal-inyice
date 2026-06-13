@@ -77,7 +77,7 @@ class OrderController extends Controller
             'voucher.travel_type' => 'nullable|string|max:100',
             'voucher.package_type' => 'nullable|string|max:100',
             'voucher.booking_reference' => 'nullable|string|max:100',
-            'voucher.gds_source' => 'nullable|in:sabre,galileo',
+            'voucher.gds_source' => 'nullable|in:sabre,galileo,amadeus,other',
             'voucher.gds_parsed_record_id' => 'nullable|integer|exists:gds_parsed_records,id',
             'voucher.emergency_contact' => 'nullable|string',
             'voucher.contact' => 'nullable|array',
@@ -105,6 +105,21 @@ class OrderController extends Controller
 
         $voucher = $validated['voucher'];
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
+
+        $profileContact = array_filter([
+            'company_name' => $company->display_name,
+            'executive_name' => $user->name,
+            'email' => $company->email ?: $user->email,
+            'phone' => $company->phone,
+            'address' => $company->address,
+        ], fn ($value) => $value !== null && $value !== '');
+
+        $voucherContact = array_filter(
+            $voucher['contact'] ?? [],
+            fn ($value) => $value !== null && $value !== ''
+        );
+
+        $voucher['contact'] = array_merge($profileContact, $voucherContact);
 
         $order = DB::transaction(function () use ($validated, $voucher, $user, $tenantId, $companyId, $currencyCode) {
             $order = Order::create([
