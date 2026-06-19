@@ -12,10 +12,14 @@ class OrderNumberService
      */
     public function generateOrderNumber(int $companyId, int $tenantId): string
     {
-        $prefix = now()->format('Ymd'); // YYYYMMDD
+        $today = now();
+        $prefix = $today->format('Ymd'); // YYYYMMDD
         $sequence = Order::where('company_id', $companyId)
             ->where('tenant_id', $tenantId)
-            ->whereRaw("DATE_FORMAT(created_at, '%Y%m%d') = ?", [$prefix])
+            ->whereBetween('created_at', [
+                $today->copy()->startOfDay(),
+                $today->copy()->endOfDay(),
+            ])
             ->count() + 1;
 
         return sprintf('ORD-%s-%05d', $prefix, $sequence);

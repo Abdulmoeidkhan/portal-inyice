@@ -48,6 +48,7 @@ class InvoiceController extends Controller
         $status = $request->query('status');
         $customerId = $request->query('customer_id');
         $companyId = $request->query('company_id', auth()->user()->company_id);
+        $search = trim((string) $request->query('search', ''));
 
         $query = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
@@ -59,6 +60,18 @@ class InvoiceController extends Controller
 
         if ($customerId) {
             $query->where('customer_id', $customerId);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('order', function ($orderQuery) use ($search) {
+                        $orderQuery->where('order_number', 'like', "%{$search}%");
+                    });
+            });
         }
 
         $invoices = $query->orderByDesc('invoice_date')

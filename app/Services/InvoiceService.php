@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Order;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class InvoiceService
@@ -15,37 +16,51 @@ class InvoiceService
      */
     public function createFromOrder(Order $order): Invoice
     {
-        $invoice = new Invoice();
-        $invoice->uid = (string) Str::ulid();
-        $invoice->tenant_id = $order->tenant_id;
-        $invoice->company_id = $order->company_id;
-        $invoice->order_id = $order->id;
-        $invoice->customer_id = $order->customer_id;
-        $invoice->invoice_date = now()->toDateString();
-        $invoice->due_date = now()->addDays(30)->toDateString();
-        $invoice->currency_code = $order->company->base_currency_code;
-        $invoice->invoice_number = $this->generateInvoiceNumber($order->company_id);
-        $invoice->subtotal = $order->total_amount;
-        $invoice->tax_amount = 0;
-        $invoice->total_amount = $order->total_amount;
-        $invoice->outstanding_amount = $order->total_amount;
-        $invoice->fx_rate_to_base = 1;
-        $invoice->save();
+        return DB::transaction(function () use ($order): Invoice {
+            $existingInvoice = Invoice::where('tenant_id', $order->tenant_id)
+                ->where('order_id', $order->id)
+                ->first();
 
-        // Create invoice lines from order items
-        foreach ($order->items as $item) {
-            InvoiceLine::create([
-                'uid' => (string) Str::ulid(),
-                'tenant_id' => $order->tenant_id,
-                'invoice_id' => $invoice->id,
-                'description' => $item->description,
-                'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price,
-                'total_price' => $item->total_price,
-            ]);
-        }
+            if ($existingInvoice) {
+                return $existingInvoice->load('lines');
+            }
 
-        return $invoice->fresh(['lines']);
+            $order->loadMissing(['company', 'items']);
+
+            $invoice = new Invoice();
+            $invoice->uid = (string) Str::ulid();
+            $invoice->tenant_id = $order->tenant_id;
+            $invoice->company_id = $order->company_id;
+            $invoice->order_id = $order->id;
+            $invoice->customer_id = $order->customer_id;
+            $invoice->invoice_date = now()->toDateString();
+            $invoice->due_date = now()->addDays(30)->toDateString();
+            $invoice->currency_code = $order->currency_code ?: $order->company->base_currency_code;
+            $invoice->invoice_number = $this->generateInvoiceNumber($order->company_id);
+            $invoice->subtotal = $order->total_amount;
+            $invoice->tax_amount = 0;
+            $invoice->total_amount = $order->total_amount;
+            $invoice->outstanding_amount = $order->total_amount;
+            $invoice->status = 'issued';
+            $invoice->fx_rate_to_base = 1;
+            $invoice->save();
+
+            foreach ($order->items as $item) {
+                InvoiceLine::create([
+                    'uid' => (string) Str::ulid(),
+                    'tenant_id' => $order->tenant_id,
+                    'invoice_id' => $invoice->id,
+                    'description' => $item->description,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'total_price' => $item->total_price,
+                ]);
+            }
+
+            $order->update(['status' => 'invoice']);
+
+            return $invoice->fresh(['lines']);
+        });
     }
 
     /**

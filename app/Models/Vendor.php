@@ -68,6 +68,14 @@ class Vendor extends Model
     }
 
     /**
+     * Get payments made to this vendor.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
      * Scope to B2B vendors only
      */
     public function scopeB2b($query)

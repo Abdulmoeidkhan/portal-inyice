@@ -135,7 +135,7 @@ class DemoDataSeeder extends Seeder
                 'tenant_id' => $tenant->id,
                 'company_id' => $company->id,
                 'customer_id' => $i % 2 == 0 ? $customer1->id : $customer2->id,
-                'order_number' => app(\App\Services\OrderNumberService::class)->generateOrderNumber($company->id),
+                'order_number' => app(\App\Services\OrderNumberService::class)->generateOrderNumber($company->id, $tenant->id),
                 'order_date' => now()->subDays($i * 5)->toDateString(),
                 'status' => $i % 3 == 0 ? 'quote' : 'order',
                 'total_amount' => 50000 + ($i * 5000),

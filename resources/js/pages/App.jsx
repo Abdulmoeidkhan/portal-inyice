@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton } from 'antd';
+import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton, Drawer } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -11,14 +11,17 @@ import {
   ApartmentOutlined,
   IdcardOutlined,
   ShoppingCartOutlined,
+  TeamOutlined,
   LogoutOutlined,
   UserOutlined,
   SunOutlined,
   MoonOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 
 // Components
 import InvoiceList from './InvoiceList';
+import OrderList from './OrderList';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
 import Login from './Login';
@@ -28,6 +31,11 @@ import CompanyProfile from './CompanyProfile';
 import UserProfile from './UserProfile';
 import SalesFlow from './SalesFlow';
 import Payments from './Payments';
+import CustomerList from './CustomerList';
+import VendorList from './VendorList';
+import CustomerStatement from './CustomerStatement';
+import VendorStatement from './VendorStatement';
+import VendorPayments from './VendorPayments';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -48,6 +56,8 @@ function useAuthToken() {
 
 function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onChangeThemeStyle, onToggleTheme }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const selectedKey = menuItems
     .flatMap((item) => (item.children ? item.children : [item]))
     .find((item) => item.key === location.pathname)?.key || '/';
@@ -82,6 +92,24 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
     },
   ];
 
+  const navigation = (
+    <>
+      <div className="brand-block">
+        <div className="brand-glow" />
+        <h2>inYice Lite</h2>
+        <Text className="brand-caption">Travel Finance OS</Text>
+      </div>
+      <Menu
+        className="app-nav-menu"
+        theme={themeMode === 'dark' ? 'dark' : 'light'}
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        items={menuItems}
+        onClick={() => setMobileNavOpen(false)}
+      />
+    </>
+  );
+
   return (
     <Layout className="app-shell">
       <Sider
@@ -91,23 +119,32 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
         width={256}
         className="app-sider"
       >
-        <div className="brand-block">
-          <div className="brand-glow" />
-          <h2>inYice Lite</h2>
-          <Text className="brand-caption">Travel Finance OS</Text>
-        </div>
-        <Menu
-          className="app-nav-menu"
-          theme={themeMode === 'dark' ? 'dark' : 'light'}
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={menuItems}
-        />
+        {navigation}
       </Sider>
+
+      <Drawer
+        rootClassName="mobile-nav-drawer"
+        placement="left"
+        size="default"
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        styles={{ body: { padding: 0 } }}
+        title={null}
+        closeIcon={false}
+      >
+        {navigation}
+      </Drawer>
 
       <Layout className="app-main">
         <Header className="app-header page-fade-down">
-          <Space>
+          <Button
+            className="mobile-menu-btn"
+            type="text"
+            aria-label="Open navigation menu"
+            icon={<MenuOutlined />}
+            onClick={() => setMobileNavOpen(true)}
+          />
+          <Space className="header-actions" size="small">
             <Segmented
               size="small"
               value={themeStyle}
@@ -119,17 +156,18 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               ]}
             />
             <Button
+              className="theme-toggle-btn"
               type="default"
               icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
               onClick={onToggleTheme}
             >
-              {themeMode === 'dark' ? 'Light' : 'Dark'}
+              <span className="button-label">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
             </Button>
             <Dropdown menu={{ items: profileMenu }} trigger={['click']}>
               <Button type="text" className="profile-btn">
                 <Space>
                   <Avatar size="small" icon={<UserOutlined />} />
-                  <span>{user?.name || 'Account'}</span>
+                  <span className="account-name">{user?.name || 'Account'}</span>
                 </Space>
               </Button>
             </Dropdown>
@@ -141,12 +179,18 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<InvoiceList />} />
+              <Route path="/orders" element={<OrderList />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={<Payments />} />
+              <Route path="/vendor-payments" element={<VendorPayments />} />
+              <Route path="/customers" element={<CustomerList />} />
+              <Route path="/vendors" element={<VendorList />} />
               <Route path="/profile/company" element={<CompanyProfile />} />
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={<AgingReport />} />
               <Route path="/reports/revenue" element={<RevenueReport />} />
+              <Route path="/statements/customers" element={<CustomerStatement />} />
+              <Route path="/statements/vendors" element={<VendorStatement />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
@@ -210,8 +254,13 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
       children: [
         {
           key: '/sales-flow',
-          label: <Link to="/sales-flow">Quotes & GDS</Link>,
+          label: <Link to="/sales-flow">Create Order</Link>,
           icon: <ShoppingCartOutlined />,
+        },
+        {
+          key: '/orders',
+          label: <Link to="/orders">Orders</Link>,
+          icon: <FileTextOutlined />,
         },
         {
           key: '/invoices',
@@ -220,8 +269,28 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         },
         {
           key: '/payments',
-          label: <Link to="/payments">Payments</Link>,
+          label: <Link to="/payments">Customer Receipts</Link>,
           icon: <BankOutlined />,
+        },
+        {
+          key: '/vendor-payments',
+          label: <Link to="/vendor-payments">Vendor Payments</Link>,
+          icon: <BankOutlined />,
+        },
+      ],
+    },
+    {
+      key: 'master-data',
+      label: 'Master Data',
+      icon: <TeamOutlined />,
+      children: [
+        {
+          key: '/customers',
+          label: <Link to="/customers">Customers</Link>,
+        },
+        {
+          key: '/vendors',
+          label: <Link to="/vendors">Vendors</Link>,
         },
       ],
     },
@@ -249,6 +318,14 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         {
           key: '/reports/revenue',
           label: <Link to="/reports/revenue">Revenue Report</Link>,
+        },
+        {
+          key: '/statements/customers',
+          label: <Link to="/statements/customers">Customer Statement</Link>,
+        },
+        {
+          key: '/statements/vendors',
+          label: <Link to="/statements/vendors">Vendor Statement</Link>,
         },
       ],
     },

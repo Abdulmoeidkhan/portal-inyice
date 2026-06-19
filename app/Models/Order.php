@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\TenantAware;
 
 class Order extends Model
 {
-    use HasFactory, TenantAware;
+    use HasFactory, TenantAware, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',
@@ -103,11 +105,24 @@ class Order extends Model
     }
 
     /**
+     * Get the invoice generated from this order.
+     */
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
+    }
+
+    /**
      * Get all status history
      */
     public function statusHistory(): HasMany
     {
         return $this->hasMany(OrderStatusHistory::class)->orderByDesc('created_at');
+    }
+
+    public function vendorPaymentAllocations(): HasMany
+    {
+        return $this->hasMany(VendorPaymentAllocation::class);
     }
 
     /**
@@ -124,13 +139,14 @@ class Order extends Model
     public function canTransitionTo(string $newStatus): bool
     {
         $transitions = [
-            'quote' => ['order'],
-            'order' => ['confirm', 'cancel'],
-            'confirm' => ['invoice', 'refund'],
+            'quote' => ['order', 'confirm', 'cancel'],
+            'order' => ['confirm', 'cancel', 'invoice'],
+            'confirm' => ['invoice', 'cancel'],
             'cancel' => [],
-            'invoice' => ['paid', 'partial_paid'],
-            'refund' => [],
+            'invoice' => ['void', 'refund', 'partial_refund', 'paid', 'partial_paid'],
             'void' => [],
+            'refund' => [],
+            'partial_refund' => ['refund'],
             'paid' => [],
             'partial_paid' => ['paid'],
         ];

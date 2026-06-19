@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, message, Statistic, Skeleton, Empty } from 'antd';
+import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, Statistic, Skeleton, Empty } from 'antd';
+import { message } from '../services/feedback';
 import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
 
@@ -247,6 +248,7 @@ export default function RevenueReport() {
           <Card className="border-beam-aurora" title="Revenue by Period">
             <Spin spinning={loading}>
               <Table
+                scroll={{ x: 'max-content' }}
                 columns={columns}
                 dataSource={report.data}
                 rowKey="period"

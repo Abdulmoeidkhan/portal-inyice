@@ -6,6 +6,8 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\SecurityHeaders;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,12 +18,31 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $trustedProxies = array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', ''))));
+
+        $middleware->trustProxies(
+            at: $trustedProxies ?: null,
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_PREFIX
+        );
+
+        $middleware->throttleApi(
+            limiter: 'api',
+            redis: (bool) env('RATE_LIMITER_USE_REDIS', env('CACHE_STORE') === 'redis')
+        );
+
+        $middleware->append(SecurityHeaders::class);
+
         // Resolve tenant context for all requests
         $middleware->web(ResolveTenant::class);
 
         $middleware->alias([
             'active.user' => EnsureUserIsActive::class,
             'role' => RequireRole::class,
+            'security.headers' => SecurityHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

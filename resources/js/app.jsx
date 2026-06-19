@@ -6,8 +6,21 @@ import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd';
 import enUS from 'antd/locale/en_US';
 import '../css/app.css';
 import MainApp from './pages/App';
+import { setFeedbackMessage } from './services/feedback';
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const container = document.getElementById('root');
+const root = window.__inyiceRoot || ReactDOM.createRoot(container);
+window.__inyiceRoot = root;
+
+function FeedbackBridge() {
+  const { message } = AntdApp.useApp();
+
+  useEffect(() => {
+    setFeedbackMessage(message);
+  }, [message]);
+
+  return null;
+}
 
 function RootApp() {
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem('ui_theme') || 'light');
@@ -50,7 +63,8 @@ function RootApp() {
       }}
     >
       <AntdApp>
-        <BrowserRouter>
+        <FeedbackBridge />
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <MainApp
             themeMode={themeMode}
             themeStyle={themeStyle}

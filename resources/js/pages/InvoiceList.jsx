@@ -1,29 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Spin, message, Modal, InputNumber, Select, Input } from 'antd';
-import { DeleteOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Button, Card, Input, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { message } from '../services/feedback';
+import { useNavigate } from 'react-router-dom';
+
+const { Title, Paragraph } = Typography;
 
 export default function InvoiceList() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [paymentData, setPaymentData] = useState({ amount: 0, payment_method: 'cash' });
+  const [searchTerm, setSearchTerm] = useState('');
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
-  useEffect(() => {
-    fetchInvoices();
-  }, [pagination.current, statusFilter]);
-
-  const fetchInvoices = async () => {
+  const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: pagination.current,
+        page,
         per_page: pagination.pageSize,
       });
-      if (statusFilter) params.append('status', statusFilter);
+
+      if (status) {
+        params.set('status', status);
+      }
+
+      if (search) {
+        params.set('search', search);
+      }
 
       const response = await fetch(`/api/v1/invoices?${params}`, {
         headers: {
@@ -32,12 +37,16 @@ export default function InvoiceList() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to fetch invoices');
+      if (!response.ok) {
+        throw new Error('Failed to fetch invoices');
+      }
+
       const data = await response.json();
-      setInvoices(data.data);
-      setPagination(prev => ({
+      setInvoices(data.data || []);
+      setPagination((prev) => ({
         ...prev,
-        total: data.total,
+        current: page,
+        total: data.total || 0,
       }));
     } catch (error) {
       message.error('Failed to load invoices: ' + error.message);
@@ -46,33 +55,14 @@ export default function InvoiceList() {
     }
   };
 
-  const handlePayment = async () => {
-    if (!selectedInvoice || paymentData.amount <= 0) {
-      message.error('Please select an invoice and enter a valid amount');
-      return;
-    }
+  useEffect(() => {
+    fetchInvoices(1, searchTerm, statusFilter);
+  }, [statusFilter]);
 
-    try {
-      const response = await fetch('/api/v1/payments/record', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          invoice_uid: selectedInvoice.uid,
-          amount: paymentData.amount,
-          payment_method: paymentData.payment_method,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to record payment');
-      message.success('Payment recorded successfully');
-      setPaymentModalVisible(false);
-      fetchInvoices();
-    } catch (error) {
-      message.error('Failed to record payment: ' + error.message);
-    }
+  const handleSearch = (value) => {
+    const search = value.trim();
+    setSearchTerm(search);
+    fetchInvoices(1, search, statusFilter);
   };
 
   const getStatusColor = (status) => {
@@ -85,6 +75,7 @@ export default function InvoiceList() {
       overdue: 'error',
       void: 'default',
     };
+
     return colors[status] || 'default';
   };
 
@@ -93,134 +84,125 @@ export default function InvoiceList() {
       title: 'Invoice #',
       dataIndex: 'invoice_number',
       key: 'invoice_number',
-      width: 130,
+      width: 150,
     },
     {
       title: 'Customer',
       dataIndex: ['customer', 'name'],
       key: 'customer',
-      width: 200,
+      width: 220,
+      render: (value) => value || '-',
+    },
+    {
+      title: 'Order #',
+      dataIndex: ['order', 'order_number'],
+      key: 'order_number',
+      width: 160,
+      render: (value) => value || '-',
     },
     {
       title: 'Amount',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount) => `${amount.toFixed(2)}`,
       align: 'right',
+      render: (amount, record) => `${record.currency_code || ''} ${Number(amount || 0).toFixed(2)}`,
     },
     {
       title: 'Outstanding',
       dataIndex: 'outstanding_amount',
       key: 'outstanding_amount',
-      render: (amount) => `${amount.toFixed(2)}`,
       align: 'right',
+      render: (amount, record) => `${record.currency_code || ''} ${Number(amount || 0).toFixed(2)}`,
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <Tag color={getStatusColor(status)}>{status}</Tag>,
+      width: 130,
+      render: (status) => <Tag color={getStatusColor(status)}>{String(status || '-').toUpperCase()}</Tag>,
     },
     {
-      title: 'Date',
+      title: 'Invoice Date',
       dataIndex: 'invoice_date',
       key: 'invoice_date',
-      width: 110,
+      width: 130,
     },
     {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => {
-              setSelectedInvoice(record);
-              setPaymentModalVisible(true);
-            }}
-          >
-            Pay
-          </Button>
-          <Button size="small" icon={<FileTextOutlined />} />
-        </Space>
+      title: 'Due Date',
+      dataIndex: 'due_date',
+      key: 'due_date',
+      width: 130,
+      render: (value) => value || '-',
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      fixed: 'right',
+      render: (_, invoice) => (
+        <Button
+          type="primary"
+          size="small"
+          disabled={Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void'}
+          onClick={() => navigate(`/payments?invoice=${invoice.uid}`)}
+        >
+          Record Payment
+        </Button>
       ),
     },
   ];
 
   return (
     <div className="page-shell page-fade-up">
-      <div className="elevated-card" style={{ marginBottom: 16 }}>
-      <h1>Invoices</h1>
-      
-      <div style={{ marginBottom: '20px' }}>
-        <Select
-          style={{ width: 200 }}
-          placeholder="Filter by status"
-          allowClear
-          onChange={setStatusFilter}
-          options={[
-            { label: 'Draft', value: 'draft' },
-            { label: 'Issued', value: 'issued' },
-            { label: 'Sent', value: 'sent' },
-            { label: 'Partial Paid', value: 'partial_paid' },
-            { label: 'Paid', value: 'paid' },
-            { label: 'Overdue', value: 'overdue' },
-            { label: 'Void', value: 'void' },
-          ]}
-        />
+      <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
+        <Title level={2} style={{ margin: 0 }}>Invoices</Title>
+        <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+          Read-only invoice register generated from orders.
+        </Paragraph>
       </div>
 
-      <Spin spinning={loading}>
-        <Table
-          columns={columns}
-          dataSource={invoices}
-          rowKey="id"
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            onChange: (page) => setPagination(prev => ({ ...prev, current: page })),
-          }}
-        />
-      </Spin>
-      </div>
+      <Card className="border-beam-aurora">
+        <Space className="list-toolbar" wrap>
+          <Input.Search
+            className="responsive-search"
+            allowClear
+            enterButton="Search"
+            placeholder="Search invoice, order, or customer"
+            onSearch={handleSearch}
+            style={{ width: 380 }}
+          />
+          <Select
+            className="responsive-control"
+            style={{ width: 220 }}
+            placeholder="Filter by status"
+            allowClear
+            onChange={(value) => setStatusFilter(value || '')}
+            options={[
+              { label: 'Draft', value: 'draft' },
+              { label: 'Issued', value: 'issued' },
+              { label: 'Sent', value: 'sent' },
+              { label: 'Partial Paid', value: 'partial_paid' },
+              { label: 'Paid', value: 'paid' },
+              { label: 'Overdue', value: 'overdue' },
+              { label: 'Void', value: 'void' },
+            ]}
+          />
+        </Space>
 
-      <Modal
-        title="Record Payment"
-        open={paymentModalVisible}
-        onOk={handlePayment}
-        onCancel={() => setPaymentModalVisible(false)}
-      >
-        {selectedInvoice && (
-          <div>
-            <p><strong>Invoice:</strong> {selectedInvoice.invoice_number}</p>
-            <p><strong>Outstanding:</strong> {selectedInvoice.outstanding_amount.toFixed(2)}</p>
-            
-            <InputNumber
-              label="Amount"
-              value={paymentData.amount}
-              onChange={(value) => setPaymentData(prev => ({ ...prev, amount: value }))}
-              style={{ width: '100%', marginBottom: '10px' }}
-              min={0}
-              step={0.01}
-            />
-            
-            <Select
-              label="Payment Method"
-              value={paymentData.payment_method}
-              onChange={(value) => setPaymentData(prev => ({ ...prev, payment_method: value }))}
-              options={[
-                { label: 'Cash', value: 'cash' },
-                { label: 'Bank Transfer', value: 'bank_transfer' },
-                { label: 'Check', value: 'check' },
-                { label: 'Card', value: 'card' },
-              ]}
-              style={{ width: '100%' }}
-            />
-          </div>
-        )}
-      </Modal>
+        <Spin spinning={loading}>
+          <Table
+            scroll={{ x: 'max-content' }}
+            columns={columns}
+            dataSource={invoices}
+            rowKey="id"
+            pagination={{
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
+              onChange: (page) => fetchInvoices(page),
+            }}
+          />
+        </Spin>
+      </Card>
     </div>
   );
 }

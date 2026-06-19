@@ -4,7 +4,7 @@ import { Button, Card, Space } from 'antd';
 export default function RowGroupCard({ title, rows, addLabel, onAdd, onRemove, children }) {
   return (
     <Card className="border-beam-aurora" size="small" title={title} style={{ marginBottom: 12 }}>
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         {rows.map((row, idx) => (
           <Card
             key={`${title}-${idx}`}

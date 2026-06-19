@@ -1,181 +1,104 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Select, Spin, message, DatePicker } from 'antd';
-import { DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
+import { PrinterOutlined } from '@ant-design/icons';
+import { message } from '../services/feedback';
+
+const { Title, Paragraph } = Typography;
 
 export default function CustomerStatement() {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [fromDate, setFromDate] = useState(null);
-  const [toDate, setToDate] = useState(null);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   useEffect(() => {
-    // TODO: Fetch customers from API
+    fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load customers')))
+      .then(setCustomers)
+      .catch((error) => message.error(error.message));
   }, []);
 
   const fetchStatement = async () => {
     if (!selectedCustomer) {
-      message.error('Please select a customer');
+      message.error('Select a customer');
       return;
     }
 
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (fromDate) params.append('from_date', fromDate);
-      if (toDate) params.append('to_date', toDate);
-
-      const response = await fetch(
-        `/api/v1/statements/customer/${selectedCustomer}?${params}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            Accept: 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to fetch statement');
+      if (fromDate) params.set('from_date', fromDate);
+      if (toDate) params.set('to_date', toDate);
+      const response = await fetch(`/api/v1/statements/customer/${selectedCustomer}?${params}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not load customer statement');
       setStatement(data);
     } catch (error) {
-      message.error('Failed to load statement: ' + error.message);
+      message.error(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const columns = [
-    {
-      title: 'Invoice #',
-      dataIndex: 'invoice_number',
-      key: 'invoice_number',
-    },
-    {
-      title: 'Date',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'amount_in_client_currency',
-      render: (amount) => amount.toFixed(2),
-      align: 'right',
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-    },
-    {
-      title: 'Outstanding',
-      dataIndex: 'outstanding',
-      render: (outstanding) => outstanding.toFixed(2),
-      align: 'right',
-    },
+    { title: 'Invoice', dataIndex: 'invoice_number', key: 'invoice_number' },
+    { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date' },
+    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date' },
+    { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Paid', key: 'paid', align: 'right', render: (_, row) => (Number(row.amount || 0) - Number(row.outstanding || 0)).toFixed(2) },
+    { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Status', dataIndex: 'status', render: (value) => <Tag>{String(value || '').toUpperCase()}</Tag> },
   ];
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Customer Statement</h1>
+    <div className="page-shell page-fade-up">
+      <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
+        <Title level={2} style={{ margin: 0 }}>Customer Statement</Title>
+        <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>Review customer invoices, receipts, and outstanding receivables.</Paragraph>
+      </div>
 
-      <Card style={{ marginBottom: '20px' }}>
-          <Space orientation="vertical" style={{ width: '100%' }}>
+      <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
+        <Space wrap className="responsive-toolbar">
           <Select
-            placeholder="Select Customer"
-            style={{ width: '100%' }}
-            onChange={setSelectedCustomer}
-            // TODO: Load customers from API
+            showSearch
+            optionFilterProp="label"
+            placeholder="Select customer"
+            value={selectedCustomer}
+            onChange={(value) => { setSelectedCustomer(value); setStatement(null); }}
+            options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+            style={{ width: 300 }}
+            className="responsive-control"
           />
-          <Space>
-            <DatePicker
-              placeholder="From Date"
-              onChange={(date) => setFromDate(date?.format('YYYY-MM-DD'))}
-            />
-            <DatePicker
-              placeholder="To Date"
-              onChange={(date) => setToDate(date?.format('YYYY-MM-DD'))}
-            />
-            <Button type="primary" onClick={fetchStatement} loading={loading}>
-              Generate Statement
-            </Button>
-          </Space>
+          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} style={{ width: 165 }} />
+          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} style={{ width: 165 }} />
+          <Button type="primary" onClick={fetchStatement} loading={loading}>Generate Statement</Button>
         </Space>
       </Card>
 
-      {statement && (
-        <>
-          <Card style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div>
-                <h3>{statement.customer.name}</h3>
-                <p>{statement.customer.email}</p>
-                <p>{statement.customer.phone}</p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p><strong>Statement Date:</strong> {statement.statement_date}</p>
-                <p><strong>Currency:</strong> {statement.customer_currency}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card title="Invoices" style={{ marginBottom: '20px' }}>
-            <Spin spinning={loading}>
-              <Table
-                columns={columns}
-                dataSource={statement.customer_currency_invoices}
-                rowKey="invoice_uid"
-                pagination={false}
-              />
-            </Spin>
-          </Card>
-
-          <Card title="Summary" style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-              <div>
-                <p><strong>Total Invoices:</strong></p>
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {statement.summary.total_invoices}
-                </p>
-              </div>
-              <div>
-                <p><strong>Total Outstanding:</strong></p>
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {statement.summary.total_outstanding.toFixed(2)}
-                </p>
-              </div>
-              <div>
-                <p><strong>Total Paid:</strong></p>
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {statement.summary.total_paid.toFixed(2)}
-                </p>
-              </div>
-              <div>
-                <p><strong>Total Amount:</strong></p>
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {statement.summary.total_amount.toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <Space>
-              <Button
-                type="primary"
-                icon={<DownloadOutlined />}
-                onClick={() => message.info('PDF export coming soon')}
-              >
-                Export PDF
-              </Button>
-              <Button icon={<PrinterOutlined />} onClick={() => window.print()}>
-                Print
-              </Button>
-            </Space>
-          </Card>
-        </>
-      )}
+      <Spin spinning={loading}>
+        {statement && (
+          <>
+            <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
+              <Title level={4} style={{ marginTop: 0 }}>{statement.customer.name}</Title>
+              <Paragraph type="secondary">{statement.customer.email || '-'} · {statement.customer.phone || '-'}</Paragraph>
+              <Row gutter={[16, 16]}>
+                <Col xs={12} lg={6}><Statistic title="Invoices" value={statement.summary.total_invoices} /></Col>
+                <Col xs={12} lg={6}><Statistic title="Total" value={Number(statement.summary.total_amount)} precision={2} prefix={statement.customer_currency} /></Col>
+                <Col xs={12} lg={6}><Statistic title="Paid" value={Number(statement.summary.total_paid)} precision={2} prefix={statement.customer_currency} /></Col>
+                <Col xs={12} lg={6}><Statistic title="Outstanding" value={Number(statement.summary.total_outstanding)} precision={2} prefix={statement.customer_currency} /></Col>
+              </Row>
+            </Card>
+            <Card className="border-beam-aurora" title="Invoice Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
+              <Table scroll={{ x: 'max-content' }} columns={columns} dataSource={statement.customer_currency_invoices} rowKey="invoice_uid" pagination={false} />
+            </Card>
+          </>
+        )}
+      </Spin>
     </div>
   );
 }

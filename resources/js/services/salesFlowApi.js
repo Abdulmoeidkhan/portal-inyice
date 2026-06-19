@@ -38,8 +38,20 @@ export const createOrderFromVoucherApi = (payload) =>
     body: JSON.stringify(payload),
   });
 
-export const createInvoiceFromOrderApi = (payload) =>
-  apiCall('/invoices/create-from-order', {
+export const listCustomersApi = (search = '') =>
+  apiCall(`/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+
+export const createCustomerApi = (payload) =>
+  apiCall('/customers', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const listVendorsApi = (search = '') =>
+  apiCall(`/vendors${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+
+export const createVendorApi = (payload) =>
+  apiCall('/vendors', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

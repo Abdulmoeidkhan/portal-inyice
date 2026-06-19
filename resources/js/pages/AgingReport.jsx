@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Table, Statistic, Spin, message, Select, Skeleton, Empty } from 'antd';
+import { Card, Row, Col, Table, Statistic, Spin, Select, Skeleton, Empty } from 'antd';
+import { message } from '../services/feedback';
 import { DollarOutlined, FileTextOutlined, AlertOutlined } from '@ant-design/icons';
 import { Column } from '@ant-design/plots';
 
@@ -172,6 +173,7 @@ export default function AgingReport() {
       {Object.entries(report.buckets).map(([key, bucket]) => (
         <Card key={key} className="border-beam-aurora" title={`${bucket.description} (${bucket.count})`} style={{ marginBottom: '20px' }}>
           <Table
+            scroll={{ x: 'max-content' }}
             columns={getBucketColumns()}
             dataSource={bucket.invoices}
             rowKey="invoice_uid"

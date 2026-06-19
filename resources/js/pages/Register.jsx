@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Steps, Form, Input, Select, Button, Card, message, Alert, Typography, Space } from 'antd';
+import { Steps, Form, Input, Select, Button, Card, Alert, Typography, Space } from 'antd';
+import { message } from '../services/feedback';
 import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 

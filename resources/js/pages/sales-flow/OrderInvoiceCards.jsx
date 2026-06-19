@@ -1,32 +1,147 @@
-import React from 'react';
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Typography } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Typography } from 'antd';
+import { message } from '../../services/feedback';
+import { createCustomerApi, createVendorApi, listCustomersApi, listVendorsApi } from '../../services/salesFlowApi';
 
 const { Text } = Typography;
 const { TextArea } = Input;
 
 export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) {
+  const [customers, setCustomers] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [vendorModalOpen, setVendorModalOpen] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [savingVendor, setSavingVendor] = useState(false);
+  const [customerForm] = Form.useForm();
+  const [vendorForm] = Form.useForm();
+
+  const customerOptions = customers.map((customer) => ({
+    value: customer.id,
+    label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
+  }));
+
+  const vendorOptions = vendors.map((vendor) => ({
+    value: vendor.id,
+    label: `${vendor.name}${vendor.phone ? ` - ${vendor.phone}` : ''}`,
+  }));
+
+  const loadCustomers = async (search = '') => {
+    try {
+      setCustomers(await listCustomersApi(search));
+    } catch (error) {
+      message.error(error.message || 'Unable to load customers');
+    }
+  };
+
+  const loadVendors = async (search = '') => {
+    try {
+      setVendors(await listVendorsApi(search));
+    } catch (error) {
+      message.error(error.message || 'Unable to load vendors');
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers();
+    loadVendors();
+  }, []);
+
+  const handleCreateCustomer = async () => {
+    setSavingCustomer(true);
+    try {
+      const values = await customerForm.validateFields();
+      const data = await createCustomerApi(values);
+      await loadCustomers();
+      form.setFieldValue('customer_id', data.customer.id);
+      customerForm.resetFields();
+      setCustomerModalOpen(false);
+      message.success('Customer created');
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(error.message || 'Customer creation failed');
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
+  const handleCreateVendor = async () => {
+    setSavingVendor(true);
+    try {
+      const values = await vendorForm.validateFields();
+      const data = await createVendorApi(values);
+      await loadVendors();
+      form.setFieldValue('vendor_id', data.vendor.id);
+      vendorForm.resetFields();
+      setVendorModalOpen(false);
+      message.success('Vendor created');
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(error.message || 'Vendor creation failed');
+    } finally {
+      setSavingVendor(false);
+    }
+  };
+
   return (
-    <Card className="border-beam-aurora" title="Create Order / Quotation">
-      <Form layout="vertical" form={form} onFinish={onCreateOrder} initialValues={{ status: 'quote', currency_code: 'PKR' }}>
+    <Card className="border-beam-aurora" title="Create Order">
+      <Form layout="vertical" form={form} onFinish={onCreateOrder} initialValues={{ currency_code: 'PKR' }}>
         <Row gutter={12}>
-          <Col xs={24} md={6}>
-            <Form.Item name="customer_id" label="Customer ID" rules={[{ required: true, message: 'Customer ID required' }]}>
-              <InputNumber min={1} style={{ width: '100%' }} />
+          <Col xs={24} md={8}>
+            <Form.Item name="customer_id" label="Customer" rules={[{ required: true, message: 'Customer required' }]}>
+              <Select
+                showSearch
+                placeholder="Select customer"
+                filterOption={false}
+                onSearch={loadCustomers}
+                options={customerOptions}
+                dropdownRender={(menu) => (
+                  <>
+                    {menu}
+                    <Button type="link" block onClick={() => setCustomerModalOpen(true)}>+ Add Customer</Button>
+                  </>
+                )}
+              />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={4}>
             <Form.Item name="company_id" label="Company ID (optional)">
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="vendor_id" label="Vendor ID (optional)">
-              <InputNumber min={1} style={{ width: '100%' }} />
+          <Col xs={24} md={8}>
+            <Form.Item name="vendor_id" label="Vendor (optional)">
+              <Select
+                allowClear
+                showSearch
+                placeholder="Select vendor"
+                filterOption={false}
+                onSearch={loadVendors}
+                options={vendorOptions}
+                dropdownRender={(menu) => (
+                  <>
+                    {menu}
+                    <Button type="link" block onClick={() => setVendorModalOpen(true)}>+ Add Vendor</Button>
+                  </>
+                )}
+              />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="status" label="Type">
-              <Select options={[{ value: 'quote', label: 'Quotation' }, { value: 'order', label: 'Order' }]} />
+          <Col xs={24} md={4}>
+            <Form.Item name="status" label="Order Status" initialValue="order">
+              <Select
+                options={[
+                  {
+                    label: 'Order Section',
+                    options: [
+                      { value: 'quote', label: 'Quote' },
+                      { value: 'order', label: 'Order' },
+                      { value: 'confirm', label: 'Confirm' },
+                      { value: 'cancel', label: 'Cancel' },
+                    ],
+                  },
+                ]}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -44,17 +159,72 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
           </Col>
         </Row>
 
-        <Button type="primary" htmlType="submit" loading={loading}>Create Order / Quotation</Button>
+        <Button type="primary" htmlType="submit" loading={loading}>Create Order</Button>
       </Form>
+
+      <Modal
+        title="Add Customer"
+        open={customerModalOpen}
+        onOk={handleCreateCustomer}
+        onCancel={() => setCustomerModalOpen(false)}
+        confirmLoading={savingCustomer}
+      >
+        <Form layout="vertical" form={customerForm} initialValues={{ type: 'B2C' }}>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Customer name required' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label="Type">
+            <Select options={[{ value: 'B2C', label: 'B2C' }, { value: 'B2B', label: 'B2B' }]} />
+          </Form.Item>
+          <Form.Item name="email" label="Email">
+            <Input />
+          </Form.Item>
+          <Form.Item name="phone" label="Phone">
+            <Input />
+          </Form.Item>
+          <Form.Item name="currency_code" label="Currency Code">
+            <Input placeholder="PKR" maxLength={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Add Vendor"
+        open={vendorModalOpen}
+        onOk={handleCreateVendor}
+        onCancel={() => setVendorModalOpen(false)}
+        confirmLoading={savingVendor}
+      >
+        <Form layout="vertical" form={vendorForm} initialValues={{ type: 'B2C' }}>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Vendor name required' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label="Type">
+            <Select options={[{ value: 'B2C', label: 'B2C' }, { value: 'B2B', label: 'B2B' }]} />
+          </Form.Item>
+          <Form.Item name="email" label="Email">
+            <Input />
+          </Form.Item>
+          <Form.Item name="phone" label="Phone">
+            <Input />
+          </Form.Item>
+          <Form.Item name="currency_code" label="Currency Code">
+            <Input placeholder="PKR" maxLength={3} />
+          </Form.Item>
+          <Form.Item name="payment_terms" label="Payment Terms">
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {createdOrder && (
         <Alert
           style={{ marginTop: 16 }}
           type="success"
           showIcon
-          message={`${createdOrder.status?.toUpperCase() || 'ORDER'} ${createdOrder.order_number} created`}
+          message={`Order ${createdOrder.order_number} created`}
           description={
-            <Space direction="vertical">
+            <Space orientation="vertical">
               <Text>Order ID: {createdOrder.id}</Text>
               <Text>Order UID: {createdOrder.uid}</Text>
               <Text>Total Amount: {createdOrder.total_amount}</Text>
@@ -67,36 +237,3 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
   );
 }
 
-export function ConvertInvoiceCard({ form, loading, createdInvoice, onCreateInvoice, canConvert }) {
-  return (
-    <Card className="border-beam-aurora" title="Convert to Invoice">
-      <Form layout="inline" form={form} onFinish={onCreateInvoice}>
-        <Form.Item name="order_id" rules={[{ required: true, message: 'Order ID required' }]}>
-          <InputNumber min={1} style={{ width: 220 }} placeholder="Order ID" />
-        </Form.Item>
-        <Form.Item>
-          <Button type="primary" htmlType="submit" loading={loading} disabled={!canConvert}>Convert to Invoice</Button>
-        </Form.Item>
-      </Form>
-
-      {!canConvert && (
-        <Alert
-          style={{ marginTop: 12 }}
-          type="info"
-          showIcon
-          message="Create an order/quotation first, then convert it to invoice."
-        />
-      )}
-
-      {createdInvoice && (
-        <Alert
-          style={{ marginTop: 16 }}
-          type="success"
-          showIcon
-          message={`Invoice ${createdInvoice.invoice_number} created`}
-          description={`Invoice UID: ${createdInvoice.uid}`}
-        />
-      )}
-    </Card>
-  );
-}

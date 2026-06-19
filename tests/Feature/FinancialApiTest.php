@@ -7,6 +7,8 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Role;
+use App\Models\Receipt;
+use App\Models\VendorPaymentAllocation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vendor;
@@ -87,6 +89,27 @@ class FinancialApiTest extends TestCase
         $payment->assertJsonPath('success', true);
         $payment->assertJsonPath('invoice.status', 'partial_paid');
 
+        $vendorPayment = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 400,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-18',
+            'narration' => 'Supplier settlement',
+        ]);
+        $vendorPayment->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('outstanding_balance', 600);
+
+        $this->getJson('/api/v1/payments/vendor')
+            ->assertOk()
+            ->assertJsonPath('total', 1);
+
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonPath('summary.period_payables', 1000)
+            ->assertJsonPath('summary.period_paid', 400)
+            ->assertJsonPath('summary.outstanding_balance', 600);
+
         $advance = $this->postJson('/api/v1/payments/advance', [
             'invoice_uid' => $invoiceUid,
             'amount' => 200,
@@ -110,6 +133,102 @@ class FinancialApiTest extends TestCase
         $balance = $this->getJson('/api/v1/accounts/bank/' . $bankId . '/balance');
         $balance->assertOk();
         $balance->assertJsonPath('account_type', 'bank');
+    }
+
+    public function test_bulk_payment_allocates_one_receipt_across_same_customer_invoices(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $secondOrder = $ctx['order']->replicate();
+        $secondOrder->uid = (string) Str::ulid();
+        $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $secondOrder->save();
+
+        foreach ($ctx['order']->items as $item) {
+            $secondItem = $item->replicate();
+            $secondItem->uid = (string) Str::ulid();
+            $secondItem->order_id = $secondOrder->id;
+            $secondItem->save();
+        }
+
+        $firstInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+        $secondInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $secondOrder->id,
+        ])->assertCreated()->json('invoice');
+
+        $response = $this->postJson('/api/v1/payments/record-bulk', [
+            'allocations' => [
+                ['invoice_uid' => $firstInvoice['uid'], 'amount' => 500],
+                ['invoice_uid' => $secondInvoice['uid'], 'amount' => 1000],
+            ],
+            'amount' => 1500,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-15',
+            'narration' => 'Combined customer payment',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(2, 'allocations')
+            ->assertJsonPath('receipt.amount', '1500.0000');
+
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $firstInvoice['uid'],
+            'outstanding_amount' => 500,
+            'status' => 'partial_paid',
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $secondInvoice['uid'],
+            'outstanding_amount' => 0,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('receipts', [
+            'description' => 'Combined customer payment',
+            'amount' => 1500,
+        ]);
+        $this->assertSame(
+            '2026-06-15',
+            Receipt::where('description', 'Combined customer payment')->firstOrFail()->receipt_date->toDateString()
+        );
+    }
+
+    public function test_bulk_vendor_payment_allocates_one_payment_across_payable_orders(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $secondOrder = $ctx['order']->replicate();
+        $secondOrder->uid = (string) Str::ulid();
+        $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $secondOrder->save();
+
+        $payables = $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->json('data');
+
+        $response = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 1500,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-19',
+            'reference_number' => 'BULK-VENDOR-001',
+            'allocations' => [
+                ['order_id' => $payables[0]['id'], 'amount' => 1000],
+                ['order_id' => $payables[1]['id'], 'amount' => 500],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(2, 'payment.allocations');
+        $this->assertSame(2, VendorPaymentAllocation::count());
+
+        $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('outstanding_total', 500);
     }
 
     public function test_reports_and_statements_endpoints_work(): void

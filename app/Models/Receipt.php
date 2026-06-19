@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TenantAware;
 
 class Receipt extends Model
@@ -49,5 +50,11 @@ class Receipt extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(InvoiceSettlement::class, 'reference_document_id')
+            ->where('reference_document_type', self::class);
     }
 }

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Card, Descriptions, Typography, Tag, Button, message } from 'antd';
+import { Card, Descriptions, Typography, Tag, Button } from 'antd';
+import { message } from '../services/feedback';
 
 const { Title, Paragraph } = Typography;
 

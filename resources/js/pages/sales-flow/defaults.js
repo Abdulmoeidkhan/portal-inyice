@@ -10,6 +10,8 @@ export const blankFlight = () => ({
   cabin: 'Economy',
   booking_class: '',
   baggage: '',
+  vendor_id: null,
+  vendor_name: '',
 });
 
 export const blankPassenger = () => ({
@@ -23,11 +25,25 @@ export const blankPassenger = () => ({
 
 export const blankPricing = () => ({
   pax_name: '',
-  flight_fare: '',
-  hotel_price: '',
-  visa_price: '',
-  transfer_price: '',
-  city_tour_ziarat_price: '',
+  flight_ticket_no: '',
+  flight_cost: '',
+  flight_profit: '',
+  flight_sales: '',
+  hotel_cost: '',
+  hotel_profit: '',
+  hotel_sales: '',
+  visa_cost: '',
+  visa_profit: '',
+  visa_sales: '',
+  transfer_cost: '',
+  transfer_profit: '',
+  transfer_sales: '',
+  city_tour_ziarat_cost: '',
+  city_tour_ziarat_profit: '',
+  city_tour_ziarat_sales: '',
+  other_service_cost: '',
+  other_service_profit: '',
+  other_service_sales: '',
   total: '',
 });
 
@@ -65,8 +81,11 @@ export const blankCityTour = () => ({
 
 export const blankVisa = () => ({
   passenger_name: '',
+  visa_type: 'umrah',
+  validity: '',
   visa_no: '',
-  publisher: '',
+  vendor_id: null,
+  visa_vendor: '',
   notes: '',
   amount: '',
 });
@@ -102,7 +121,7 @@ export const createInitialVoucher = () => ({
     address: '',
   },
   // active_sections: optionalVoucherSections.map((x) => x.value),
-  active_sections: ['flights'],
+  active_sections: ['flights', 'visa'],
   flights: [blankFlight()],
   passengers: [blankPassenger()],
   pricing: [blankPricing()],
@@ -170,7 +189,8 @@ export const buildVoucherFromParsed = (prevVoucher, gdsSource, parsedPayload) =>
       ? passengers.map((pax, idx) => ({
           ...blankPricing(),
           pax_name: pax.name || '',
-          flight_fare: firstFilled(tickets[idx]?.amount),
+          flight_ticket_no: firstFilled(pax.ticket_no, pax.ticketNo, pax.ticket_number, tickets[idx]?.ticket_number),
+          flight_sales: firstFilled(tickets[idx]?.amount),
         }))
       : prevVoucher.pricing,
   };
