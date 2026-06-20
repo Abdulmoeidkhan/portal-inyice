@@ -74,7 +74,7 @@ class AuthSecurityApiTest extends TestCase
 
         $invoiceUid = $createInvoice->json('invoice.uid');
 
-        $paymentAttempt = $this->postJson('/api/v1/payments/record', [
+        $paymentAttempt = $this->postJson('/api/v1/receipts/customer/record', [
             'invoice_uid' => $invoiceUid,
             'amount' => 200,
             'payment_method' => 'cash',

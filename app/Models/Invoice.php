@@ -15,6 +15,7 @@ class Invoice extends Model
     protected $fillable = [
         'tenant_id',
         'uid',
+        'share_token',
         'company_id',
         'order_id',
         'customer_id',

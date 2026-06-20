@@ -18,6 +18,7 @@ Route::get('/registration/currencies', [RegistrationController::class, 'getCurre
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
+Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])->middleware('throttle:public-api');
 
 
 Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
@@ -32,6 +33,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::prefix('invoices')->controller(InvoiceController::class)->group(function () {
         Route::get('/', 'index')->name('invoices.list');
         Route::post('/create-from-order', 'createFromOrder')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('invoices.createFromOrder');
+        Route::post('/{uid}/share', 'share')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('invoices.share');
+        Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('invoices.share.revoke');
         Route::get('/{uid}', 'show')->name('invoices.show');
         Route::patch('/{uid}/mark-sent', 'markAsSent')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.markAsSent');
         Route::patch('/{uid}/void', 'void')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.void');
@@ -58,16 +61,33 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
 
     // ========== PAYMENTS ==========
     Route::prefix('payments')->controller(PaymentController::class)->group(function () {
-        Route::post('/record', 'recordPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.record');
-        Route::post('/record-bulk', 'recordBulkPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.recordBulk');
         Route::get('/vendor', 'vendorPayments')->name('payments.vendor.list');
+        Route::get('/vendor/payment/{uid}', 'showVendorPayment')->name('payments.vendor.show');
+        Route::patch('/vendor/payment/{uid}', 'updateVendorPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.vendor.update');
+        Route::delete('/vendor/payment/{uid}', 'deleteVendorPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.vendor.delete');
         Route::get('/vendor/{vendorId}/payables', 'vendorPayables')->name('payments.vendor.payables');
         Route::post('/vendor', 'recordVendorPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.vendor.record');
-        Route::get('/customer', 'customerReceipts')->name('payments.customer.list');
-        Route::post('/refund', 'recordRefund')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.refund');
-        Route::post('/advance', 'recordAdvance')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.advance');
+        Route::get('/customer', 'customerPayments')->name('payments.customer.list');
+        Route::post('/customer', 'recordCustomerPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.customer.record');
+        Route::delete('/customer/{uid}', 'deleteCustomerPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.customer.delete');
+        Route::patch('/customer/{uid}', 'updateCustomerPayment')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.customer.update');
+        Route::post('/customer/refund', 'recordRefund')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.customer.refund');
         Route::post('/apply-advance', 'applyAdvance')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('payments.applyAdvance');
         Route::get('/invoices/{invoiceUid}/settlements', 'settlements')->name('payments.settlements');
+    });
+
+    Route::prefix('receipts')->controller(PaymentController::class)->group(function () {
+        Route::post('/customer/record', 'recordCustomerReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.customer.record');
+        Route::post('/customer/record-bulk', 'recordBulkCustomerReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.customer.recordBulk');
+        Route::post('/customer/advance', 'recordAdvance')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.customer.advance');
+        Route::get('/customer', 'customerReceipts')->name('receipts.customer.list');
+        Route::get('/customer/{uid}', 'showCustomerReceipt')->name('receipts.customer.show');
+        Route::patch('/customer/{uid}', 'updateCustomerReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.customer.update');
+        Route::delete('/customer/{uid}', 'deleteCustomerReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.customer.delete');
+        Route::get('/vendor', 'vendorReceipts')->name('receipts.vendor.list');
+        Route::post('/vendor', 'recordVendorReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.vendor.record');
+        Route::delete('/vendor/{uid}', 'deleteVendorReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.vendor.delete');
+        Route::patch('/vendor/{uid}', 'updateVendorReceipt')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receipts.vendor.update');
     });
 
     // ========== ACCOUNTS ==========
@@ -89,6 +109,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
+        Route::get('/payments', 'paymentReport')->name('reports.payments');
+        Route::get('/receipts', 'receiptReport')->name('reports.receipts');
         Route::get('/customer-summary', 'customerSummaryReport')->name('reports.customerSummary');
     });
 

@@ -1,10 +1,10 @@
 # Portal inYice
 
-Portal inYice is a Laravel 13 and React 18 travel-agency order workspace. The current focus is voucher-to-order flow, local GDS text parsing, passenger and flight references, per-passenger service pricing, orders, invoices, payments, reports, and statements.
+Portal inYice is a Laravel 13 and React 18 travel-agency order workspace. The current focus is voucher-to-order flow, local GDS text parsing, passenger and flight references, per-passenger service pricing, orders, invoices, receipts, payments, reports, and statements.
 
 ## Current Stack
 
-- Backend: Laravel 13, PHP 8.3, Laravel Sanctum
+- Backend: Laravel 13, PHP 8.4, Laravel Sanctum
 - Frontend: React 18, Ant Design, Vite
 - Database: MySQL in normal runtime, with Laravel migrations in `database/migrations`
 - Runtime support: local PHP/Vite development and Docker compose files
@@ -20,7 +20,18 @@ Portal inYice is a Laravel 13 and React 18 travel-agency order workspace. The cu
 - Vendor module: `resources/js/pages/VendorList.jsx`
 - Voucher-to-order backend: `app/Http/Controllers/Api/OrderController.php`
 - Customer/vendor selectors and quick-create API: `app/Http/Controllers/Api/MasterDataController.php`
-- Invoice and payment APIs: `app/Http/Controllers/Api`
+- Invoice, receipt, and payment APIs: `app/Http/Controllers/Api`
+
+## Financial terminology
+
+Cash transactions use direction-based names consistently throughout the API, screens, statements, and reports:
+
+- **Receipt (money in):** money received by the company. A customer receipt records money received from a customer. A vendor receipt records money received from a vendor, such as a rebate or returned overpayment.
+- **Payment (money out):** money paid by the company. A vendor payment records money paid to a vendor. A customer payment records money paid to a customer, including full and partial invoice refunds.
+
+The four finance entry screens are Customer Receipts, Customer Payments, Vendor Receipts, and Vendor Payments. Receipt Report contains only money-in records; Payment Report contains only money-out records. Both reports can be filtered by customer/vendor, method, date, and search text.
+
+Invoice payments and customer advances create customer receipts. Invoice refunds create customer payments and linked refund settlements so invoice balances and cash-direction reports remain consistent.
 
 ## Project Docs
 
@@ -82,6 +93,7 @@ Authenticated API groups include:
 - `/api/orders`
 - `/api/invoices`
 - `/api/payments`
+- `/api/receipts`
 - `/api/accounts`
 - `/api/reports`
 - `/api/statements`

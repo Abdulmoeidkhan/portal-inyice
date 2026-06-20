@@ -54,6 +54,13 @@ export default function CustomerStatement() {
     { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
     { title: 'Status', dataIndex: 'status', render: (value) => <Tag>{String(value || '').toUpperCase()}</Tag> },
   ];
+  const transactionColumns = [
+    { title: 'Date', dataIndex: 'date' }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).toUpperCase()}</Tag> },
+    { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description' },
+    { title: 'Debit', dataIndex: 'debit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Credit', dataIndex: 'credit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+  ];
 
   return (
     <div className="page-shell page-fade-up">
@@ -95,6 +102,9 @@ export default function CustomerStatement() {
             </Card>
             <Card className="border-beam-aurora" title="Invoice Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
               <Table scroll={{ x: 'max-content' }} columns={columns} dataSource={statement.customer_currency_invoices} rowKey="invoice_uid" pagination={false} />
+            </Card>
+            <Card className="border-beam-aurora" title="Receipts and Payments" style={{ marginTop: 16 }}>
+              <Table scroll={{ x: 'max-content' }} columns={transactionColumns} dataSource={statement.transactions} rowKey="id" pagination={false} />
             </Card>
           </>
         )}

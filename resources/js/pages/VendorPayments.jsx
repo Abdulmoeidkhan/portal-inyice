@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BankOutlined, CheckCircleOutlined, CreditCardOutlined, DollarOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Input, InputNumber, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { BankOutlined, CheckCircleOutlined, CreditCardOutlined, DeleteOutlined, DollarOutlined, EditOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 
 const { Title, Paragraph, Text } = Typography;
@@ -17,6 +17,8 @@ export default function VendorPayments() {
   const [allocations, setAllocations] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editOrders, setEditOrders] = useState([]);
   const [form, setForm] = useState({ date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '' });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -113,6 +115,45 @@ export default function VendorPayments() {
     }
   };
 
+  const openEdit = async (row) => {
+    setSaving(true);
+    try {
+      const [paymentResponse, payableResponse] = await Promise.all([
+        fetch(`/api/v1/payments/vendor/payment/${row.uid}`, { headers }),
+        fetch(`/api/v1/payments/vendor/${row.vendor_id}/payables`, { headers }),
+      ]);
+      const [payment, payableData] = await Promise.all([paymentResponse.json(), payableResponse.json()]);
+      if (!paymentResponse.ok || !payableResponse.ok) throw new Error('Could not load payment for editing');
+      const old = Object.fromEntries(payment.allocations.map((item) => [item.order_id, Number(item.amount)]));
+      const merged = new Map((payableData.data || []).map((item) => [item.id, item]));
+      payment.allocations.forEach((item) => merged.set(item.order_id, { ...(merged.get(item.order_id) || item.order), id: item.order_id, outstanding_amount: Number(merged.get(item.order_id)?.outstanding_amount || 0) }));
+      setEditOrders([...merged.values()]);
+      setEditing({ ...payment, date: String(payment.payment_date).slice(0, 10), method: payment.payment_method, reference: payment.reference_number || '', narration: payment.description || '', allocations: old, originalAllocations: old });
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
+  const saveEdit = async () => {
+    const next = Object.entries(editing.allocations).filter(([, amount]) => Number(amount) > 0).map(([orderId, amount]) => ({ order_id: Number(orderId), amount: Number(amount) }));
+    if (!next.length) return message.error('Allocate the payment to at least one order');
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/v1/payments/vendor/payment/${editing.uid}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ date: editing.date, payment_method: editing.method, account_id: editing.account_id, reference_number: editing.reference || null, description: editing.narration || null, allocations: next }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not update payment');
+      message.success('Vendor payment updated and reallocated'); setEditing(null); await loadBaseData();
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
+  const deletePayment = async (row) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/v1/payments/vendor/payment/${row.uid}`, { method: 'DELETE', headers });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not delete payment');
+      message.success('Vendor payment deleted'); await loadBaseData();
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
   const payableColumns = [
     { title: 'Order no.', dataIndex: 'order_number', width: 150 },
     { title: 'Order date', dataIndex: 'date', width: 120 },
@@ -135,6 +176,7 @@ export default function VendorPayments() {
     { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' },
     { title: 'Orders', dataIndex: 'allocations', render: (items = []) => items.map((item) => item.order?.order_number).filter(Boolean).join(', ') || 'Unallocated' },
     { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
+    { title: 'Actions', key: 'actions', fixed: 'right', width: 125, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Delete this vendor payment?" description="Its allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deletePayment(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
 
   return (
@@ -159,11 +201,27 @@ export default function VendorPayments() {
           <Space wrap><Button onClick={() => updateSelection(payables.map((item) => item.id))} disabled={!payables.length}>Select all</Button><Button onClick={() => updateSelection([])} disabled={!selectedKeys.length}>Clear</Button><Text type="secondary">{selectedKeys.length} order{selectedKeys.length === 1 ? '' : 's'} selected</Text></Space>
           <Space wrap><div className="allocation-total"><span>Payment total</span><strong>{vendor?.currency_code || ''} {money(allocationTotal)}</strong></div><Button type="primary" size="large" icon={<SaveOutlined />} loading={saving} disabled={!selectedKeys.length} onClick={submitPayment}>Record payment</Button></Space>
         </div>
-
-        <Table rowKey="id" loading={loading} columns={payableColumns} dataSource={payables} pagination={false} tableLayout="fixed" scroll={{ x: 1320, y: 410 }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: vendorId ? 'No open payables for this vendor' : 'Select a vendor to load payable orders' }} />
+        <Row justify="center" align="middle" className="financial-table-row">
+          <Col span={24} className="financial-table-column">
+            <Table rowKey="id" loading={loading} columns={payableColumns} dataSource={payables} pagination={false} tableLayout="fixed" scroll={{ x: 1320, y: 410 }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: vendorId ? 'No open payables for this vendor' : 'Select a vendor to load payable orders' }} />
+          </Col>
+        </Row>
       </Card>
 
       <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={payments} scroll={{ x: 900 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} /></Card>
+      <Modal width={900} title={`Edit and reallocate ${editing?.payment_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
+        {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} /></Col>
+          <Col xs={12} md={5}><Text strong>Method</Text><Select value={editing.method} onChange={(value) => setEditing((current) => ({ ...current, method: value, account_id: null }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: value.replaceAll('_', ' ').toUpperCase() }))} /></Col>
+          <Col xs={24} md={7}><Text strong>Account</Text><Select allowClear value={editing.account_id} onChange={(value) => setEditing((current) => ({ ...current, account_id: value }))} options={(editing.method === 'cash' ? accounts.cash : accounts.bank).filter((item) => item.currency_code === editing.currency_code).map((item) => ({ value: item.id, label: item.account_name || `${item.bank_name} · ${item.account_number}` }))} /></Col>
+          <Col xs={24} md={7}><Text strong>Reference</Text><Input value={editing.reference} onChange={(event) => setEditing((current) => ({ ...current, reference: event.target.value }))} /></Col>
+          <Col span={24}><Text strong>Description</Text><Input value={editing.narration} onChange={(event) => setEditing((current) => ({ ...current, narration: event.target.value }))} /></Col>
+        </Row><Table rowKey="id" pagination={false} dataSource={editOrders} columns={[
+          { title: 'Order', dataIndex: 'order_number' },
+          { title: 'Available for reallocation', key: 'available', align: 'right', render: (_, order) => money(Number(order.outstanding_amount || 0) + Number(editing.originalAllocations[order.id] || 0)) },
+          { title: 'Allocation', key: 'allocation', align: 'right', render: (_, order) => <InputNumber min={0} max={Number(order.outstanding_amount || 0) + Number(editing.originalAllocations[order.id] || 0)} precision={2} value={editing.allocations[order.id] || 0} onChange={(value) => setEditing((current) => ({ ...current, allocations: { ...current.allocations, [order.id]: Number(value || 0) } }))} /> },
+        ]} /></>}
+      </Modal>
     </div>
   );
 }

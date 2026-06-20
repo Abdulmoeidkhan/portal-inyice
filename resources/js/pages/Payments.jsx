@@ -6,15 +6,19 @@ import {
   DollarOutlined,
   ReloadOutlined,
   SaveOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Input, InputNumber, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
+import { useSearchParams } from 'react-router-dom';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const money = (value) => Number(value || 0).toFixed(2);
 
 export default function Payments() {
+  const [searchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -24,6 +28,8 @@ export default function Payments() {
   const [allocations, setAllocations] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editInvoices, setEditInvoices] = useState([]);
   const [form, setForm] = useState({ date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '' });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -34,7 +40,7 @@ export default function Payments() {
     try {
       const [customerResponse, receiptResponse, cashResponse, bankResponse] = await Promise.all([
         fetch('/api/v1/customers', { headers }),
-        fetch('/api/v1/payments/customer', { headers }),
+        fetch('/api/v1/receipts/customer', { headers }),
         fetch('/api/v1/accounts/cash', { headers }),
         fetch('/api/v1/accounts/bank', { headers }),
       ]);
@@ -53,6 +59,20 @@ export default function Payments() {
   };
 
   useEffect(() => { loadBaseData(); }, []);
+  useEffect(() => {
+    const invoiceUid = searchParams.get('invoice');
+    if (!invoiceUid) return;
+    fetch(`/api/v1/invoices/${invoiceUid}`, { headers }).then((response) => response.json().then((data) => ({ response, data }))).then(({ response, data }) => {
+      if (!response.ok) throw new Error('Could not open the selected invoice');
+      setCustomerId(data.customer_id);
+      return fetch(`/api/v1/invoices?customer_id=${data.customer_id}&per_page=200`, { headers });
+    }).then((response) => response.json()).then((data) => {
+      const open = (data.data || []).filter((invoice) => Number(invoice.outstanding_amount) > 0 && invoice.status !== 'void');
+      setInvoices(open);
+      const selected = open.find((invoice) => invoice.uid === invoiceUid);
+      if (selected) { setSelectedKeys([selected.id]); setAllocations({ [selected.id]: Number(selected.outstanding_amount) }); }
+    }).catch((error) => message.error(error.message));
+  }, []);
 
   const selectCustomer = async (value) => {
     setCustomerId(value);
@@ -112,7 +132,7 @@ export default function Payments() {
 
     setSaving(true);
     try {
-      const response = await fetch(isBulk ? '/api/v1/payments/record-bulk' : '/api/v1/payments/record', {
+      const response = await fetch(isBulk ? '/api/v1/receipts/customer/record-bulk' : '/api/v1/receipts/customer/record', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -127,6 +147,43 @@ export default function Payments() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openEdit = async (row) => {
+    setSaving(true);
+    try {
+      const [receiptResponse, invoiceResponse] = await Promise.all([
+        fetch(`/api/v1/receipts/customer/${row.uid}`, { headers }),
+        fetch(`/api/v1/invoices?customer_id=${row.customer_id}&per_page=200`, { headers }),
+      ]);
+      const [receipt, invoiceData] = await Promise.all([receiptResponse.json(), invoiceResponse.json()]);
+      if (!receiptResponse.ok || !invoiceResponse.ok) throw new Error('Could not load receipt for editing');
+      const oldAllocations = Object.fromEntries(receipt.settlements.map((item) => [item.invoice_id, Number(item.amount_received)]));
+      setEditInvoices((invoiceData.data || []).filter((invoice) => invoice.status !== 'void' && (Number(invoice.outstanding_amount) > 0 || oldAllocations[invoice.id])));
+      setEditing({ ...receipt, date: String(receipt.receipt_date).slice(0, 10), method: receipt.payment_method, reference: receipt.reference_number || '', narration: receipt.description || '', allocations: oldAllocations, originalAllocations: oldAllocations });
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
+  const saveEdit = async () => {
+    const editAllocations = Object.entries(editing.allocations).filter(([, amount]) => Number(amount) > 0).map(([invoiceId, amount]) => ({ invoice_id: Number(invoiceId), amount: Number(amount) }));
+    if (!editAllocations.length) return message.error('Allocate the receipt to at least one invoice');
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/v1/receipts/customer/${editing.uid}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ date: editing.date, payment_method: editing.method, account_id: editing.account_id, reference_number: editing.reference || null, description: editing.narration || null, allocations: editAllocations }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not update receipt');
+      message.success('Receipt updated and reallocated'); setEditing(null); await loadBaseData();
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
+  const deleteReceipt = async (row) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/v1/receipts/customer/${row.uid}`, { method: 'DELETE', headers });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not delete receipt');
+      message.success('Receipt deleted and invoice balances restored'); await loadBaseData();
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
   const invoiceColumns = [
@@ -160,6 +217,7 @@ export default function Payments() {
     { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' },
     { title: 'Invoices', dataIndex: 'settlements', render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || '—' },
     { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
+    { title: 'Actions', key: 'actions', fixed: 'right', width: 125, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
 
   return (
@@ -221,6 +279,20 @@ export default function Payments() {
       <Card className="financial-history-card">
         <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 900 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} />
       </Card>
+      <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
+        {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} /></Col>
+          <Col xs={12} md={5}><Text strong>Method</Text><Select value={editing.method} onChange={(value) => setEditing((current) => ({ ...current, method: value, account_id: null }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: value.replaceAll('_', ' ').toUpperCase() }))} /></Col>
+          <Col xs={24} md={7}><Text strong>Account</Text><Select allowClear value={editing.account_id} onChange={(value) => setEditing((current) => ({ ...current, account_id: value }))} options={(editing.method === 'cash' ? accounts.cash : accounts.bank).filter((item) => item.currency_code === editing.currency_code).map((item) => ({ value: item.id, label: item.account_name || `${item.bank_name} · ${item.account_number}` }))} /></Col>
+          <Col xs={24} md={7}><Text strong>Reference</Text><Input value={editing.reference} onChange={(event) => setEditing((current) => ({ ...current, reference: event.target.value }))} /></Col>
+          <Col span={24}><Text strong>Description</Text><Input value={editing.narration} onChange={(event) => setEditing((current) => ({ ...current, narration: event.target.value }))} /></Col>
+        </Row><Table rowKey="id" pagination={false} dataSource={editInvoices} columns={[
+          { title: 'Invoice', dataIndex: 'invoice_number' },
+          { title: 'Current balance', dataIndex: 'outstanding_amount', align: 'right', render: money },
+          { title: 'Available for reallocation', key: 'available', align: 'right', render: (_, invoice) => money(Number(invoice.outstanding_amount) + Number(editing.originalAllocations[invoice.id] || 0)) },
+          { title: 'Allocation', key: 'allocation', align: 'right', render: (_, invoice) => <InputNumber min={0} max={Number(invoice.outstanding_amount) + Number(editing.originalAllocations[invoice.id] || 0)} precision={2} value={editing.allocations[invoice.id] || 0} onChange={(value) => setEditing((current) => ({ ...current, allocations: { ...current.allocations, [invoice.id]: Number(value || 0) } }))} /> },
+        ]} /></>}
+      </Modal>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Input, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Dropdown, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { DownOutlined, EyeOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Paragraph } = Typography;
+const money = (value) => Number(value || 0).toFixed(2);
 
 export default function InvoiceList() {
   const navigate = useNavigate();
@@ -12,6 +14,10 @@ export default function InvoiceList() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [refundInvoice, setRefundInvoice] = useState(null);
+  const [refundAmount, setRefundAmount] = useState(0);
+  const [refundReason, setRefundReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
@@ -79,6 +85,32 @@ export default function InvoiceList() {
     return colors[status] || 'default';
   };
 
+  const request = async (endpoint, method = 'POST', body) => {
+    setActionLoading(true);
+    try {
+      const response = await fetch(endpoint, { method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Action failed');
+      return data;
+    } catch (error) { message.error(error.message); return null; } finally { setActionLoading(false); }
+  };
+
+  const refund = async (invoice, amount) => {
+    const data = await request('/api/v1/payments/customer/refund', 'POST', { invoice_uid: invoice.uid, amount, reason: refundReason || undefined });
+    if (data) { message.success('Refund recorded'); setRefundInvoice(null); setRefundReason(''); fetchInvoices(); }
+  };
+
+  const voidInvoice = async (invoice) => {
+    const data = await request(`/api/v1/invoices/${invoice.uid}/void`, 'PATCH');
+    if (data) { message.success('Invoice voided'); fetchInvoices(); }
+  };
+
+  const shareInvoice = async (invoice) => {
+    const data = await request(`/api/v1/invoices/${invoice.uid}/share`);
+    if (data && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(data.share_url); message.success('Shareable invoice link copied'); }
+    else if (data) window.prompt('Copy this shareable invoice link:', data.share_url);
+  };
+
   const columns = [
     {
       title: 'Invoice #',
@@ -139,14 +171,17 @@ export default function InvoiceList() {
       key: 'action',
       fixed: 'right',
       render: (_, invoice) => (
-        <Button
-          type="primary"
-          size="small"
-          disabled={Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void'}
-          onClick={() => navigate(`/payments?invoice=${invoice.uid}`)}
-        >
-          Record Payment
-        </Button>
+        <Space>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>Open</Button>
+          <Dropdown menu={{ items: [
+            { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void', onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
+            { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
+            { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
+            { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
+            { type: 'divider' },
+            { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
+          ] }}><Button size="small" loading={actionLoading}>Actions <DownOutlined /></Button></Dropdown>
+        </Space>
       ),
     },
   ];
@@ -203,6 +238,13 @@ export default function InvoiceList() {
           />
         </Spin>
       </Card>
+      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoading} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
+        <Typography.Paragraph>Refundable: {refundInvoice?.currency_code} {money(Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))}</Typography.Paragraph>
+        <Typography.Text strong>Amount</Typography.Text>
+        <InputNumber style={{ width: '100%', marginBottom: 12 }} min={0.01} max={Math.max(0, Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))} precision={2} value={refundAmount} onChange={(value) => setRefundAmount(Number(value || 0))} />
+        <Typography.Text strong>Reason</Typography.Text>
+        <Input.TextArea maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
+      </Modal>
     </div>
   );
 }

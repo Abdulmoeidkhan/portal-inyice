@@ -77,7 +77,7 @@ class FinancialApiTest extends TestCase
         $bankCreate->assertCreated();
         $bankId = $bankCreate->json('account.id');
 
-        $payment = $this->postJson('/api/v1/payments/record', [
+        $payment = $this->postJson('/api/v1/receipts/customer/record', [
             'invoice_uid' => $invoiceUid,
             'amount' => 400,
             'payment_method' => 'bank_transfer',
@@ -100,6 +100,20 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('outstanding_balance', 600);
 
+        $report = $this->getJson('/api/v1/reports/payments?from_date=2020-01-01&to_date=2030-12-31');
+        $report->assertOk()
+            ->assertJsonPath('summary.total_records', 1)
+            ->assertJsonPath('summary.customer_records', 0)
+            ->assertJsonPath('summary.vendor_records', 1)
+            ->assertJsonPath('summary.by_currency.0.currency_code', 'PKR')
+            ->assertJsonCount(1, 'data');
+
+        $this->getJson('/api/v1/reports/receipts?from_date=2020-01-01&to_date=2030-12-31&counterparty_type=customer')
+            ->assertOk()
+            ->assertJsonPath('summary.total_records', 1)
+            ->assertJsonPath('data.0.direction', 'money_in')
+            ->assertJsonPath('data.0.counterparty_name', 'Test Customer');
+
         $this->getJson('/api/v1/payments/vendor')
             ->assertOk()
             ->assertJsonPath('total', 1);
@@ -110,7 +124,7 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('summary.period_paid', 400)
             ->assertJsonPath('summary.outstanding_balance', 600);
 
-        $advance = $this->postJson('/api/v1/payments/advance', [
+        $advance = $this->postJson('/api/v1/receipts/customer/advance', [
             'invoice_uid' => $invoiceUid,
             'amount' => 200,
             'payment_method' => 'cash',
@@ -158,7 +172,7 @@ class FinancialApiTest extends TestCase
             'order_id' => $secondOrder->id,
         ])->assertCreated()->json('invoice');
 
-        $response = $this->postJson('/api/v1/payments/record-bulk', [
+        $response = $this->postJson('/api/v1/receipts/customer/record-bulk', [
             'allocations' => [
                 ['invoice_uid' => $firstInvoice['uid'], 'amount' => 500],
                 ['invoice_uid' => $secondInvoice['uid'], 'amount' => 1000],
@@ -231,6 +245,67 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('outstanding_total', 500);
     }
 
+    public function test_payments_can_be_reallocated_deleted_refunded_and_invoices_shared(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])
+            ->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'], 'amount' => 400, 'payment_method' => 'cash',
+        ])->assertCreated();
+        $receipt = $this->getJson('/api/v1/receipts/customer')->assertOk()->json('data.0');
+
+        $this->patchJson('/api/v1/receipts/customer/' . $receipt['uid'], [
+            'date' => '2026-06-20', 'payment_method' => 'cash',
+            'allocations' => [['invoice_id' => $invoice['id'], 'amount' => 250]],
+        ])->assertOk()->assertJsonPath('receipt.amount', '250.0000');
+        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'outstanding_amount' => 750]);
+
+        $this->postJson('/api/v1/payments/customer/refund', [
+            'invoice_uid' => $invoice['uid'], 'amount' => 100, 'reason' => 'Partial service refund',
+        ])->assertCreated();
+        $this->postJson('/api/v1/payments/customer/refund', [
+            'invoice_uid' => $invoice['uid'], 'amount' => 151,
+        ])->assertUnprocessable()->assertJsonPath('error', 'Refund cannot exceed the refundable paid amount.');
+
+        $share = $this->postJson('/api/v1/invoices/' . $invoice['uid'] . '/share')->assertOk();
+        $this->getJson('/api/v1/shared-invoices/' . $share->json('share_token'))
+            ->assertOk()->assertJsonPath('invoice_number', $invoice['invoice_number']);
+
+        $this->deleteJson('/api/v1/receipts/customer/' . $receipt['uid'])
+            ->assertUnprocessable()->assertJsonPath('error', 'A refunded receipt cannot be deleted.');
+        $this->assertDatabaseHas('receipts', ['uid' => $receipt['uid']]);
+        $this->deleteJson('/api/v1/receipts/customer/' . $receipt['uid'] . '-missing')->assertNotFound();
+
+        // A separate unrefunded receipt can be safely deleted and its allocation restored.
+        $secondOrder = $ctx['order']->replicate();
+        $secondOrder->uid = (string) Str::ulid();
+        $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $secondOrder->save();
+        foreach ($ctx['order']->items as $item) {
+            $copy = $item->replicate(); $copy->uid = (string) Str::ulid(); $copy->order_id = $secondOrder->id; $copy->save();
+        }
+        $secondInvoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $secondOrder->id])->assertCreated()->json('invoice');
+        $this->postJson('/api/v1/receipts/customer/record', ['invoice_uid' => $secondInvoice['uid'], 'amount' => 100, 'payment_method' => 'cash'])->assertCreated();
+        $secondReceipt = $this->getJson('/api/v1/receipts/customer')->assertOk()->json('data.0');
+        $this->deleteJson('/api/v1/receipts/customer/' . $secondReceipt['uid'])->assertOk();
+        $this->assertDatabaseMissing('receipts', ['uid' => $secondReceipt['uid']]);
+        $this->assertDatabaseHas('invoices', ['id' => $secondInvoice['id'], 'outstanding_amount' => 1000]);
+
+        $vendorPayment = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id, 'amount' => 400, 'payment_method' => 'cash',
+            'allocations' => [['order_id' => $ctx['order']->id, 'amount' => 400]],
+        ])->assertCreated()->json('payment');
+        $this->patchJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'], [
+            'date' => '2026-06-20', 'payment_method' => 'cash',
+            'allocations' => [['order_id' => $ctx['order']->id, 'amount' => 300]],
+        ])->assertOk()->assertJsonPath('payment.amount', '300.0000');
+        $this->deleteJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertOk();
+        $this->assertDatabaseMissing('payments', ['uid' => $vendorPayment['uid']]);
+    }
+
     public function test_reports_and_statements_endpoints_work(): void
     {
         $ctx = $this->seedTenantContext();
@@ -243,7 +318,7 @@ class FinancialApiTest extends TestCase
         $invoiceUid = $invoiceResponse->json('invoice.uid');
         $this->patchJson('/api/v1/invoices/' . $invoiceUid . '/mark-sent')->assertOk();
 
-        $this->postJson('/api/v1/payments/record', [
+        $this->postJson('/api/v1/receipts/customer/record', [
             'invoice_uid' => $invoiceUid,
             'amount' => 250,
             'payment_method' => 'cash',
@@ -285,6 +360,47 @@ class FinancialApiTest extends TestCase
             'statement_date',
             'summary',
         ]);
+    }
+
+    public function test_customer_payments_and_vendor_receipts_follow_cash_direction(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $customerPayment = $this->postJson('/api/v1/payments/customer', [
+            'customer_id' => $ctx['customer']->id, 'amount' => 125,
+            'payment_method' => 'cash', 'payment_date' => '2026-06-20',
+            'description' => 'Customer goodwill payment',
+        ])->assertCreated()->assertJsonPath('payment.customer.name', 'Test Customer')->json('payment');
+
+        $vendorReceipt = $this->postJson('/api/v1/receipts/vendor', [
+            'vendor_id' => $ctx['vendor']->id, 'amount' => 75,
+            'payment_method' => 'bank_transfer', 'receipt_date' => '2026-06-20',
+            'description' => 'Vendor rebate received',
+        ])->assertCreated()->assertJsonPath('receipt.vendor.name', 'Test Vendor')->json('receipt');
+
+        $this->patchJson('/api/v1/payments/customer/' . $customerPayment['uid'], [
+            'date' => '2026-06-20', 'amount' => 130, 'payment_method' => 'cash', 'description' => 'Updated customer payment',
+        ])->assertOk()->assertJsonPath('payment.amount', '130.0000');
+        $this->patchJson('/api/v1/receipts/vendor/' . $vendorReceipt['uid'], [
+            'date' => '2026-06-20', 'amount' => 80, 'payment_method' => 'bank_transfer', 'description' => 'Updated vendor receipt',
+        ])->assertOk()->assertJsonPath('receipt.amount', '80.0000');
+
+        $this->getJson('/api/v1/reports/payments?from_date=2026-06-01&to_date=2026-06-30')
+            ->assertOk()->assertJsonPath('direction', 'payment')->assertJsonPath('summary.customer_records', 1)
+            ->assertJsonPath('data.0.counterparty_name', 'Test Customer');
+        $this->getJson('/api/v1/reports/receipts?from_date=2026-06-01&to_date=2026-06-30')
+            ->assertOk()->assertJsonPath('direction', 'receipt')->assertJsonPath('summary.vendor_records', 1)
+            ->assertJsonPath('data.0.counterparty_name', 'Test Vendor');
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()->assertJsonPath('transactions.0.type', 'payment');
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()->assertJsonPath('summary.outstanding_balance', 1080);
+
+        $this->deleteJson('/api/v1/payments/customer/' . $customerPayment['uid'])->assertOk();
+        $this->deleteJson('/api/v1/receipts/vendor/' . $vendorReceipt['uid'])->assertOk();
+        $this->assertDatabaseMissing('payments', ['uid' => $customerPayment['uid']]);
+        $this->assertDatabaseMissing('receipts', ['uid' => $vendorReceipt['uid']]);
     }
 
     private function seedTenantContext(): array

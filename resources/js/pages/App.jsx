@@ -24,6 +24,9 @@ import InvoiceList from './InvoiceList';
 import OrderList from './OrderList';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
+import PaymentReport from './PaymentReport';
+import InvoiceDetail from './InvoiceDetail';
+import CounterpartyTransaction from './CounterpartyTransaction';
 import Login from './Login';
 import Register from './Register';
 import Dashboard from './Dashboard';
@@ -179,16 +182,21 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<InvoiceList />} />
+              <Route path="/invoices/:uid" element={<InvoiceDetail />} />
               <Route path="/orders" element={<OrderList />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={<Payments />} />
+              <Route path="/customer-payments" element={<CounterpartyTransaction direction="payment" partyType="customer" />} />
               <Route path="/vendor-payments" element={<VendorPayments />} />
+              <Route path="/vendor-receipts" element={<CounterpartyTransaction direction="receipt" partyType="vendor" />} />
               <Route path="/customers" element={<CustomerList />} />
               <Route path="/vendors" element={<VendorList />} />
               <Route path="/profile/company" element={<CompanyProfile />} />
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={<AgingReport />} />
               <Route path="/reports/revenue" element={<RevenueReport />} />
+              <Route path="/reports/payments" element={<PaymentReport />} />
+              <Route path="/reports/receipts" element={<PaymentReport direction="receipt" />} />
               <Route path="/statements/customers" element={<CustomerStatement />} />
               <Route path="/statements/vendors" element={<VendorStatement />} />
               <Route path="*" element={<NotFound />} />
@@ -273,6 +281,16 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           icon: <BankOutlined />,
         },
         {
+          key: '/customer-payments',
+          label: <Link to="/customer-payments">Customer Payments</Link>,
+          icon: <BankOutlined />,
+        },
+        {
+          key: '/vendor-receipts',
+          label: <Link to="/vendor-receipts">Vendor Receipts</Link>,
+          icon: <BankOutlined />,
+        },
+        {
           key: '/vendor-payments',
           label: <Link to="/vendor-payments">Vendor Payments</Link>,
           icon: <BankOutlined />,
@@ -320,6 +338,14 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           label: <Link to="/reports/revenue">Revenue Report</Link>,
         },
         {
+          key: '/reports/receipts',
+          label: <Link to="/reports/receipts">Receipt Report</Link>,
+        },
+        {
+          key: '/reports/payments',
+          label: <Link to="/reports/payments">Payment Report</Link>,
+        },
+        {
           key: '/statements/customers',
           label: <Link to="/statements/customers">Customer Statement</Link>,
         },
@@ -334,6 +360,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   if (!isAuthenticated) {
     return (
       <Routes>
+        <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => setIsAuthenticated(true)} />} />
         <Route path="/register" element={<Register onRegistered={() => setIsAuthenticated(true)} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -342,13 +369,9 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   }
 
   return (
-    <AuthenticatedLayout
-      menuItems={menuItems}
-      onLogout={handleLogout}
-      themeMode={themeMode}
-      themeStyle={themeStyle}
-      onChangeThemeStyle={onChangeThemeStyle}
-      onToggleTheme={onToggleTheme}
-    />
+    <Routes>
+      <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
+      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} />} />
+    </Routes>
   );
 }

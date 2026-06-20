@@ -14,6 +14,48 @@ class ReportController extends Controller
     }
 
     /**
+     * Get all money-out customer and vendor payment records.
+     */
+    public function paymentReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+            'counterparty_type' => 'nullable|in:customer,vendor',
+            'payment_method' => 'nullable|in:cash,bank_transfer,check,card',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        $report = $this->reportService->cashTransactionReport(
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
+            $validated['from_date'],
+            $validated['to_date'],
+            'payment',
+            $validated['counterparty_type'] ?? null,
+            $validated['payment_method'] ?? null,
+            isset($validated['search']) ? trim($validated['search']) : null,
+        );
+
+        return response()->json($report);
+    }
+
+    public function receiptReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'required|date', 'to_date' => 'required|date|after_or_equal:from_date',
+            'counterparty_type' => 'nullable|in:customer,vendor',
+            'payment_method' => 'nullable|in:cash,bank_transfer,check,card', 'search' => 'nullable|string|max:100',
+        ]);
+        return response()->json($this->reportService->cashTransactionReport(
+            (int) auth()->user()->tenant_id, (int) auth()->user()->company_id,
+            $validated['from_date'], $validated['to_date'], 'receipt',
+            $validated['counterparty_type'] ?? null, $validated['payment_method'] ?? null,
+            isset($validated['search']) ? trim($validated['search']) : null,
+        ));
+    }
+
+    /**
      * Get invoice aging report
      */
     public function agingReport(Request $request): JsonResponse

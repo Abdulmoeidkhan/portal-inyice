@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Services\InvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 class InvoiceController extends Controller
 {
@@ -87,9 +88,39 @@ class InvoiceController extends Controller
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('uid', $uid)
-            ->with(['lines', 'customer', 'order', 'settlements'])
+            ->with(['lines', 'customer', 'order', 'company', 'settlements'])
             ->firstOrFail();
 
+        return response()->json($invoice);
+    }
+
+    public function share(string $uid): JsonResponse
+    {
+        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        if (!$invoice->share_token) $invoice->update(['share_token' => Str::random(64)]);
+        return response()->json([
+            'share_url' => url('/shared/invoices/' . $invoice->share_token),
+            'share_token' => $invoice->share_token,
+        ]);
+    }
+
+    public function revokeShare(string $uid): JsonResponse
+    {
+        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $invoice->update(['share_token' => null]);
+        return response()->json(['success' => true]);
+    }
+
+    public function shared(string $token): JsonResponse
+    {
+        $invoice = Invoice::where('share_token', $token)
+            ->with(['lines', 'customer', 'order', 'company'])
+            ->firstOrFail();
+        $invoice->makeHidden(['share_token', 'tenant_id', 'company_id', 'customer_id', 'order_id', 'fx_rate_to_base', 'created_at', 'updated_at']);
+        $invoice->lines->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
+        $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
+        $invoice->order?->setVisible(['order_number', 'booking_reference']);
+        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address']);
         return response()->json($invoice);
     }
 
@@ -126,6 +157,7 @@ class InvoiceController extends Controller
         }
 
         $invoice->update(['status' => 'void']);
+        $invoice->order()->update(['status' => 'void']);
 
         return response()->json([
             'success' => true,

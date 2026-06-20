@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\ExchangeRate;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Receipt;
 use App\Models\Vendor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -79,6 +80,21 @@ class StatementService
             $totalPaid += ($invoice->total_amount - $invoice->outstanding_amount);
         }
 
+        $cashTransactions = collect();
+        foreach ($invoices as $invoice) {
+            $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'description' => 'Customer invoice', 'debit' => (float) $invoice->total_amount, 'credit' => 0, 'sort_order' => 1]);
+        }
+        Receipt::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get()
+            ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from customer', 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 2]));
+        Payment::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->when($fromDate, fn ($q) => $q->where('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('payment_date', '<=', $toDate))->get()
+            ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'description' => $payment->description ?: 'Payment to customer', 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 3]));
+        $runningCustomerBalance = 0;
+        $cashTransactions = $cashTransactions->sortBy([['date', 'asc'], ['sort_order', 'asc']])->values()->map(function ($row) use (&$runningCustomerBalance) {
+            $runningCustomerBalance += $row['debit'] - $row['credit']; $row['balance'] = $runningCustomerBalance; unset($row['sort_order']); return $row;
+        });
+
         return [
             'customer' => [
                 'uid' => $customer->uid,
@@ -96,6 +112,7 @@ class StatementService
             'customer_currency' => $customCurrency,
             'base_currency_invoices' => $baseCurrencyInvoices->toArray(),
             'customer_currency_invoices' => $customCurrencyInvoices->toArray(),
+            'transactions' => $cashTransactions->all(),
             'summary' => [
                 'total_invoices' => count($invoices),
                 'total_outstanding' => $totalOutstanding,
@@ -129,6 +146,7 @@ class StatementService
             ->filter(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId) > 0);
         $paymentsQuery = Payment::where('tenant_id', $tenantId)
             ->where('vendor_id', $vendorId);
+        $receiptsQuery = Receipt::where('tenant_id', $tenantId)->where('vendor_id', $vendorId);
 
         $openingPayables = $eligibleOrders
             ->when($fromDate, fn ($orders) => $orders->filter(fn (Order $order) => $order->created_at->toDateString() < $fromDate))
@@ -136,7 +154,8 @@ class StatementService
         $openingPayments = (clone $paymentsQuery)
             ->when($fromDate, fn ($query) => $query->where('payment_date', '<', $fromDate))
             ->sum('amount');
-        $openingBalance = $fromDate ? (float) $openingPayables - (float) $openingPayments : 0;
+        $openingReceipts = (clone $receiptsQuery)->when($fromDate, fn ($query) => $query->where('receipt_date', '<', $fromDate))->sum('amount');
+        $openingBalance = $fromDate ? (float) $openingPayables - (float) $openingPayments + (float) $openingReceipts : 0;
 
         $orders = $eligibleOrders
             ->when($fromDate, fn ($items) => $items->filter(fn (Order $order) => $order->created_at->toDateString() >= $fromDate))
@@ -146,6 +165,7 @@ class StatementService
             ->when($toDate, fn ($query) => $query->where('payment_date', '<=', $toDate))
             ->orderBy('payment_date')
             ->get();
+        $receipts = $receiptsQuery->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get();
 
         $transactions = collect();
         foreach ($orders as $order) {
@@ -170,6 +190,13 @@ class StatementService
                 'debit' => 0,
                 'credit' => (float) $payment->amount,
                 'sort_order' => 2,
+            ]);
+        }
+        foreach ($receipts as $receipt) {
+            $transactions->push([
+                'id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt',
+                'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from vendor',
+                'debit' => (float) $receipt->amount, 'credit' => 0, 'sort_order' => 3,
             ]);
         }
 

@@ -744,3 +744,25 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+@media print {
+  @page { margin: 12mm; }
+
+  .app-sider,
+  .app-header,
+  .invoice-screen-actions,
+  .ant-float-btn {
+    display: none !important;
+  }
+
+  .app-content,
+  .invoice-document,
+  .invoice-document .ant-card-body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .invoice-document .ant-card {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

@@ -17,6 +17,7 @@ class Payment extends Model
         'uid',
         'company_id',
         'vendor_id',
+        'customer_id',
         'payment_number',
         'payment_date',
         'amount',
@@ -49,6 +50,11 @@ class Payment extends Model
         return $this->belongsTo(Vendor::class);
     }
 
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
@@ -57,5 +63,10 @@ class Payment extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(VendorPaymentAllocation::class);
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'uid';
     }
 }

@@ -4,11 +4,196 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Receipt;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class ReportService
 {
+    public function cashTransactionReport(
+        int $tenantId,
+        int $companyId,
+        string $fromDate,
+        string $toDate,
+        string $direction,
+        ?string $counterpartyType = null,
+        ?string $paymentMethod = null,
+        ?string $search = null
+    ): array {
+        $isReceipt = $direction === 'receipt';
+        $model = $isReceipt ? Receipt::class : Payment::class;
+        $dateColumn = $isReceipt ? 'receipt_date' : 'payment_date';
+        $numberColumn = $isReceipt ? 'receipt_number' : 'payment_number';
+        $query = $model::query()->where('tenant_id', $tenantId)->where('company_id', $companyId)
+            ->whereBetween($dateColumn, [$fromDate, $toDate])
+            ->when($counterpartyType === 'customer', fn ($q) => $q->whereNotNull('customer_id'))
+            ->when($counterpartyType === 'vendor', fn ($q) => $q->whereNotNull('vendor_id'))
+            ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
+            ->when($search, function ($q, $search) use ($numberColumn) {
+                $q->where(function ($nested) use ($search, $numberColumn) {
+                    $nested->where($numberColumn, 'like', "%{$search}%")
+                        ->orWhere('reference_number', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($party) => $party->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('vendor', fn ($party) => $party->where('name', 'like', "%{$search}%"));
+                });
+            })->with(['customer:id,name', 'vendor:id,name', 'createdBy:id,name']);
+
+        if ($isReceipt) $query->with('settlements.invoice:id,invoice_number');
+        else $query->with('allocations.order:id,order_number');
+
+        $records = $query->orderByDesc($dateColumn)->orderByDesc('id')->get()->map(function ($record) use ($isReceipt, $dateColumn, $numberColumn) {
+            $partyType = $record->customer_id ? 'customer' : 'vendor';
+            return [
+                'key' => ($isReceipt ? 'receipt-' : 'payment-') . $record->id,
+                'direction' => $isReceipt ? 'money_in' : 'money_out',
+                'counterparty_type' => $partyType,
+                'counterparty_name' => $record->{$partyType}?->name,
+                'document_number' => $record->{$numberColumn},
+                'date' => $record->{$dateColumn}->toDateString(),
+                'payment_method' => $record->payment_method,
+                'reference_number' => $record->reference_number,
+                'description' => $record->description,
+                'currency_code' => $record->currency_code,
+                'amount' => (float) $record->amount,
+                'created_by' => $record->createdBy?->name,
+            ];
+        });
+        $byCurrency = $records->groupBy('currency_code')->map(fn (Collection $rows, string $currency) => [
+            'currency_code' => $currency, 'amount' => round((float) $rows->sum('amount'), 4), 'count' => $rows->count(),
+        ])->values();
+        return [
+            'report_date' => now()->toDateString(), 'company_id' => $companyId, 'direction' => $direction,
+            'period' => ['from' => $fromDate, 'to' => $toDate], 'data' => $records->all(),
+            'summary' => [
+                'total_records' => $records->count(),
+                'customer_records' => $records->where('counterparty_type', 'customer')->count(),
+                'vendor_records' => $records->where('counterparty_type', 'vendor')->count(),
+                'by_currency' => $byCurrency->all(),
+            ],
+        ];
+    }
+
+    /**
+     * Generate a unified report of customer receipts and vendor payments.
+     */
+    public function paymentReport(
+        int $tenantId,
+        int $companyId,
+        string $fromDate,
+        string $toDate,
+        string $type = 'all',
+        ?string $paymentMethod = null,
+        ?string $search = null
+    ): array {
+        $records = collect();
+
+        if (in_array($type, ['all', 'received'], true)) {
+            $receipts = Receipt::query()
+                ->where('tenant_id', $tenantId)
+                ->where('company_id', $companyId)
+                ->whereBetween('receipt_date', [$fromDate, $toDate])
+                ->when($paymentMethod, fn ($query) => $query->where('payment_method', $paymentMethod))
+                ->when($search, function ($query, $search) {
+                    $query->where(function ($searchQuery) use ($search) {
+                        $searchQuery->where('receipt_number', 'like', "%{$search}%")
+                            ->orWhere('reference_number', 'like', "%{$search}%")
+                            ->orWhere('description', 'like', "%{$search}%")
+                            ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"));
+                    });
+                })
+                ->with(['customer:id,name', 'createdBy:id,name', 'settlements.invoice:id,invoice_number'])
+                ->get()
+                ->map(fn (Receipt $receipt) => [
+                    'key' => 'receipt-' . $receipt->id,
+                    'type' => 'received',
+                    'document_number' => $receipt->receipt_number,
+                    'date' => $receipt->receipt_date->toDateString(),
+                    'party_type' => 'customer',
+                    'party_name' => $receipt->customer?->name,
+                    'payment_method' => $receipt->payment_method,
+                    'reference_number' => $receipt->reference_number,
+                    'related_documents' => $receipt->settlements
+                        ->pluck('invoice.invoice_number')->filter()->unique()->values()->all(),
+                    'description' => $receipt->description,
+                    'currency_code' => $receipt->currency_code,
+                    'amount' => (float) $receipt->amount,
+                    'created_by' => $receipt->createdBy?->name,
+                ]);
+
+            $records = $records->concat($receipts);
+        }
+
+        if (in_array($type, ['all', 'paid'], true)) {
+            $payments = Payment::query()
+                ->where('tenant_id', $tenantId)
+                ->where('company_id', $companyId)
+                ->whereBetween('payment_date', [$fromDate, $toDate])
+                ->when($paymentMethod, fn ($query) => $query->where('payment_method', $paymentMethod))
+                ->when($search, function ($query, $search) {
+                    $query->where(function ($searchQuery) use ($search) {
+                        $searchQuery->where('payment_number', 'like', "%{$search}%")
+                            ->orWhere('reference_number', 'like', "%{$search}%")
+                            ->orWhere('description', 'like', "%{$search}%")
+                            ->orWhereHas('vendor', fn ($vendorQuery) => $vendorQuery->where('name', 'like', "%{$search}%"));
+                    });
+                })
+                ->with(['vendor:id,name', 'createdBy:id,name', 'allocations.order:id,order_number'])
+                ->get()
+                ->map(fn (Payment $payment) => [
+                    'key' => 'payment-' . $payment->id,
+                    'type' => 'paid',
+                    'document_number' => $payment->payment_number,
+                    'date' => $payment->payment_date->toDateString(),
+                    'party_type' => 'vendor',
+                    'party_name' => $payment->vendor?->name,
+                    'payment_method' => $payment->payment_method,
+                    'reference_number' => $payment->reference_number,
+                    'related_documents' => $payment->allocations
+                        ->pluck('order.order_number')->filter()->unique()->values()->all(),
+                    'description' => $payment->description,
+                    'currency_code' => $payment->currency_code,
+                    'amount' => (float) $payment->amount,
+                    'created_by' => $payment->createdBy?->name,
+                ]);
+
+            $records = $records->concat($payments);
+        }
+
+        $records = $records->sortByDesc(fn (array $record) => $record['date'] . '|' . $record['key'])->values();
+        $currencySummary = $records->groupBy('currency_code')->map(function (Collection $currencyRecords, string $currency) {
+            return [
+                'currency_code' => $currency,
+                'received' => round((float) $currencyRecords->where('type', 'received')->sum('amount'), 4),
+                'paid' => round((float) $currencyRecords->where('type', 'paid')->sum('amount'), 4),
+                'net_cash_flow' => round(
+                    (float) $currencyRecords->where('type', 'received')->sum('amount')
+                    - (float) $currencyRecords->where('type', 'paid')->sum('amount'),
+                    4
+                ),
+            ];
+        })->values();
+
+        return [
+            'report_date' => now()->toDateString(),
+            'company_id' => $companyId,
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'filters' => [
+                'type' => $type,
+                'payment_method' => $paymentMethod,
+                'search' => $search,
+            ],
+            'data' => $records->all(),
+            'summary' => [
+                'total_records' => $records->count(),
+                'received_count' => $records->where('type', 'received')->count(),
+                'paid_count' => $records->where('type', 'paid')->count(),
+                'by_currency' => $currencySummary->all(),
+            ],
+        ];
+    }
+
     /**
      * Generate invoice aging report
      */

@@ -82,7 +82,7 @@ export default function Dashboard() {
                 <p>Your all-in-one order and invoicing management platform for travel agencies.</p>
                 <ul>
                   <li>📄 Smart invoicing from orders</li>
-                  <li>💰 Multi-currency payment tracking</li>
+                  <li>💰 Multi-currency receipt and payment tracking</li>
                   <li>📊 Advanced financial reporting</li>
                   <li>👥 Customer & vendor management</li>
                   <li>🔐 Secure multi-tenant architecture</li>

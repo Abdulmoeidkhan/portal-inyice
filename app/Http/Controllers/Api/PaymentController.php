@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\BankAccount;
 use App\Models\CashAccount;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Receipt;
@@ -63,6 +64,172 @@ class PaymentController extends Controller
         }
 
         return response()->json($query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50));
+    }
+
+    public function vendorReceipts(Request $request): JsonResponse
+    {
+        $query = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->with('vendor:id,name');
+        if ($request->filled('vendor_id')) $query->where('vendor_id', (int) $request->query('vendor_id'));
+        return response()->json($query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50));
+    }
+
+    public function customerPayments(Request $request): JsonResponse
+    {
+        $query = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->with('customer:id,name');
+        if ($request->filled('customer_id')) $query->where('customer_id', (int) $request->query('customer_id'));
+        return response()->json($query->orderByDesc('payment_date')->orderByDesc('id')->paginate(50));
+    }
+
+    public function recordCustomerPayment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id', 'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,bank_transfer,check,card', 'payment_date' => 'nullable|date',
+            'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000',
+        ]);
+        $customer = Customer::where('tenant_id', auth()->user()->tenant_id)->with('company')->findOrFail($validated['customer_id']);
+        $currency = $customer->currency_code ?: $customer->company->base_currency_code;
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $customer->company_id, $currency)) return response()->json(['error' => 'The selected account is unavailable for this customer payment.'], 422);
+        $payment = $this->paymentService->recordCustomerPayment($customer, (float) $validated['amount'], $validated['payment_method'], $validated['account_id'] ?? null, $validated['reference_number'] ?? null, $validated['description'] ?? null, $validated['payment_date'] ?? null, auth()->id());
+        return response()->json(['success' => true, 'payment' => $payment], 201);
+    }
+
+    public function deleteCustomerPayment(string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
+        $this->paymentService->deleteCustomerPayment($payment);
+        return response()->json(['success' => true]);
+    }
+
+    public function updateCustomerPayment(Request $request, string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
+        $validated = $request->validate($this->standaloneTransactionRules());
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $payment->company_id, $payment->currency_code)) return response()->json(['error' => 'The selected account is unavailable.'], 422);
+        try { $payment = $this->paymentService->updateCustomerPayment($payment, $validated); }
+        catch (\InvalidArgumentException $exception) { return response()->json(['error' => $exception->getMessage()], 422); }
+        return response()->json(['success' => true, 'payment' => $payment]);
+    }
+
+    public function recordVendorReceipt(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'vendor_id' => 'required|integer|exists:vendors,id', 'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,bank_transfer,check,card', 'receipt_date' => 'nullable|date',
+            'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000',
+        ]);
+        $vendor = Vendor::where('tenant_id', auth()->user()->tenant_id)->with('company')->findOrFail($validated['vendor_id']);
+        $currency = $vendor->currency_code ?: $vendor->company->base_currency_code;
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $vendor->company_id, $currency)) return response()->json(['error' => 'The selected account is unavailable for this vendor receipt.'], 422);
+        $receipt = $this->paymentService->recordVendorReceipt($vendor, (float) $validated['amount'], $validated['payment_method'], $validated['account_id'] ?? null, $validated['reference_number'] ?? null, $validated['description'] ?? null, $validated['receipt_date'] ?? null, auth()->id());
+        return response()->json(['success' => true, 'receipt' => $receipt], 201);
+    }
+
+    public function deleteVendorReceipt(string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
+        $this->paymentService->deleteVendorReceipt($receipt);
+        return response()->json(['success' => true]);
+    }
+
+    public function updateVendorReceipt(Request $request, string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
+        $validated = $request->validate($this->standaloneTransactionRules());
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $receipt->company_id, $receipt->currency_code)) return response()->json(['error' => 'The selected account is unavailable.'], 422);
+        $receipt = $this->paymentService->updateVendorReceipt($receipt, $validated);
+        return response()->json(['success' => true, 'receipt' => $receipt]);
+    }
+
+    public function showCustomerReceipt(string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)
+            ->with(['customer:id,name,currency_code', 'settlements.invoice:id,uid,invoice_number,outstanding_amount,total_amount'])
+            ->firstOrFail();
+        return response()->json($receipt);
+    }
+
+    public function updateCustomerReceipt(Request $request, string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $validated = $request->validate([
+            'date' => 'required|date', 'payment_method' => 'required|in:cash,bank_transfer,check,card',
+            'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000', 'allocations' => 'required|array|min:1',
+            'allocations.*.invoice_id' => 'required|integer|distinct|exists:invoices,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+        $invoices = Invoice::where('tenant_id', $receipt->tenant_id)
+            ->where('customer_id', $receipt->customer_id)
+            ->whereIn('id', collect($validated['allocations'])->pluck('invoice_id'))->get();
+        if ($invoices->count() !== count($validated['allocations'])) {
+            return response()->json(['error' => 'One or more invoices are unavailable.'], 422);
+        }
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $receipt->company_id, $receipt->currency_code)) {
+            return response()->json(['error' => 'The selected account is unavailable for this receipt.'], 422);
+        }
+        try {
+            $receipt = $this->paymentService->updateReceipt($receipt, $invoices, $validated);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+        return response()->json(['success' => true, 'receipt' => $receipt]);
+    }
+
+    public function deleteCustomerReceipt(string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        try {
+            $this->paymentService->deleteReceipt($receipt);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+        return response()->json(['success' => true]);
+    }
+
+    public function showVendorPayment(string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)
+            ->with(['vendor:id,name,currency_code', 'allocations.order:id,order_number,booking_reference'])->firstOrFail();
+        return response()->json($payment);
+    }
+
+    public function updateVendorPayment(Request $request, string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->with('vendor.company')->firstOrFail();
+        $validated = $request->validate([
+            'date' => 'required|date', 'payment_method' => 'required|in:cash,bank_transfer,check,card',
+            'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000', 'allocations' => 'required|array|min:1',
+            'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+        $orders = Order::where('tenant_id', $payment->tenant_id)->whereIn('id', collect($validated['allocations'])->pluck('order_id'))->get();
+        if ($orders->count() !== count($validated['allocations'])) return response()->json(['error' => 'One or more orders are unavailable.'], 422);
+        foreach ($validated['allocations'] as $allocation) {
+            $order = $orders->firstWhere('id', (int) $allocation['order_id']);
+            $payable = $this->statementService->vendorPayableAmount($order, $payment->vendor_id);
+            $allocatedElsewhere = (float) VendorPaymentAllocation::where('order_id', $order->id)->where('payment_id', '!=', $payment->id)->sum('amount');
+            if ((float) $allocation['amount'] > max(0, $payable - $allocatedElsewhere)) {
+                return response()->json(['error' => 'An allocation exceeds the selected order balance.'], 422);
+            }
+        }
+        $accountType = ($validated['account_id'] ?? null) ? ($validated['payment_method'] === 'cash' ? 'cash' : 'bank') : null;
+        if (($validated['account_id'] ?? null) && !$this->accountIsValid($validated['account_id'], $validated['payment_method'], $payment->company_id, $payment->currency_code)) {
+            return response()->json(['error' => 'The selected account is unavailable for this payment.'], 422);
+        }
+        $validated['account_type'] = $accountType;
+        $payment = $this->paymentService->updateVendorPayment($payment, $validated);
+        return response()->json(['success' => true, 'payment' => $payment]);
+    }
+
+    public function deleteVendorPayment(string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $this->paymentService->deleteVendorPayment($payment);
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -201,7 +368,7 @@ class PaymentController extends Controller
     /**
      * Record customer payment
      */
-    public function recordPayment(Request $request): JsonResponse
+    public function recordCustomerReceipt(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'invoice_uid' => 'required|exists:invoices,uid',
@@ -233,7 +400,7 @@ class PaymentController extends Controller
             ], 422);
         }
 
-        $settlement = $this->paymentService->recordPayment(
+        $settlement = $this->paymentService->recordCustomerReceipt(
             invoice: $invoice,
             amount: (float)$validated['amount'],
             paymentMethod: $validated['payment_method'],
@@ -254,7 +421,7 @@ class PaymentController extends Controller
     /**
      * Record one receipt and allocate exact amounts across multiple invoices.
      */
-    public function recordBulkPayment(Request $request): JsonResponse
+    public function recordBulkCustomerReceipt(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'invoice_uids' => 'required_without:allocations|array|min:2',
@@ -323,7 +490,7 @@ class PaymentController extends Controller
             }
         }
 
-        $result = $this->paymentService->recordBulkPayment(
+        $result = $this->paymentService->recordBulkCustomerReceipt(
             invoices: $invoices,
             amount: (float) $validated['amount'],
             paymentMethod: $validated['payment_method'],
@@ -360,12 +527,20 @@ class PaymentController extends Controller
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
-        $settlement = $this->paymentService->recordRefund(
-            invoice: $invoice,
-            amount: (float)$validated['amount'],
-            reason: $validated['reason'] ?? '',
-            createdByUserId: auth()->id()
-        );
+        if ($invoice->status === 'void') {
+            return response()->json(['error' => 'A void invoice cannot be refunded.'], 422);
+        }
+
+        try {
+            $settlement = $this->paymentService->recordRefund(
+                invoice: $invoice,
+                amount: (float)$validated['amount'],
+                reason: $validated['reason'] ?? '',
+                createdByUserId: auth()->id()
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -383,12 +558,16 @@ class PaymentController extends Controller
             'invoice_uid' => 'required|exists:invoices,uid',
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:cash,bank_transfer,check,card',
-            'account_id' => 'nullable|exists:bank_accounts,id',
+            'account_id' => 'nullable|integer',
         ]);
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
+
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $invoice->company_id, $invoice->currency_code)) {
+            return response()->json(['error' => 'The selected account is unavailable for this customer advance receipt.'], 422);
+        }
 
         $settlement = $this->paymentService->recordAdvance(
             invoice: $invoice,
@@ -470,5 +649,14 @@ class PaymentController extends Controller
             ->where('currency_code', $currencyCode)
             ->where('is_active', true)
             ->exists();
+    }
+
+    private function standaloneTransactionRules(): array
+    {
+        return [
+            'date' => 'required|date', 'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,bank_transfer,check,card', 'account_id' => 'nullable|integer',
+            'reference_number' => 'nullable|string|max:100', 'description' => 'nullable|string|max:1000',
+        ];
     }
 }

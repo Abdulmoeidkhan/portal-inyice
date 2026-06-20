@@ -74,6 +74,16 @@ class Customer extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(Receipt::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     /**
      * Scope to B2B customers only
      */
