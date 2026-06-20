@@ -388,6 +388,9 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/reports/payments?from_date=2026-06-01&to_date=2026-06-30')
             ->assertOk()->assertJsonPath('direction', 'payment')->assertJsonPath('summary.customer_records', 1)
             ->assertJsonPath('data.0.counterparty_name', 'Test Customer');
+        $this->getJson('/api/v1/reports/payments?from_date=2026-06-01&to_date=2026-06-30&counterparty_type=customer&counterparty_id=' . $ctx['customer']->id)
+            ->assertOk()->assertJsonPath('summary.total_records', 1)
+            ->assertJsonPath('data.0.counterparty_name', 'Test Customer');
         $this->getJson('/api/v1/reports/receipts?from_date=2026-06-01&to_date=2026-06-30')
             ->assertOk()->assertJsonPath('direction', 'receipt')->assertJsonPath('summary.vendor_records', 1)
             ->assertJsonPath('data.0.counterparty_name', 'Test Vendor');

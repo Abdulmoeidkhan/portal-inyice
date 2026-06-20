@@ -13,8 +13,9 @@ export default function PaymentReport({ direction = 'payment' }) {
   const isReceipt = direction === 'receipt';
   const title = isReceipt ? 'Receipt Report' : 'Payment Report';
   const [report, setReport] = useState(null);
+  const [counterparties, setCounterparties] = useState({ customers: [], vendors: [] });
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), counterparty_type: undefined, payment_method: undefined, search: '' });
+  const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), counterparty_type: undefined, counterparty_id: undefined, payment_method: undefined, search: '' });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   const fetchReport = async () => {
@@ -25,7 +26,17 @@ export default function PaymentReport({ direction = 'payment' }) {
       const data = await response.json(); if (!response.ok) throw new Error(data.message || `Could not load ${title.toLowerCase()}`); setReport(data);
     } catch (error) { message.error(error.message); } finally { setLoading(false); }
   };
-  useEffect(() => { fetchReport(); }, [direction]);
+  useEffect(() => {
+    fetchReport();
+    Promise.all([
+      fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }),
+      fetch('/api/v1/vendors', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }),
+    ]).then(async ([customerResponse, vendorResponse]) => {
+      if (!customerResponse.ok || !vendorResponse.ok) throw new Error('Could not load customer and vendor filters');
+      const [customers, vendors] = await Promise.all([customerResponse.json(), vendorResponse.json()]);
+      setCounterparties({ customers: customers.data || customers || [], vendors: vendors.data || vendors || [] });
+    }).catch((error) => message.error(error.message));
+  }, [direction]);
 
   const exportCsv = () => {
     if (!report?.data?.length) return;
@@ -48,10 +59,11 @@ export default function PaymentReport({ direction = 'payment' }) {
       <Row gutter={[12, 12]} align="bottom">
         <Col xs={12} md={4}><Text strong>From</Text><Input type="date" value={filters.from_date} onChange={(event) => setFilters((current) => ({ ...current, from_date: event.target.value }))} /></Col>
         <Col xs={12} md={4}><Text strong>To</Text><Input type="date" value={filters.to_date} onChange={(event) => setFilters((current) => ({ ...current, to_date: event.target.value }))} /></Col>
-        <Col xs={12} md={4}><Text strong>Counterparty</Text><Select allowClear placeholder="Customers and vendors" value={filters.counterparty_type} onChange={(value) => setFilters((current) => ({ ...current, counterparty_type: value }))} options={[{ value: 'customer', label: 'Customers' }, { value: 'vendor', label: 'Vendors' }]} /></Col>
-        <Col xs={12} md={4}><Text strong>Method</Text><Select allowClear placeholder="All methods" value={filters.payment_method} onChange={(value) => setFilters((current) => ({ ...current, payment_method: value }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: label(value) }))} /></Col>
-        <Col xs={24} md={5}><Text strong>Search</Text><Input allowClear value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} onPressEnter={fetchReport} /></Col>
-        <Col xs={24} md={3}><Button block type="primary" icon={<ReloadOutlined />} loading={loading} onClick={fetchReport}>Run</Button></Col>
+        <Col xs={12} md={3}><Text strong>Counterparty</Text><Select allowClear placeholder="All" value={filters.counterparty_type} onChange={(value) => setFilters((current) => ({ ...current, counterparty_type: value, counterparty_id: undefined }))} options={[{ value: 'customer', label: 'Customers' }, { value: 'vendor', label: 'Vendors' }]} /></Col>
+        <Col xs={12} md={4}><Text strong>Specific party</Text><Select showSearch allowClear optionFilterProp="label" disabled={!filters.counterparty_type} placeholder={filters.counterparty_type ? `All ${filters.counterparty_type}s` : 'Choose type first'} value={filters.counterparty_id} onChange={(value) => setFilters((current) => ({ ...current, counterparty_id: value }))} options={(filters.counterparty_type === 'customer' ? counterparties.customers : counterparties.vendors).map((item) => ({ value: item.id, label: item.name }))} /></Col>
+        <Col xs={12} md={3}><Text strong>Method</Text><Select allowClear placeholder="All methods" value={filters.payment_method} onChange={(value) => setFilters((current) => ({ ...current, payment_method: value }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: label(value) }))} /></Col>
+        <Col xs={24} md={4}><Text strong>Search</Text><Input allowClear value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} onPressEnter={fetchReport} /></Col>
+        <Col xs={24} md={2}><Button block type="primary" icon={<ReloadOutlined />} loading={loading} onClick={fetchReport}>Run</Button></Col>
       </Row>
     </div>
     {report && <><Row gutter={[16, 16]} style={{ marginBottom: 16 }}><Col xs={8}><Card><Statistic title="All records" value={report.summary.total_records} /></Card></Col><Col xs={8}><Card><Statistic title="Customer records" value={report.summary.customer_records} /></Card></Col><Col xs={8}><Card><Statistic title="Vendor records" value={report.summary.vendor_records} /></Card></Col></Row>

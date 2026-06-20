@@ -18,6 +18,7 @@ class ReportService
         string $toDate,
         string $direction,
         ?string $counterpartyType = null,
+        ?int $counterpartyId = null,
         ?string $paymentMethod = null,
         ?string $search = null
     ): array {
@@ -29,6 +30,8 @@ class ReportService
             ->whereBetween($dateColumn, [$fromDate, $toDate])
             ->when($counterpartyType === 'customer', fn ($q) => $q->whereNotNull('customer_id'))
             ->when($counterpartyType === 'vendor', fn ($q) => $q->whereNotNull('vendor_id'))
+            ->when($counterpartyType === 'customer' && $counterpartyId, fn ($q) => $q->where('customer_id', $counterpartyId))
+            ->when($counterpartyType === 'vendor' && $counterpartyId, fn ($q) => $q->where('vendor_id', $counterpartyId))
             ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
             ->when($search, function ($q, $search) use ($numberColumn) {
                 $q->where(function ($nested) use ($search, $numberColumn) {

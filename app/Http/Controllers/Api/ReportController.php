@@ -22,6 +22,7 @@ class ReportController extends Controller
             'from_date' => 'required|date',
             'to_date' => 'required|date|after_or_equal:from_date',
             'counterparty_type' => 'nullable|in:customer,vendor',
+            'counterparty_id' => 'nullable|integer|min:1',
             'payment_method' => 'nullable|in:cash,bank_transfer,check,card',
             'search' => 'nullable|string|max:100',
         ]);
@@ -33,6 +34,7 @@ class ReportController extends Controller
             $validated['to_date'],
             'payment',
             $validated['counterparty_type'] ?? null,
+            isset($validated['counterparty_id']) ? (int) $validated['counterparty_id'] : null,
             $validated['payment_method'] ?? null,
             isset($validated['search']) ? trim($validated['search']) : null,
         );
@@ -45,12 +47,15 @@ class ReportController extends Controller
         $validated = $request->validate([
             'from_date' => 'required|date', 'to_date' => 'required|date|after_or_equal:from_date',
             'counterparty_type' => 'nullable|in:customer,vendor',
+            'counterparty_id' => 'nullable|integer|min:1',
             'payment_method' => 'nullable|in:cash,bank_transfer,check,card', 'search' => 'nullable|string|max:100',
         ]);
         return response()->json($this->reportService->cashTransactionReport(
             (int) auth()->user()->tenant_id, (int) auth()->user()->company_id,
             $validated['from_date'], $validated['to_date'], 'receipt',
-            $validated['counterparty_type'] ?? null, $validated['payment_method'] ?? null,
+            $validated['counterparty_type'] ?? null,
+            isset($validated['counterparty_id']) ? (int) $validated['counterparty_id'] : null,
+            $validated['payment_method'] ?? null,
             isset($validated['search']) ? trim($validated['search']) : null,
         ));
     }
