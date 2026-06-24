@@ -1,29 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Typography } from 'antd';
 import { message } from '../../services/feedback';
-import { createCustomerApi, createVendorApi, listCustomersApi, listVendorsApi } from '../../services/salesFlowApi';
+import { createCustomerApi, listCustomersApi } from '../../services/salesFlowApi';
 
 const { Text } = Typography;
 const { TextArea } = Input;
 
 export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) {
   const [customers, setCustomers] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
-  const [vendorModalOpen, setVendorModalOpen] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
-  const [savingVendor, setSavingVendor] = useState(false);
   const [customerForm] = Form.useForm();
-  const [vendorForm] = Form.useForm();
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
-  }));
-
-  const vendorOptions = vendors.map((vendor) => ({
-    value: vendor.id,
-    label: `${vendor.name}${vendor.phone ? ` - ${vendor.phone}` : ''}`,
   }));
 
   const loadCustomers = async (search = '') => {
@@ -34,17 +25,8 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
     }
   };
 
-  const loadVendors = async (search = '') => {
-    try {
-      setVendors(await listVendorsApi(search));
-    } catch (error) {
-      message.error(error.message || 'Unable to load vendors');
-    }
-  };
-
   useEffect(() => {
     loadCustomers();
-    loadVendors();
   }, []);
 
   const handleCreateCustomer = async () => {
@@ -65,26 +47,8 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
     }
   };
 
-  const handleCreateVendor = async () => {
-    setSavingVendor(true);
-    try {
-      const values = await vendorForm.validateFields();
-      const data = await createVendorApi(values);
-      await loadVendors();
-      form.setFieldValue('vendor_id', data.vendor.id);
-      vendorForm.resetFields();
-      setVendorModalOpen(false);
-      message.success('Vendor created');
-    } catch (error) {
-      if (error?.errorFields) return;
-      message.error(error.message || 'Vendor creation failed');
-    } finally {
-      setSavingVendor(false);
-    }
-  };
-
   return (
-    <Card className="border-beam-aurora" title="Create Order">
+    <Card className="border-beam-aurora" title="Order Details">
       <Form layout="vertical" form={form} onFinish={onCreateOrder} initialValues={{ currency_code: 'PKR' }}>
         <Row gutter={12}>
           <Col xs={24} md={8}>
@@ -109,24 +73,6 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={8}>
-            <Form.Item name="vendor_id" label="Vendor (optional)">
-              <Select
-                allowClear
-                showSearch
-                placeholder="Select vendor"
-                filterOption={false}
-                onSearch={loadVendors}
-                options={vendorOptions}
-                dropdownRender={(menu) => (
-                  <>
-                    {menu}
-                    <Button type="link" block onClick={() => setVendorModalOpen(true)}>+ Add Vendor</Button>
-                  </>
-                )}
-              />
-            </Form.Item>
-          </Col>
           <Col xs={24} md={4}>
             <Form.Item name="status" label="Order Status" initialValue="order">
               <Select
@@ -144,15 +90,15 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
               />
             </Form.Item>
           </Col>
-        </Row>
-
-        <Row gutter={12}>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8}>
             <Form.Item name="currency_code" label="Currency Code">
               <Input placeholder="PKR" />
             </Form.Item>
           </Col>
-          <Col xs={24} md={18}>
+        </Row>
+
+        <Row gutter={12}>
+          <Col xs={24}>
             <Form.Item name="notes" label="Order Notes">
               <TextArea rows={3} placeholder="Internal notes" />
             </Form.Item>
@@ -184,35 +130,6 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
           </Form.Item>
           <Form.Item name="currency_code" label="Currency Code">
             <Input placeholder="PKR" maxLength={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="Add Vendor"
-        open={vendorModalOpen}
-        onOk={handleCreateVendor}
-        onCancel={() => setVendorModalOpen(false)}
-        confirmLoading={savingVendor}
-      >
-        <Form layout="vertical" form={vendorForm} initialValues={{ type: 'B2C' }}>
-          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Vendor name required' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="type" label="Type">
-            <Select options={[{ value: 'B2C', label: 'B2C' }, { value: 'B2B', label: 'B2B' }]} />
-          </Form.Item>
-          <Form.Item name="email" label="Email">
-            <Input />
-          </Form.Item>
-          <Form.Item name="phone" label="Phone">
-            <Input />
-          </Form.Item>
-          <Form.Item name="currency_code" label="Currency Code">
-            <Input placeholder="PKR" maxLength={3} />
-          </Form.Item>
-          <Form.Item name="payment_terms" label="Payment Terms">
-            <Input />
           </Form.Item>
         </Form>
       </Modal>

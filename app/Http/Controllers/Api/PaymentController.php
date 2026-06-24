@@ -211,7 +211,10 @@ class PaymentController extends Controller
         foreach ($validated['allocations'] as $allocation) {
             $order = $orders->firstWhere('id', (int) $allocation['order_id']);
             $payable = $this->statementService->vendorPayableAmount($order, $payment->vendor_id);
-            $allocatedElsewhere = (float) VendorPaymentAllocation::where('order_id', $order->id)->where('payment_id', '!=', $payment->id)->sum('amount');
+            $allocatedElsewhere = (float) VendorPaymentAllocation::where('order_id', $order->id)
+                ->where('payment_id', '!=', $payment->id)
+                ->whereHas('payment', fn ($query) => $query->where('vendor_id', $payment->vendor_id))
+                ->sum('amount');
             if ((float) $allocation['amount'] > max(0, $payable - $allocatedElsewhere)) {
                 return response()->json(['error' => 'An allocation exceeds the selected order balance.'], 422);
             }
@@ -247,6 +250,7 @@ class PaymentController extends Controller
                 $payable = $this->statementService->vendorPayableAmount($order, $vendor->id);
                 $allocated = (float) VendorPaymentAllocation::where('tenant_id', $order->tenant_id)
                     ->where('order_id', $order->id)
+                    ->whereHas('payment', fn ($query) => $query->where('vendor_id', $vendor->id))
                     ->sum('amount');
 
                 return [

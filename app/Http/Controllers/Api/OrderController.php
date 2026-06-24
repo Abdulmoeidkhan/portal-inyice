@@ -8,7 +8,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\Vendor;
+use App\Models\OrderVendorCost;
 use App\Services\GdsParserService;
 use App\Services\InvoiceService;
 use App\Services\OrderNumberService;
@@ -16,9 +16,30 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
+    private const PACKAGE_TYPES = [
+        'Ticket Only',
+        'Visa Only',
+        'Hotel Only',
+        'Transfer Only',
+        'Partial Package',
+        'Full Package',
+        'Holiday Package',
+        'Umrah Package',
+    ];
+
+    private const OPTIONAL_SECTIONS = [
+        'flights',
+        'hotels',
+        'transfers',
+        'city_tours',
+        'visa',
+        'other_services',
+    ];
+
     public function __construct(
         private readonly GdsParserService $gdsParserService,
         private readonly OrderNumberService $orderNumberService,
@@ -69,18 +90,21 @@ class OrderController extends Controller
      */
     public function createFromVoucher(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $tenantVendor = Rule::exists('vendors', 'id')->where(
+            fn ($query) => $query->where('tenant_id', $tenantId)
+        );
         $validated = $request->validate([
             'company_id' => 'nullable|integer|exists:companies,id',
             'customer_id' => 'required|integer|exists:customers,id',
-            'vendor_id' => 'nullable|integer|exists:vendors,id',
             'currency_code' => 'nullable|string|size:3',
             'status' => 'nullable|in:quote,order,confirm,cancel,invoice,void,refund,partial_refund,paid,partial_paid',
             'notes' => 'nullable|string',
             'voucher' => 'required|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
             'voucher.issue_date' => 'nullable|date',
-            'voucher.travel_type' => 'nullable|string|max:100',
-            'voucher.package_type' => 'nullable|string|max:100',
+            'voucher.package_type' => ['nullable', 'string', Rule::in(self::PACKAGE_TYPES)],
             'voucher.booking_reference' => 'nullable|string|max:100',
             'voucher.gds_source' => 'nullable|in:sabre,galileo,amadeus,other',
             'voucher.gds_parsed_record_id' => 'nullable|integer|exists:gds_parsed_records,id',
@@ -92,27 +116,33 @@ class OrderController extends Controller
             'voucher.contact.phone' => 'nullable|string|max:100',
             'voucher.contact.address' => 'nullable|string',
             'voucher.active_sections' => 'nullable|array',
+            'voucher.active_sections.*' => ['string', Rule::in(self::OPTIONAL_SECTIONS)],
             'voucher.flights' => 'nullable|array',
+            'voucher.flights.*.date' => 'nullable|date_format:Y-m-d',
+            'voucher.flights.*.departure' => 'nullable|date_format:H:i',
+            'voucher.flights.*.arrival' => 'nullable|date_format:H:i',
+            'voucher.flights.*.booking_class' => ['nullable', 'regex:/^[A-Z]$/'],
             'voucher.passengers' => 'nullable|array',
             'voucher.pricing' => 'nullable|array',
+            'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
+            'voucher.pricing.*.flight_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_profit' => 'nullable|numeric',
+            'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
             'voucher.hotels' => 'nullable|array',
             'voucher.transfers' => 'nullable|array',
             'voucher.city_tours' => 'nullable|array',
             'voucher.visa' => 'nullable|array',
+            'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
+            'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
+            'voucher.visa.*.amount' => 'nullable|numeric|min:0',
             'voucher.other_services' => 'nullable|array',
         ]);
-
-        $user = $request->user();
-        $tenantId = (int) $user->tenant_id;
 
         $companyId = (int) ($validated['company_id'] ?? $user->company_id);
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
         $customer = Customer::where('tenant_id', $tenantId)->findOrFail((int) $validated['customer_id']);
-        $vendorId = null;
-
-        if (!empty($validated['vendor_id'])) {
-            $vendorId = Vendor::where('tenant_id', $tenantId)->findOrFail((int) $validated['vendor_id'])->id;
-        }
 
         $voucher = $validated['voucher'];
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
@@ -132,16 +162,20 @@ class OrderController extends Controller
 
         $voucher['contact'] = array_merge($profileContact, $voucherContact);
 
-        $order = DB::transaction(function () use ($validated, $voucher, $user, $tenantId, $companyId, $currencyCode, $customer, $vendorId) {
+        $order = DB::transaction(function () use ($validated, $voucher, $user, $tenantId, $companyId, $currencyCode, $customer) {
             $order = Order::create([
                 'tenant_id' => $tenantId,
                 'uid' => (string) Str::ulid(),
                 'company_id' => $companyId,
                 'customer_id' => $customer->id,
-                'vendor_id' => $vendorId,
                 'created_by_user_id' => (int) $user->id,
                 'updated_by_user_id' => (int) $user->id,
                 'order_number' => $this->orderNumberService->generateOrderNumber($companyId, $tenantId),
+                'voucher_no' => $voucher['voucher_no'] ?? null,
+                'issue_date' => $voucher['issue_date'] ?? null,
+                'package_type' => $voucher['package_type'] ?? null,
+                'active_sections' => $voucher['active_sections'] ?? [],
+                'emergency_contact' => $voucher['emergency_contact'] ?? null,
                 'booking_reference' => $voucher['booking_reference'] ?? null,
                 'status' => $validated['status'] ?? 'order',
                 'currency_code' => $currencyCode,
@@ -152,7 +186,6 @@ class OrderController extends Controller
                 'meta' => [
                     'voucher_no' => $voucher['voucher_no'] ?? null,
                     'issue_date' => $voucher['issue_date'] ?? null,
-                    'travel_type' => $voucher['travel_type'] ?? null,
                     'package_type' => $voucher['package_type'] ?? null,
                     'emergency_contact' => $voucher['emergency_contact'] ?? null,
                     'contact' => $voucher['contact'] ?? [],
@@ -173,6 +206,8 @@ class OrderController extends Controller
             if (!empty($items)) {
                 OrderItem::insert($items);
             }
+
+            $this->syncVendorCosts($order, $voucher, $tenantId);
 
             $total = OrderItem::where('order_id', $order->id)->sum('total_price');
             $order->update(['total_amount' => $total]);
@@ -199,12 +234,11 @@ class OrderController extends Controller
                     $searchQuery->where('order_number', 'like', "%{$search}%")
                         ->orWhere('booking_reference', 'like', "%{$search}%")
                         ->orWhere('gds_source', 'like', "%{$search}%")
-                        ->orWhere('meta->voucher_no', 'like', "%{$search}%")
-                        ->orWhere('meta->issue_date', 'like', "%{$search}%")
-                        ->orWhere('meta->package_type', 'like', "%{$search}%")
-                        ->orWhere('meta->gds_source', 'like', "%{$search}%")
-                        ->orWhere('meta->active_sections', 'like', "%{$search}%")
-                        ->orWhere('meta->emergency_contact', 'like', "%{$search}%")
+                        ->orWhere('voucher_no', 'like', "%{$search}%")
+                        ->orWhere('issue_date', 'like', "%{$search}%")
+                        ->orWhere('package_type', 'like', "%{$search}%")
+                        ->orWhere('active_sections', 'like', "%{$search}%")
+                        ->orWhere('emergency_contact', 'like', "%{$search}%")
                         ->orWhereHas('customer', function ($customerQuery) use ($search) {
                             $customerQuery->where('name', 'like', "%{$search}%");
                         });
@@ -228,9 +262,21 @@ class OrderController extends Controller
 
     public function update(string $uid, Request $request): JsonResponse
     {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $tenantVendor = Rule::exists('vendors', 'id')->where(
+            fn ($query) => $query->where('tenant_id', $tenantId)
+        );
+        $order = Order::where('tenant_id', $tenantId)
+            ->where('uid', $uid)
+            ->firstOrFail();
+        $allowedPackageTypes = array_values(array_unique(array_filter([
+            ...self::PACKAGE_TYPES,
+            $order->package_type,
+        ])));
+
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',
-            'vendor_id' => 'nullable|integer|exists:vendors,id',
             'booking_reference' => 'nullable|string|max:50',
             'status' => 'required|in:quote,order,confirm,cancel,invoice,void,refund,partial_refund,paid,partial_paid',
             'currency_code' => 'required|string|size:3|exists:currencies,code',
@@ -239,8 +285,7 @@ class OrderController extends Controller
             'voucher' => 'nullable|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
             'voucher.issue_date' => 'nullable|date',
-            'voucher.travel_type' => 'nullable|string|max:100',
-            'voucher.package_type' => 'nullable|string|max:100',
+            'voucher.package_type' => ['nullable', 'string', Rule::in($allowedPackageTypes)],
             'voucher.booking_reference' => 'nullable|string|max:100',
             'voucher.gds_source' => 'nullable|in:sabre,galileo,amadeus,other',
             'voucher.gds_parsed_record_id' => 'nullable|integer|exists:gds_parsed_records,id',
@@ -252,31 +297,32 @@ class OrderController extends Controller
             'voucher.contact.phone' => 'nullable|string|max:100',
             'voucher.contact.address' => 'nullable|string',
             'voucher.active_sections' => 'nullable|array',
+            'voucher.active_sections.*' => ['string', Rule::in(self::OPTIONAL_SECTIONS)],
             'voucher.flights' => 'nullable|array',
+            'voucher.flights.*.date' => 'nullable|date_format:Y-m-d',
+            'voucher.flights.*.departure' => 'nullable|date_format:H:i',
+            'voucher.flights.*.arrival' => 'nullable|date_format:H:i',
+            'voucher.flights.*.booking_class' => ['nullable', 'regex:/^[A-Z]$/'],
             'voucher.passengers' => 'nullable|array',
             'voucher.pricing' => 'nullable|array',
+            'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
+            'voucher.pricing.*.flight_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_profit' => 'nullable|numeric',
+            'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
             'voucher.hotels' => 'nullable|array',
             'voucher.transfers' => 'nullable|array',
             'voucher.city_tours' => 'nullable|array',
             'voucher.visa' => 'nullable|array',
+            'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
+            'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
+            'voucher.visa.*.amount' => 'nullable|numeric|min:0',
             'voucher.other_services' => 'nullable|array',
         ]);
 
-        $user = $request->user();
-        $tenantId = (int) $user->tenant_id;
-
-        $order = Order::where('tenant_id', $tenantId)
-            ->where('uid', $uid)
-            ->firstOrFail();
-
         $customer = Customer::where('tenant_id', $tenantId)->findOrFail((int) $validated['customer_id']);
-        $vendorId = null;
-
-        if (!empty($validated['vendor_id'])) {
-            $vendorId = Vendor::where('tenant_id', $tenantId)->findOrFail((int) $validated['vendor_id'])->id;
-        }
-
-        DB::transaction(function () use ($order, $validated, $customer, $vendorId, $user, $tenantId): void {
+        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId): void {
             $voucher = $validated['voucher'] ?? null;
             $totalAmount = $validated['total_amount'] ?? $order->total_amount;
             $meta = $order->meta ?? [];
@@ -290,11 +336,12 @@ class OrderController extends Controller
                     OrderItem::insert($items);
                 }
 
+                $this->syncVendorCosts($order, $voucher, $tenantId);
+
                 $totalAmount = OrderItem::where('order_id', $order->id)->sum('total_price');
                 $meta = array_merge($meta, [
                     'voucher_no' => $voucher['voucher_no'] ?? null,
                     'issue_date' => $voucher['issue_date'] ?? null,
-                    'travel_type' => $voucher['travel_type'] ?? null,
                     'package_type' => $voucher['package_type'] ?? null,
                     'emergency_contact' => $voucher['emergency_contact'] ?? null,
                     'contact' => $voucher['contact'] ?? [],
@@ -312,7 +359,11 @@ class OrderController extends Controller
 
             $order->update([
                 'customer_id' => $customer->id,
-                'vendor_id' => $vendorId,
+                'voucher_no' => $voucher['voucher_no'] ?? $order->voucher_no,
+                'issue_date' => $voucher['issue_date'] ?? $order->issue_date,
+                'package_type' => $voucher['package_type'] ?? $order->package_type,
+                'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
+                'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
                 'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? null,
                 'status' => $validated['status'],
                 'currency_code' => strtoupper($validated['currency_code']),
@@ -525,6 +576,55 @@ class OrderController extends Controller
         }
 
         return $items;
+    }
+
+    private function syncVendorCosts(Order $order, array $voucher, int $tenantId): void
+    {
+        $rows = [];
+        $timestamp = now();
+
+        foreach (($voucher['pricing'] ?? []) as $index => $pricing) {
+            $vendorId = (int) ($pricing['vendor_id'] ?? 0);
+            $amount = $this->toAmount($pricing['flight_cost'] ?? null);
+            if ($vendorId <= 0 || $amount <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'tenant_id' => $tenantId,
+                'order_id' => $order->id,
+                'vendor_id' => $vendorId,
+                'service_type' => 'flight',
+                'service_index' => (int) $index,
+                'amount' => $amount,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
+        }
+
+        foreach (($voucher['visa'] ?? []) as $index => $visa) {
+            $vendorId = (int) ($visa['vendor_id'] ?? 0);
+            $amount = $this->toAmount($visa['amount'] ?? null);
+            if ($vendorId <= 0 || $amount <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'tenant_id' => $tenantId,
+                'order_id' => $order->id,
+                'vendor_id' => $vendorId,
+                'service_type' => 'visa',
+                'service_index' => (int) $index,
+                'amount' => $amount,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
+        }
+
+        OrderVendorCost::where('order_id', $order->id)->delete();
+        if ($rows !== []) {
+            OrderVendorCost::insert($rows);
+        }
     }
 
     private function hasFilledValue(array $row, array $keys): bool

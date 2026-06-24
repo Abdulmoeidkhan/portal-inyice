@@ -406,6 +406,127 @@ class FinancialApiTest extends TestCase
         $this->assertDatabaseMissing('receipts', ['uid' => $vendorReceipt['uid']]);
     }
 
+    public function test_voucher_order_fields_are_searchable_and_vendor_costs_are_related_per_service(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $secondVendor = Vendor::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'type' => 'B2B',
+            'name' => 'Second Test Vendor',
+            'currency_code' => 'PKR',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/v1/orders/create-from-voucher', [
+            'customer_id' => $ctx['customer']->id,
+            'currency_code' => 'PKR',
+            'status' => 'order',
+            'notes' => 'Multi-vendor package',
+            'voucher' => [
+                'voucher_no' => 'VCH-SEARCH-991',
+                'issue_date' => '2026-06-24',
+                'package_type' => 'Full Package',
+                'booking_reference' => 'ZXCV12',
+                'gds_source' => 'sabre',
+                'emergency_contact' => 'Emergency search value',
+                'active_sections' => ['flights', 'visa'],
+                'flights' => [[
+                    'date' => '2026-07-01',
+                    'departure' => '10:30',
+                    'arrival' => '13:45',
+                    'booking_class' => 'A',
+                    'flight_no' => 'PK301',
+                    'from' => 'LHE',
+                    'to' => 'JED',
+                ]],
+                'passengers' => [
+                    ['name' => 'First Passenger', 'ticket_no' => '1234567890'],
+                    ['name' => 'Second Passenger', 'ticket_no' => '1234567891'],
+                ],
+                'pricing' => [
+                    [
+                        'pax_name' => 'First Passenger',
+                        'vendor_id' => $ctx['vendor']->id,
+                        'flight_ticket_no' => '1234567890',
+                        'flight_cost' => 400,
+                        'flight_profit' => 100,
+                        'flight_sales' => 500,
+                    ],
+                    [
+                        'pax_name' => 'Second Passenger',
+                        'vendor_id' => $secondVendor->id,
+                        'flight_ticket_no' => '1234567891',
+                        'flight_cost' => 200,
+                        'flight_profit' => 50,
+                        'flight_sales' => 250,
+                    ],
+                ],
+                'visa' => [[
+                    'passenger_name' => 'Second Passenger',
+                    'vendor_id' => $secondVendor->id,
+                    'visa_vendor' => $secondVendor->name,
+                    'amount' => 100,
+                ]],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('order.voucher_no', 'VCH-SEARCH-991')
+            ->assertJsonPath('order.package_type', 'Full Package')
+            ->assertJsonPath('order.booking_reference', 'ZXCV12');
+
+        $orderId = (int) $response->json('order.id');
+        $this->assertDatabaseHas('orders', [
+            'id' => $orderId,
+            'voucher_no' => 'VCH-SEARCH-991',
+            'issue_date' => '2026-06-24',
+            'package_type' => 'Full Package',
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $ctx['vendor']->id,
+            'service_type' => 'flight',
+            'amount' => 400,
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $secondVendor->id,
+            'service_type' => 'visa',
+            'amount' => 100,
+        ]);
+
+        $this->getJson('/api/v1/orders?search=VCH-SEARCH-991')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.id', $orderId);
+        $this->getJson('/api/v1/orders?search=ZXCV12')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.id', $orderId);
+        $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $orderId, 'net_amount' => 400]);
+        $this->getJson('/api/v1/payments/vendor/' . $secondVendor->id . '/payables')
+            ->assertOk()
+            ->assertJsonPath('data.0.net_amount', 300);
+
+        $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 400,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-24',
+            'allocations' => [
+                ['order_id' => $orderId, 'amount' => 400],
+            ],
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/payments/vendor/' . $secondVendor->id . '/payables')
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 300);
+    }
+
     private function seedTenantContext(): array
     {
         $tenant = Tenant::create([

@@ -67,6 +67,11 @@ class Vendor extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function orderCosts(): HasMany
+    {
+        return $this->hasMany(OrderVendorCost::class);
+    }
+
     /**
      * Get payments made to this vendor.
      */

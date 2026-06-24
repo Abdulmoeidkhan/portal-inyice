@@ -57,20 +57,21 @@ const voucherFromOrder = (order) => {
 
   return {
     ...initialVoucher,
-    voucher_no: meta.voucher_no || '',
-    issue_date: meta.issue_date || '',
-    travel_type: meta.travel_type || '',
-    package_type: meta.package_type || '',
+    voucher_no: order?.voucher_no || meta.voucher_no || '',
+    issue_date: order?.issue_date || meta.issue_date || '',
+    package_type: order?.package_type || meta.package_type || '',
     booking_reference: order?.booking_reference || meta.booking_reference || '',
     gds_source: order?.gds_source || meta.gds_source || null,
     gds_parsed_record_id: order?.gds_parsed_record_id || meta.gds_parsed_record_id || null,
-    emergency_contact: meta.emergency_contact || '',
+    emergency_contact: order?.emergency_contact || meta.emergency_contact || '',
     contact: {
       ...initialVoucher.contact,
       ...(meta.contact || {}),
     },
-    active_sections: Array.isArray(meta.active_sections) && meta.active_sections.length
-      ? meta.active_sections
+    active_sections: Array.isArray(order?.active_sections) && order.active_sections.length
+      ? order.active_sections
+      : Array.isArray(meta.active_sections) && meta.active_sections.length
+        ? meta.active_sections
       : initialVoucher.active_sections,
     flights,
     passengers: normalizeRows(meta.passengers, blankPassenger),
@@ -158,11 +159,6 @@ export default function OrderList() {
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
-  }));
-
-  const vendorOptions = vendors.map((vendor) => ({
-    value: vendor.id,
-    label: `${vendor.name}${vendor.phone ? ` - ${vendor.phone}` : ''}`,
   }));
 
   const loadCustomers = async (search = '') => {
@@ -303,7 +299,6 @@ export default function OrderList() {
       form.resetFields();
       form.setFieldsValue({
         customer_id: detail.customer?.id || detail.customer_id,
-        vendor_id: detail.vendor?.id || detail.vendor_id || null,
         status: detail.status || 'order',
         currency_code: detail.currency_code || 'PKR',
         notes: detail.notes || '',
@@ -647,15 +642,6 @@ export default function OrderList() {
                     filterOption={false}
                     onSearch={loadCustomers}
                     options={customerOptions}
-                  />
-                </Form.Item>
-                <Form.Item name="vendor_id" label="Vendor" style={{ minWidth: 260 }}>
-                  <Select
-                    allowClear
-                    showSearch
-                    filterOption={false}
-                    onSearch={loadVendors}
-                    options={vendorOptions}
                   />
                 </Form.Item>
                 <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 180 }}>

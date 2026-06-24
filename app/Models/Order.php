@@ -23,6 +23,11 @@ class Order extends Model
         'created_by_user_id',
         'updated_by_user_id',
         'order_number',
+        'voucher_no',
+        'issue_date',
+        'package_type',
+        'active_sections',
+        'emergency_contact',
         'booking_reference', // PNR or other booking ref
         'status',
         'currency_code',
@@ -35,6 +40,8 @@ class Order extends Model
 
     protected $casts = [
         'total_amount' => 'decimal:4',
+        'issue_date' => 'date:Y-m-d',
+        'active_sections' => 'array',
         'meta' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -70,6 +77,14 @@ class Order extends Model
     public function vendor(): BelongsTo
     {
         return $this->belongsTo(Vendor::class);
+    }
+
+    /**
+     * Per-service supplier costs. The vendor_id column above is retained for legacy orders.
+     */
+    public function vendorCosts(): HasMany
+    {
+        return $this->hasMany(OrderVendorCost::class);
     }
 
     /**

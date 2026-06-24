@@ -45,7 +45,7 @@ export default function SalesFlow() {
   const [gdsForm] = Form.useForm();
   const [orderForm] = Form.useForm();
 
-  const [activeTab, setActiveTab] = useState('voucher');
+  const [activeTab, setActiveTab] = useState('order');
   const [voucher, setVoucher] = useState(createVoucherWithProfileContact());
   const [parseResult, setParseResult] = useState(null);
   const [createdOrder, setCreatedOrder] = useState(null);
@@ -168,7 +168,7 @@ export default function SalesFlow() {
           gds_parsed_record_id: null,
         };
       });
-      setActiveTab('voucher');
+      setActiveTab('order');
       message.success('GDS parsed locally and voucher fields pre-filled.');
     } catch (error) {
       message.error(error.message || 'GDS parse failed');
@@ -192,7 +192,6 @@ export default function SalesFlow() {
       const data = await createOrderFromVoucherApi({
         company_id: values.company_id || undefined,
         customer_id: values.customer_id,
-        vendor_id: values.vendor_id || undefined,
         currency_code: values.currency_code || undefined,
         status: values.status || 'order',
         notes: values.notes || null,
@@ -222,8 +221,8 @@ export default function SalesFlow() {
           current={1}
           items={[
             { title: 'Parse GDS', content: 'Extract flights and passengers' },
-            { title: 'Review Voucher', content: 'Confirm passenger and service details' },
-            { title: 'Create Order', content: 'Submit full order payload' },
+            { title: 'Complete Order', content: 'Confirm order, passenger, and service details' },
+            { title: 'Create Order', content: 'Submit the completed order' },
           ]}
         />
       </Card>
@@ -246,10 +245,18 @@ export default function SalesFlow() {
             ),
           },
           {
-            key: 'voucher',
-            label: 'Voucher Fields',
+            key: 'order',
+            label: 'Order',
             children: (
               <>
+                <div style={{ marginBottom: 16 }}>
+                  <CreateOrderCard
+                    form={orderForm}
+                    loading={loadingOrder}
+                    createdOrder={createdOrder}
+                    onCreateOrder={handleCreateOrder}
+                  />
+                </div>
                 <VoucherHeaderCard
                   voucher={voucher}
                   setVoucherField={setVoucherField}
@@ -262,19 +269,8 @@ export default function SalesFlow() {
                   addRow={addRow}
                   removeRow={removeRow}
                 />
+
               </>
-            ),
-          },
-          {
-            key: 'order',
-            label: 'Create Order',
-            children: (
-              <CreateOrderCard
-                form={orderForm}
-                loading={loadingOrder}
-                createdOrder={createdOrder}
-                onCreateOrder={handleCreateOrder}
-              />
             ),
           },
         ]}

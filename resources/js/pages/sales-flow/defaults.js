@@ -1,16 +1,19 @@
 export const normalizeCabin = (value = '') => {
   const normalized = String(value).trim().toLowerCase().replace(/[ _-]+/g, ' ');
   const cabins = {
-    eco: 'eco',
-    economy: 'eco',
-    'eco+': 'eco+',
-    'premium economy': 'eco+',
+    eco: 'economy',
+    economy: 'economy',
+    'eco+': 'economy+',
+    'economy+': 'economy+',
+    'premium economy': 'economy+',
     business: 'business',
+    'business+': 'business+',
     first: 'first_class',
     'first class': 'first_class',
+    'first class+': 'first_class+',
   };
 
-  return cabins[normalized] || 'eco';
+  return cabins[normalized] || 'economy';
 };
 
 export const normalizeFlightDate = (value = '', today = new Date()) => {
@@ -160,7 +163,6 @@ export const optionalVoucherSections = [
 export const createInitialVoucher = () => ({
   voucher_no: '',
   issue_date: '',
-  travel_type: '',
   package_type: '',
   booking_reference: '',
   gds_source: null,

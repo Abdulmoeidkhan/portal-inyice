@@ -245,11 +245,18 @@ class StatementService
      */
     public function vendorPayableAmount(Order $order, int $vendorId): float
     {
+        if ($order->vendorCosts()->exists()) {
+            return (float) $order->vendorCosts()
+                ->where('vendor_id', $vendorId)
+                ->sum('amount');
+        }
+
         $meta = $order->meta ?? [];
         $amount = 0;
 
-        if ((int) $order->vendor_id === $vendorId) {
-            foreach (($meta['pricing'] ?? []) as $pricing) {
+        foreach (($meta['pricing'] ?? []) as $pricing) {
+            $pricingVendorId = (int) ($pricing['vendor_id'] ?? $order->vendor_id ?? 0);
+            if ($pricingVendorId === $vendorId) {
                 $amount += (float) ($pricing['flight_cost'] ?? 0);
             }
         }
