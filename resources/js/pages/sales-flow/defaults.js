@@ -1,3 +1,56 @@
+export const normalizeCabin = (value = '') => {
+  const normalized = String(value).trim().toLowerCase().replace(/[ _-]+/g, ' ');
+  const cabins = {
+    eco: 'eco',
+    economy: 'eco',
+    'eco+': 'eco+',
+    'premium economy': 'eco+',
+    business: 'business',
+    first: 'first_class',
+    'first class': 'first_class',
+  };
+
+  return cabins[normalized] || 'eco';
+};
+
+export const normalizeFlightDate = (value = '', today = new Date()) => {
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDate) return raw;
+
+  const monthNumbers = {
+    JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
+    JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
+  };
+  const textDate = raw.toUpperCase().match(/^(\d{1,2})[-/\s]?([A-Z]{3})(?:[-/\s]?(\d{2,4}))?$/);
+  const numericDate = raw.match(/^(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?$/);
+
+  const day = Number(textDate?.[1] || numericDate?.[1]);
+  const month = textDate ? monthNumbers[textDate[2]] : Number(numericDate?.[2]);
+  const suppliedYear = textDate?.[3] || numericDate?.[3];
+  if (!day || !month || month > 12) return raw;
+
+  let year = suppliedYear
+    ? Number(suppliedYear.length === 2 ? `20${suppliedYear}` : suppliedYear)
+    : today.getFullYear();
+  let candidate = new Date(year, month - 1, day);
+  if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) {
+    return raw;
+  }
+
+  if (!suppliedYear) {
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (candidate < todayStart) {
+      year += 1;
+      candidate = new Date(year, month - 1, day);
+    }
+  }
+
+  return `${candidate.getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 export const blankFlight = () => ({
   gds_pnr: '',
   pnr: '',
@@ -7,11 +60,9 @@ export const blankFlight = () => ({
   to: '',
   departure: '',
   arrival: '',
-  cabin: 'Economy',
+  cabin: normalizeCabin(),
   booking_class: '',
   baggage: '',
-  vendor_id: null,
-  vendor_name: '',
 });
 
 export const blankPassenger = () => ({
@@ -25,10 +76,12 @@ export const blankPassenger = () => ({
 
 export const blankPricing = () => ({
   pax_name: '',
+  vendor_id: null,
+  vendor_name: '',
   flight_ticket_no: '',
-  flight_cost: '',
-  flight_profit: '',
-  flight_sales: '',
+  flight_cost: '0',
+  flight_profit: '0',
+  flight_sales: '0',
   hotel_cost: '',
   hotel_profit: '',
   hotel_sales: '',
@@ -163,12 +216,12 @@ export const buildVoucherFromParsed = (prevVoucher, gdsSource, parsedPayload) =>
           gds_pnr: firstFilled(segment.gds_pnr, segment.gdsPnr, bookingReference),
           pnr: firstFilled(segment.pnr, segment.airline_pnr, segment.airlinePnr),
           flight_no: buildFlightNo(segment),
-          date: firstFilled(segment.departure_date, segment.date),
+          date: normalizeFlightDate(firstFilled(segment.departure_date, segment.date)),
           from: firstFilled(segment.departure_airport, segment.from).toUpperCase(),
           to: firstFilled(segment.arrival_airport, segment.to).toUpperCase(),
           departure: firstFilled(segment.departure_time, segment.departure),
           arrival: firstFilled(segment.arrival_time, segment.arrival),
-          cabin: firstFilled(segment.cabin, segment.cabin_class) || 'Economy',
+          cabin: normalizeCabin(firstFilled(segment.cabin, segment.cabin_class)),
           booking_class: firstFilled(segment.booking_class, segment.bookingClass, segment.class),
           baggage: firstFilled(segment.baggage, segment.baggage_allowance),
           notes: segment.notes || `Segment ${idx + 1}`,
@@ -190,7 +243,7 @@ export const buildVoucherFromParsed = (prevVoucher, gdsSource, parsedPayload) =>
           ...blankPricing(),
           pax_name: pax.name || '',
           flight_ticket_no: firstFilled(pax.ticket_no, pax.ticketNo, pax.ticket_number, tickets[idx]?.ticket_number),
-          flight_sales: firstFilled(tickets[idx]?.amount),
+          flight_sales: firstFilled(tickets[idx]?.amount) || '0',
         }))
       : prevVoucher.pricing,
   };

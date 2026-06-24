@@ -1,38 +1,50 @@
 import React from 'react';
-import { Card, Col, Input, InputNumber, Row, Select, Typography } from 'antd';
+import { Card, Col, Input, Row, Select, Typography } from 'antd';
 import { optionalVoucherSections } from './defaults';
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
+const packageTypeOptions = [
+  'Ticket Only',
+  'Visa Only',
+  'Hotel Only',
+  'Transfer Only',
+  'Partial Package',
+  'Full Package',
+  'Holiday Package',
+  'Umrah Package',
+].map((value) => ({ value, label: value }));
+
 export default function VoucherHeaderCard({ voucher, setVoucherField }) {
   return (
     <>
       <Card className="border-beam-aurora" style={{ marginBottom: 12 }} title="Basic Voucher Information">
-        <Row gutter={12}>
-          <Col xs={24} md={6}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} sm={12} md={8} lg={4}>
             <Text>Voucher No</Text>
             <Input value={voucher.voucher_no} onChange={(e) => setVoucherField('voucher_no', e.target.value)} />
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} sm={12} md={8} lg={4}>
             <Text>Issue Date</Text>
             <Input type="date" value={voucher.issue_date} onChange={(e) => setVoucherField('issue_date', e.target.value)} />
           </Col>
-          <Col xs={24} md={6}>
-            <Text>Travel Type</Text>
-            <Input value={voucher.travel_type} onChange={(e) => setVoucherField('travel_type', e.target.value)} />
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <Text>Type</Text>
+            <Select
+              allowClear
+              placeholder="Select type"
+              style={{ width: '100%' }}
+              value={voucher.package_type || undefined}
+              options={packageTypeOptions}
+              onChange={(value) => setVoucherField('package_type', value || '')}
+            />
           </Col>
-          <Col xs={24} md={6}>
-            <Text>Package Type</Text>
-            <Input value={voucher.package_type} onChange={(e) => setVoucherField('package_type', e.target.value)} />
-          </Col>
-        </Row>
-        <Row gutter={12} style={{ marginTop: 12 }}>
-          <Col xs={24} md={6}>
+          <Col xs={24} sm={12} md={8} lg={4}>
             <Text>Booking Reference</Text>
             <Input value={voucher.booking_reference} onChange={(e) => setVoucherField('booking_reference', e.target.value)} />
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} sm={12} md={8} lg={4}>
             <Text>GDS Source</Text>
             <Select
               allowClear
@@ -47,16 +59,8 @@ export default function VoucherHeaderCard({ voucher, setVoucherField }) {
               ]}
             />
           </Col>
-          <Col xs={24} md={6}>
-            <Text>Parsed GDS Record ID</Text>
-            <InputNumber
-              style={{ width: '100%' }}
-              value={voucher.gds_parsed_record_id}
-              onChange={(value) => setVoucherField('gds_parsed_record_id', value || null)}
-            />
-          </Col>
-          <Col xs={24} md={6}>
-            <Text>Optional Sections</Text>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <Text>Optional Services</Text>
             <Select
               mode="multiple"
               style={{ width: '100%' }}

@@ -198,6 +198,13 @@ class OrderController extends Controller
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery->where('order_number', 'like', "%{$search}%")
                         ->orWhere('booking_reference', 'like', "%{$search}%")
+                        ->orWhere('gds_source', 'like', "%{$search}%")
+                        ->orWhere('meta->voucher_no', 'like', "%{$search}%")
+                        ->orWhere('meta->issue_date', 'like', "%{$search}%")
+                        ->orWhere('meta->package_type', 'like', "%{$search}%")
+                        ->orWhere('meta->gds_source', 'like', "%{$search}%")
+                        ->orWhere('meta->active_sections', 'like', "%{$search}%")
+                        ->orWhere('meta->emergency_contact', 'like', "%{$search}%")
                         ->orWhereHas('customer', function ($customerQuery) use ($search) {
                             $customerQuery->where('name', 'like', "%{$search}%");
                         });

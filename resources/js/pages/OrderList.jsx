@@ -14,6 +14,8 @@ import {
   blankTransfer,
   blankVisa,
   createInitialVoucher,
+  normalizeCabin,
+  normalizeFlightDate,
 } from './sales-flow/defaults';
 
 const { Title, Paragraph, Text } = Typography;
@@ -35,6 +37,23 @@ const normalizeRows = (rows, factory) => (Array.isArray(rows) && rows.length ? r
 const voucherFromOrder = (order) => {
   const initialVoucher = createInitialVoucher();
   const meta = order?.meta || {};
+  const storedFlights = normalizeRows(meta.flights, blankFlight);
+  const legacyFlightVendor = storedFlights.find((flight) => flight.vendor_id || flight.vendor_name) || {};
+  const flights = storedFlights.map((flight) => {
+    const cleanFlight = {
+      ...flight,
+      cabin: normalizeCabin(flight.cabin),
+      date: normalizeFlightDate(flight.date),
+    };
+    delete cleanFlight.vendor_id;
+    delete cleanFlight.vendor_name;
+    return cleanFlight;
+  });
+  const pricing = normalizeRows(meta.pricing, blankPricing).map((row) => ({
+    ...row,
+    vendor_id: row.vendor_id ?? legacyFlightVendor.vendor_id ?? null,
+    vendor_name: row.vendor_name || legacyFlightVendor.vendor_name || '',
+  }));
 
   return {
     ...initialVoucher,
@@ -53,9 +72,9 @@ const voucherFromOrder = (order) => {
     active_sections: Array.isArray(meta.active_sections) && meta.active_sections.length
       ? meta.active_sections
       : initialVoucher.active_sections,
-    flights: normalizeRows(meta.flights, blankFlight),
+    flights,
     passengers: normalizeRows(meta.passengers, blankPassenger),
-    pricing: normalizeRows(meta.pricing, blankPricing),
+    pricing,
     hotels: normalizeRows(meta.hotels, blankHotel),
     transfers: normalizeRows(meta.transfers, blankTransfer),
     city_tours: normalizeRows(meta.city_tours, blankCityTour),
@@ -545,7 +564,7 @@ export default function OrderList() {
             className="responsive-search"
             allowClear
             enterButton="Search"
-            placeholder="Search order, booking reference, or customer"
+            placeholder="Search voucher, booking reference, type, GDS, service, or customer"
             onSearch={handleSearch}
             style={{ width: 420 }}
           />
