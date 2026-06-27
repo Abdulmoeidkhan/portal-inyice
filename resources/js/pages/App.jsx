@@ -42,6 +42,35 @@ import VendorPayments from './VendorPayments';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
+const AUTH_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+const AUTH_LAST_ACTIVITY_KEY = 'auth_last_activity_at';
+const AUTH_ACTIVITY_THROTTLE_MS = 60 * 1000;
+
+function getLastAuthActivity() {
+  return Number(localStorage.getItem(AUTH_LAST_ACTIVITY_KEY) || 0);
+}
+
+function markAuthActivity(force = false) {
+  const now = Date.now();
+  const lastActivity = getLastAuthActivity();
+
+  if (force || !lastActivity || now - lastActivity > AUTH_ACTIVITY_THROTTLE_MS) {
+    localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(now));
+  }
+}
+
+function hasAuthIdleExpired() {
+  const lastActivity = getLastAuthActivity();
+
+  return !!lastActivity && Date.now() - lastActivity >= AUTH_IDLE_TIMEOUT_MS;
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+}
 
 const NotFound = () => (
   <div className="page-shell page-fade-up">
@@ -99,7 +128,8 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
     <>
       <div className="brand-block">
         <div className="brand-glow" />
-        <h2>inYice Lite</h2>
+        {/* <img className="brand-logo" src="/images/icons/icon-512x512.png" alt="InYice OS" /> */}
+        <h2>InYice OS</h2>
         <Text className="brand-caption">Travel Finance OS</Text>
       </div>
       <Menu
@@ -215,15 +245,21 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (useAuthToken() && hasAuthIdleExpired()) {
+      clearAuthStorage();
+    } else if (useAuthToken()) {
+      markAuthActivity(true);
+    }
+
     setIsAuthenticated(!!useAuthToken());
     setLoading(false);
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = async ({ revokeToken = true } = {}) => {
     const token = useAuthToken();
 
     try {
-      if (token) {
+      if (token && revokeToken) {
         await fetch('/api/v1/auth/logout', {
           method: 'POST',
           headers: {
@@ -233,13 +269,78 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         });
       }
     } finally {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      clearAuthStorage();
       setIsAuthenticated(false);
       navigate('/login');
     }
   };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
+    let timeoutId;
+
+    const signOutIfIdle = () => {
+      if (hasAuthIdleExpired()) {
+        handleLogout();
+        return true;
+      }
+
+      return false;
+    };
+
+    const scheduleIdleCheck = () => {
+      window.clearTimeout(timeoutId);
+
+      const lastActivity = getLastAuthActivity() || Date.now();
+      const remainingMs = Math.max(AUTH_IDLE_TIMEOUT_MS - (Date.now() - lastActivity), 0);
+      timeoutId = window.setTimeout(signOutIfIdle, remainingMs + 1000);
+    };
+
+    const handleActivity = () => {
+      if (signOutIfIdle()) {
+        return;
+      }
+
+      markAuthActivity();
+      scheduleIdleCheck();
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === AUTH_LAST_ACTIVITY_KEY) {
+        scheduleIdleCheck();
+      }
+
+      if ((event.key === 'auth_token' || event.key === 'token') && !event.newValue) {
+        clearAuthStorage();
+        setIsAuthenticated(false);
+        navigate('/login');
+      }
+    };
+
+    const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart', 'visibilitychange'];
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, handleActivity, { passive: true });
+    });
+    window.addEventListener('storage', handleStorage);
+
+    if (!getLastAuthActivity()) {
+      markAuthActivity(true);
+    }
+
+    scheduleIdleCheck();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, handleActivity);
+      });
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [isAuthenticated, navigate]);
 
   if (loading) {
     return (
@@ -361,8 +462,8 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
     return (
       <Routes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
-        <Route path="/login" element={<Login onLoginSuccess={() => setIsAuthenticated(true)} />} />
-        <Route path="/register" element={<Register onRegistered={() => setIsAuthenticated(true)} />} />
+        <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
+        <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

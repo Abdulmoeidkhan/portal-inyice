@@ -77,7 +77,7 @@ export default function Dashboard() {
           </Col>
 
           <Col xs={24} lg={12}>
-            <Card title="Welcome to inYice Lite" style={{ height: '100%' }} className="border-beam-aurora stagger-3">
+            <Card title="Welcome to InYice OS" style={{ height: '100%' }} className="border-beam-aurora stagger-3">
               <div>
                 <p>Your all-in-one order and invoicing management platform for travel agencies.</p>
                 <ul>

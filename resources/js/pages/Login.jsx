@@ -54,7 +54,8 @@ export default function Login({ onLoginSuccess }) {
     <div className="auth-wrap page-fade-up">
       <div className="auth-grid">
         <Card className="auth-panel auth-hero border-beam-aurora stagger-1">
-          <Title level={2}>Welcome to inYice Lite</Title>
+          <img className="auth-logo" src="/images/icons/icon-512x512.png" alt="InYice OS" />
+          <Title level={2}>Welcome to InYice OS</Title>
           <Paragraph>
             One focused workspace for sales, invoicing, payments, and reporting. Designed for fast operations and clear financial visibility.
           </Paragraph>
