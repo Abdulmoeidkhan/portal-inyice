@@ -55,20 +55,55 @@ x-app-environment: &app-environment
   AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-false}
   VITE_APP_NAME: ${VITE_APP_NAME:-inYice OS}
   VITE_APP_URL: ${VITE_APP_URL:-https://os.inyice.com}
-  WAIT_FOR_DB: ${WAIT_FOR_DB:-true}
-  DB_WAIT_RETRIES: ${DB_WAIT_RETRIES:-60}
-  RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
-  CACHE_LARAVEL_CONFIG: ${CACHE_LARAVEL_CONFIG:-true}
 
 services:
+  composer:
+    image: composer:2
+    restart: "no"
+    working_dir: /app
+    command: composer install --no-dev --optimize-autoloader --no-interaction
+    volumes:
+      - ./:/app
+    networks:
+      - app_net
+
+  assets:
+    image: node:20-alpine
+    restart: "no"
+    working_dir: /app
+    command: sh -c "npm ci && npm run build"
+    environment:
+      VITE_APP_NAME: ${VITE_APP_NAME:-inYice OS}
+      VITE_APP_URL: ${VITE_APP_URL:-https://os.inyice.com}
+    volumes:
+      - ./:/app
+    networks:
+      - app_net
+
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: app
-    image: inyice-os-laravel-app:latest
+    image: webdevops/php-nginx:8.4-alpine
     restart: unless-stopped
-    environment: *app-environment
+    working_dir: /app
+    environment:
+      <<: *app-environment
+      WEB_DOCUMENT_ROOT: /app/public
+      WEB_DOCUMENT_INDEX: index.php
+      PHP_MEMORY_LIMIT: 512M
+      PHP_MAX_EXECUTION_TIME: 120
+      PHP_POST_MAX_SIZE: 32M
+      PHP_UPLOAD_MAX_FILESIZE: 32M
+    command: >
+      sh -c "
+        mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache &&
+        until [ -f vendor/autoload.php ]; do echo 'Waiting for Composer dependencies...'; sleep 2; done &&
+        until [ -f public/build/manifest.json ]; do echo 'Waiting for Vite build...'; sleep 2; done &&
+        until php -r 'new PDO(\"mysql:host=${DB_HOST:-mysql};port=${DB_PORT:-3306};dbname=${DB_DATABASE:-inyice_os}\", \"${DB_USERNAME:-inyice_os}\", \"${DB_PASSWORD:-change_me_inyice_os_db_password}\");' >/dev/null 2>&1; do echo 'Waiting for MySQL...'; sleep 2; done &&
+        php artisan storage:link >/dev/null 2>&1 || true &&
+        php artisan migrate --force &&
+        php artisan optimize:clear &&
+        php artisan optimize &&
+        exec supervisord
+      "
     expose:
       - "80"
     labels:
@@ -79,25 +114,30 @@ services:
       - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.inyice-os.loadbalancer.server.port=80
     volumes:
-      - storage_data:/var/www/html/storage
-      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - ./:/app
     depends_on:
+      composer:
+        condition: service_completed_successfully
+      assets:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
     networks:
       - app_net
 
   worker:
-    image: inyice-os-laravel-app:latest
+    image: webdevops/php-nginx:8.4-alpine
     restart: unless-stopped
+    working_dir: /app
     environment:
       <<: *app-environment
-      RUN_MIGRATIONS: ${WORKER_RUN_MIGRATIONS:-false}
-      CACHE_LARAVEL_CONFIG: ${WORKER_CACHE_LARAVEL_CONFIG:-false}
-    command: sh -c "php artisan queue:work --sleep=3 --tries=3 --timeout=90 --max-time=3600"
+    command: >
+      sh -c "
+        until [ -f vendor/autoload.php ]; do echo 'Waiting for Composer dependencies...'; sleep 2; done &&
+        php artisan queue:work --sleep=3 --tries=3 --timeout=90 --max-time=3600
+      "
     volumes:
-      - storage_data:/var/www/html/storage
-      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - ./:/app
     depends_on:
       app:
         condition: service_started
@@ -107,16 +147,18 @@ services:
       - app_net
 
   scheduler:
-    image: inyice-os-laravel-app:latest
+    image: webdevops/php-nginx:8.4-alpine
     restart: unless-stopped
+    working_dir: /app
     environment:
       <<: *app-environment
-      RUN_MIGRATIONS: ${SCHEDULER_RUN_MIGRATIONS:-false}
-      CACHE_LARAVEL_CONFIG: ${SCHEDULER_CACHE_LARAVEL_CONFIG:-false}
-    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    command: >
+      sh -c "
+        until [ -f vendor/autoload.php ]; do echo 'Waiting for Composer dependencies...'; sleep 2; done &&
+        while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done
+      "
     volumes:
-      - storage_data:/var/www/html/storage
-      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - ./:/app
     depends_on:
       app:
         condition: service_started
@@ -128,7 +170,6 @@ services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
-    # mysql_native_password plugin removed in 8.4; caching_sha2_password is default and works with PHP mysqlnd
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -149,8 +190,6 @@ services:
 
 volumes:
   mysql_data:
-  storage_data:
-  bootstrap_cache:
 
 networks:
   app_net:
