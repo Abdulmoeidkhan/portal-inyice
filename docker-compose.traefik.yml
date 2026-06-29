@@ -1,15 +1,13 @@
-version: "3.9"
-
 services:
   web:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_proxy}
-      - traefik.http.routers.inyice.rule=Host(`${APP_DOMAIN}`)
-      - traefik.http.routers.inyice.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
-      - traefik.http.routers.inyice.tls=true
-      - traefik.http.routers.inyice.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.services.inyice.loadbalancer.server.port=80
+      - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.inyice-os.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
+      - traefik.http.routers.inyice-os.tls=true
+      - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.inyice-os.loadbalancer.server.port=80
     networks:
       - app_net
       - traefik_proxy

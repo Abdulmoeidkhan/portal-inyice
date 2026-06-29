@@ -13,7 +13,7 @@ COPY . .
 RUN mkdir -p public/build && npm run build
 
 # ── Stage 2: Laravel 13 PHP-FPM runtime ───────────────────────────────────────
-FROM php:8.3-fpm-alpine AS app
+FROM php:8.4-fpm-alpine AS app
 
 ARG APP_ENV=production
 ARG APP_DEBUG=false
@@ -69,12 +69,7 @@ RUN if [ -f composer.json ]; then \
     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev; \
     fi
 
-# Bootstrap caches — safe to fail if configs not seeded yet
-RUN if [ -f artisan ]; then \
-    php artisan config:cache || true; \
-    php artisan route:cache || true; \
-    php artisan view:cache || true; \
-    fi
+RUN if [ -f artisan ]; then php artisan storage:link || true; fi
 
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
@@ -85,3 +80,9 @@ ENV APP_DEBUG=${APP_DEBUG}
 EXPOSE 9000
 
 CMD ["php-fpm"]
+
+# ── Stage 3: Nginx runtime with built public assets ───────────────────────────
+FROM nginx:1.27-alpine AS web
+
+COPY ./.docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --from=app /var/www/html/public /var/www/html/public
