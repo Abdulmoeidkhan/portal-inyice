@@ -74,11 +74,15 @@ RUN if [ -f artisan ]; then php artisan storage:link || true; fi
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
+COPY ./.docker/entrypoint.sh /usr/local/bin/inyice-entrypoint
+RUN chmod +x /usr/local/bin/inyice-entrypoint
+
 ENV APP_ENV=${APP_ENV}
 ENV APP_DEBUG=${APP_DEBUG}
 
 EXPOSE 9000
 
+ENTRYPOINT ["inyice-entrypoint"]
 CMD ["php-fpm"]
 
 # ── Stage 3: Nginx runtime with built public assets ───────────────────────────

@@ -3,7 +3,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_proxy}
-      - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN:-os.inyice.com}`)
       - traefik.http.routers.inyice-os.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
       - traefik.http.routers.inyice-os.tls=true
       - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
