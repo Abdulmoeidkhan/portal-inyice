@@ -29,7 +29,9 @@ RUN apk add --no-cache \
     icu-dev \
     libzip-dev \
     linux-headers \
+    nginx \
     oniguruma-dev \
+    supervisor \
     unzip \
     zip \
     $PHPIZE_DEPS \
@@ -73,18 +75,15 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
 COPY ./.docker/entrypoint.sh /usr/local/bin/inyice-entrypoint
-RUN chmod +x /usr/local/bin/inyice-entrypoint
+COPY ./.docker/nginx/default.conf /etc/nginx/http.d/default.conf
+COPY ./.docker/supervisord.conf /etc/supervisord.conf
+RUN chmod +x /usr/local/bin/inyice-entrypoint \
+    && mkdir -p /run/nginx
 
 ENV APP_ENV=${APP_ENV}
 ENV APP_DEBUG=${APP_DEBUG}
 
-EXPOSE 9000
+EXPOSE 80
 
 ENTRYPOINT ["inyice-entrypoint"]
-CMD ["php-fpm"]
-
-# ── Stage 3: Nginx runtime with built public assets ───────────────────────────
-FROM nginx:1.27-alpine AS web
-
-COPY ./.docker/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=app /var/www/html/public /var/www/html/public
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]
