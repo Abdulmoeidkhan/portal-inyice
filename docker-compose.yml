@@ -29,20 +29,15 @@ x-app-environment: &app-environment
   SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
   BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-log}
   FILESYSTEM_DISK: ${FILESYSTEM_DISK:-local}
-  QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
-  CACHE_STORE: ${CACHE_STORE:-redis}
+  QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+  CACHE_STORE: ${CACHE_STORE:-database}
   CACHE_PREFIX: ${CACHE_PREFIX:-inyice_os}
   API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-120}
   PUBLIC_API_RATE_LIMIT_PER_MINUTE: ${PUBLIC_API_RATE_LIMIT_PER_MINUTE:-60}
   SENSITIVE_WRITE_RATE_LIMIT_PER_MINUTE: ${SENSITIVE_WRITE_RATE_LIMIT_PER_MINUTE:-30}
   SIGNIN_RATE_LIMIT_PER_MINUTE: ${SIGNIN_RATE_LIMIT_PER_MINUTE:-6}
   SIGNUP_RATE_LIMIT_PER_MINUTE: ${SIGNUP_RATE_LIMIT_PER_MINUTE:-5}
-  RATE_LIMITER_USE_REDIS: ${RATE_LIMITER_USE_REDIS:-true}
   TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
-  REDIS_CLIENT: ${REDIS_CLIENT:-phpredis}
-  REDIS_HOST: ${REDIS_HOST:-redis}
-  REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
-  REDIS_PORT: ${REDIS_PORT:-6379}
   SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-os.inyice.com}
   MAIL_MAILER: ${MAIL_MAILER:-smtp}
   MAIL_SCHEME: ${MAIL_SCHEME:-null}
@@ -79,8 +74,6 @@ services:
       - bootstrap_cache:/var/www/html/bootstrap/cache
     depends_on:
       mysql:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - app_net
@@ -124,8 +117,6 @@ services:
         condition: service_started
       mysql:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - app_net
 
@@ -144,8 +135,6 @@ services:
       app:
         condition: service_started
       mysql:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - app_net
@@ -169,17 +158,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks:
-      - app_net
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - app_net
 

@@ -29,10 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PREFIX
         );
 
-        $middleware->throttleApi(
-            limiter: 'api',
-            redis: (bool) env('RATE_LIMITER_USE_REDIS', env('CACHE_STORE') === 'redis')
-        );
+        $middleware->throttleApi(limiter: 'api', redis: false);
 
         $middleware->append(SecurityHeaders::class);
 
