@@ -33,7 +33,7 @@ services:
       - "80"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN:-os.inyice.com}`)
+      - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN:-os.inyice.com}`)|| Host(`www.os.inyice.com`)"
       - traefik.http.routers.inyice-os.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
       - traefik.http.routers.inyice-os.tls=true
       - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
