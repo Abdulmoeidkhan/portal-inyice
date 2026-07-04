@@ -19,8 +19,9 @@ services:
         chown -R application:application storage bootstrap/cache || true;
         chmod -R ug+rwX storage bootstrap/cache || true;
         php artisan storage:link >/dev/null 2>&1 || true;
-        php artisan optimize:clear || true;
-        php artisan migrate --force --no-interaction;
+        php artisan config:clear || true;
+        php artisan route:clear || true;
+        php artisan view:clear || true;
         exec supervisord
       "
     ports:
