@@ -12,12 +12,16 @@ services:
       PHP_MAX_EXECUTION_TIME: 120
       PHP_POST_MAX_SIZE: 32M
       PHP_UPLOAD_MAX_FILESIZE: 32M
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
     command: >
       sh -c "
         set -e;
         mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache;
         chown -R application:application storage bootstrap/cache || true;
         chmod -R ug+rwX storage bootstrap/cache || true;
+        rm -f bootstrap/cache/*.php;
         php artisan storage:link >/dev/null 2>&1 || true;
         php artisan config:clear || true;
         php artisan route:clear || true;
