@@ -20,15 +20,17 @@ services:
         chmod -R ug+rwX storage bootstrap/cache || true;
         php artisan storage:link >/dev/null 2>&1 || true;
         php artisan optimize:clear || true;
+        php artisan migrate --force --no-interaction;
         exec supervisord
       "
+    ports:
+      - "${APP_HTTP_PORT:-8081}:80"
     expose:
       - "80"
     labels:
       - traefik.enable=true
       - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN:-os.inyice.com}`) || Host(`${APP_WWW_DOMAIN:-www.os.inyice.com}`)
       - traefik.http.routers.inyice-os.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
-      - traefik.http.routers.inyice-os.tls=true
       - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.inyice-os.loadbalancer.server.port=80
     volumes:
@@ -51,7 +53,7 @@ services:
       MYSQL_USER: ${DB_USERNAME:-inyice_os}
       MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_inyice_os_db_password}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data_fresh:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "${DB_USERNAME:-inyice_os}", "-p${DB_PASSWORD:-change_me_inyice_os_db_password}"]
       interval: 10s
@@ -61,7 +63,7 @@ services:
       - app_net
 
 volumes:
-  mysql_data:
+  mysql_data_fresh:
 
 networks:
   app_net:
