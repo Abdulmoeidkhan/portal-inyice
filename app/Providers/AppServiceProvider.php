@@ -28,7 +28,6 @@ class AppServiceProvider extends ServiceProvider
     {
         if ((bool) env('FORCE_HTTPS', false)) {
             URL::forceScheme('https');
-            URL::forceRootUrl((string) config('app.url'));
         }
 
         RateLimiter::for('api', function (Request $request) {
