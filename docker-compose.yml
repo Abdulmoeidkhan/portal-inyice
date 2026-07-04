@@ -18,31 +18,18 @@ services:
         mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache;
         chown -R application:application storage bootstrap/cache || true;
         chmod -R ug+rwX storage bootstrap/cache || true;
-        if ! command -v composer >/dev/null 2>&1; then apk add --no-cache composer; fi;
-        if ! command -v npm >/dev/null 2>&1; then apk add --no-cache nodejs npm; fi;
-        composer install --no-dev --optimize-autoloader --no-interaction;
-        npm ci;
-        npm run build;
-        until php -r 'new PDO(\"mysql:host=${DB_HOST:-mysql};port=${DB_PORT:-3306};dbname=${DB_DATABASE:-inyice_os}\", \"${DB_USERNAME:-inyice_os}\", \"${DB_PASSWORD:-change_me_inyice_os_db_password}\");' >/dev/null 2>&1; do echo 'Waiting for MySQL...'; sleep 2; done;
         php artisan storage:link >/dev/null 2>&1 || true;
-        php artisan migrate --force --no-interaction || true;
         php artisan optimize:clear || true;
-        php artisan optimize || true;
         exec supervisord
       "
     expose:
       - "80"
     labels:
       - traefik.enable=true
-      - traefik.docker.network=traefik_proxy
-      - traefik.http.routers.inyice-os-http.rule=Host(`${APP_DOMAIN:-os.inyice.com}`) || Host(`${APP_WWW_DOMAIN:-www.os.inyice.com}`)
-      - traefik.http.routers.inyice-os-http.entrypoints=web
-      - traefik.http.routers.inyice-os-http.middlewares=inyice-os-https-redirect
-      - traefik.http.middlewares.inyice-os-https-redirect.redirectscheme.scheme=https
       - traefik.http.routers.inyice-os.rule=Host(`${APP_DOMAIN:-os.inyice.com}`) || Host(`${APP_WWW_DOMAIN:-www.os.inyice.com}`)
-      - traefik.http.routers.inyice-os.entrypoints=websecure
+      - traefik.http.routers.inyice-os.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
       - traefik.http.routers.inyice-os.tls=true
-      - traefik.http.routers.inyice-os.tls.certresolver=letsencrypt
+      - traefik.http.routers.inyice-os.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.inyice-os.loadbalancer.server.port=80
     volumes:
       - ./:/app
@@ -51,7 +38,6 @@ services:
         condition: service_healthy
     networks:
       - app_net
-      - traefik_proxy
 
   mysql:
     image: mysql:8.4
@@ -80,5 +66,3 @@ volumes:
 networks:
   app_net:
     driver: bridge
-  traefik_proxy:
-    external: true
