@@ -15,6 +15,7 @@ services:
       SESSION_DRIVER: file
       CACHE_STORE: file
       QUEUE_CONNECTION: sync
+      FORCE_HTTPS: "true"
     command: >
       sh -c "
         set -e;
@@ -28,8 +29,6 @@ services:
         php artisan view:clear || true;
         exec supervisord
       "
-    ports:
-      - "${APP_HTTP_PORT:-8081}:80"
     expose:
       - "80"
     labels:

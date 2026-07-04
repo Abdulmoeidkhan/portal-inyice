@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,6 +26,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ((bool) env('FORCE_HTTPS', false)) {
+            URL::forceScheme('https');
+            URL::forceRootUrl((string) config('app.url'));
+        }
+
         RateLimiter::for('api', function (Request $request) {
             $userKey = $request->user()?->getAuthIdentifier();
             $routeKey = optional($request->route())->getName() ?: $request->path();
