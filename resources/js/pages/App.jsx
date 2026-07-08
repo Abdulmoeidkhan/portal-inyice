@@ -22,6 +22,7 @@ import {
 // Components
 import InvoiceList from './InvoiceList';
 import OrderList from './OrderList';
+import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
 import PaymentReport from './PaymentReport';
@@ -214,6 +215,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/invoices" element={<InvoiceList />} />
               <Route path="/invoices/:uid" element={<InvoiceDetail />} />
               <Route path="/orders" element={<OrderList />} />
+              <Route path="/orders/:uid/edit" element={<OrderEdit />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/customer-payments" element={<CounterpartyTransaction direction="payment" partyType="customer" />} />

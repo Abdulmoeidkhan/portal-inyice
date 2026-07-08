@@ -63,7 +63,7 @@ For focused JSX edits, parse touched files with `@babel/parser` when available.
 ### Backend
 
 - `app/Http/Controllers/AuthController.php`: login/logout token flow
-- `app/Http/Controllers/RegistrationController.php`: tenant/company/admin registration
+- `app/Http/Controllers/RegistrationController.php`: tenant/company/owner registration
 - `app/Http/Controllers/Api/OrderController.php`: order listing, GDS parse endpoint, voucher-to-order creation
 - `app/Http/Controllers/Api/MasterDataController.php`: customer/vendor list and quick-create endpoints
 - `app/Http/Controllers/Api/InvoiceController.php`: invoice workflows
@@ -129,11 +129,11 @@ Registration endpoint:
 Registration creates:
 
 - `tenants` row
-- tenant roles: `admin`, `sales`, `accounts`
+- tenant roles: `owner`, `admin`, `sales`, `accounts`
 - `companies` row
-- admin `users` row
+- owner `users` row
 - default `cash_accounts` row named `Main Cash Box`
-- Sanctum token for the admin
+- Sanctum token for the owner
 
 Supporting endpoints:
 
@@ -158,10 +158,13 @@ Development rules:
 
 Current role codes:
 
+- `owner`
 - `admin`
 - `sales`
 - `accounts`
 - `super-admin` for provider/system behavior
+
+The initial signup user is assigned `owner`. Owner users satisfy admin-level permission checks.
 
 Route examples:
 

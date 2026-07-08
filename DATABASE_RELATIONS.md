@@ -65,11 +65,12 @@ Relations:
 
 Current tenant roles created during registration:
 
+- `owner`
 - `admin`
 - `sales`
 - `accounts`
 
-System role support exists through `is_system`, including provider-level `super-admin` behavior in the `User` model.
+The initial signup user is assigned `owner`. Owner users satisfy admin-level permission checks in the `User` model. System role support exists through `is_system`, including provider-level `super-admin` behavior.
 
 ### users
 

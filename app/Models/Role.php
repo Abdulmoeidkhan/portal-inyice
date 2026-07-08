@@ -11,6 +11,15 @@ class Role extends Model
 {
     use HasFactory;
 
+    public const SIGNUP_DEFAULT_ROLE = 'owner';
+
+    public const TENANT_DEFAULT_ROLES = [
+        ['code' => 'owner', 'name' => 'Owner'],
+        ['code' => 'admin', 'name' => 'Admin'],
+        ['code' => 'sales', 'name' => 'Sales'],
+        ['code' => 'accounts', 'name' => 'Accounts'],
+    ];
+
     protected $fillable = [
         'uid',
         'tenant_id',

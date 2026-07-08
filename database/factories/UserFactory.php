@@ -45,12 +45,12 @@ class UserFactory extends Factory
                 'is_active' => true,
             ]);
 
-        $role = Role::query()->where('tenant_id', $tenant->id)->where('code', 'admin')->first()
+        $role = Role::query()->where('tenant_id', $tenant->id)->where('code', Role::SIGNUP_DEFAULT_ROLE)->first()
             ?? Role::query()->create([
                 'uid' => (string) Str::ulid(),
                 'tenant_id' => $tenant->id,
-                'code' => 'admin',
-                'name' => 'Admin',
+                'code' => Role::SIGNUP_DEFAULT_ROLE,
+                'name' => 'Owner',
                 'is_system' => false,
             ]);
 

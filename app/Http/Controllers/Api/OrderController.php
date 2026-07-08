@@ -90,6 +90,8 @@ class OrderController extends Controller
      */
     public function createFromVoucher(Request $request): JsonResponse
     {
+        $this->normalizeVoucherSections($request);
+
         $user = $request->user();
         $tenantId = (int) $user->tenant_id;
         $tenantVendor = Rule::exists('vendors', 'id')->where(
@@ -262,6 +264,8 @@ class OrderController extends Controller
 
     public function update(string $uid, Request $request): JsonResponse
     {
+        $this->normalizeVoucherSections($request);
+
         $user = $request->user();
         $tenantId = (int) $user->tenant_id;
         $tenantVendor = Rule::exists('vendors', 'id')->where(
@@ -328,17 +332,20 @@ class OrderController extends Controller
             $meta = $order->meta ?? [];
 
             if ($voucher) {
-                $items = $this->buildVoucherOrderItems($voucher, $order->id, $tenantId);
+                if ($this->hasVoucherItemContent($voucher)) {
+                    $items = $this->buildVoucherOrderItems($voucher, $order->id, $tenantId);
 
-                OrderItem::where('order_id', $order->id)->delete();
+                    OrderItem::where('order_id', $order->id)->delete();
 
-                if (!empty($items)) {
-                    OrderItem::insert($items);
+                    if (!empty($items)) {
+                        OrderItem::insert($items);
+                    }
+
+                    $this->syncVendorCosts($order, $voucher, $tenantId);
+
+                    $totalAmount = OrderItem::where('order_id', $order->id)->sum('total_price');
                 }
 
-                $this->syncVendorCosts($order, $voucher, $tenantId);
-
-                $totalAmount = OrderItem::where('order_id', $order->id)->sum('total_price');
                 $meta = array_merge($meta, [
                     'voucher_no' => $voucher['voucher_no'] ?? null,
                     'issue_date' => $voucher['issue_date'] ?? null,
@@ -364,7 +371,7 @@ class OrderController extends Controller
                 'package_type' => $voucher['package_type'] ?? $order->package_type,
                 'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
                 'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
-                'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? null,
+                'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? $order->booking_reference,
                 'status' => $validated['status'],
                 'currency_code' => strtoupper($validated['currency_code']),
                 'total_amount' => $totalAmount,
@@ -576,6 +583,80 @@ class OrderController extends Controller
         }
 
         return $items;
+    }
+
+    private function normalizeVoucherSections(Request $request): void
+    {
+        $voucher = $request->input('voucher');
+
+        if (!is_array($voucher) || !array_key_exists('active_sections', $voucher)) {
+            return;
+        }
+
+        $activeSections = array_values(array_intersect(
+            array_filter((array) $voucher['active_sections'], fn ($section): bool => is_string($section)),
+            self::OPTIONAL_SECTIONS
+        ));
+        $hasActiveSection = fn (string $section): bool => in_array($section, $activeSections, true);
+
+        $voucher['active_sections'] = $activeSections;
+
+        foreach (self::OPTIONAL_SECTIONS as $section) {
+            if (!$hasActiveSection($section)) {
+                $voucher[$section] = [];
+            }
+        }
+
+        if (!$hasActiveSection('flights')) {
+            $voucher['pricing'] = [];
+        }
+
+        $request->merge(['voucher' => $voucher]);
+    }
+
+    private function hasVoucherItemContent(array $voucher): bool
+    {
+        $activeSections = $voucher['active_sections'] ?? [];
+        $hasActiveSection = fn (string $section): bool => empty($activeSections) || in_array($section, $activeSections, true);
+
+        if ($hasActiveSection('flights')) {
+            foreach (($voucher['flights'] ?? []) as $flight) {
+                if ($this->hasFilledValue($flight, ['gds_pnr', 'pnr', 'flight_no', 'from', 'to', 'date', 'departure', 'arrival'])) {
+                    return true;
+                }
+            }
+
+            foreach (($voucher['pricing'] ?? []) as $pricingRow) {
+                if (
+                    $this->toAmount($pricingRow['flight_sales'] ?? $pricingRow['flight_fare'] ?? null) > 0 ||
+                    $this->toAmount($pricingRow['total'] ?? null) > 0
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        $serviceRows = [
+            'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes', 'amount'],
+            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'amount'],
+            'city_tours' => ['city', 'title', 'attractions', 'date', 'notes', 'amount'],
+            'visa' => ['passenger_name', 'validity', 'visa_no', 'vendor_id', 'visa_vendor', 'notes', 'amount'],
+            'other_services' => ['description', 'amount'],
+        ];
+
+        foreach ($serviceRows as $section => $keys) {
+            if (!$hasActiveSection($section)) {
+                continue;
+            }
+
+            foreach (($voucher[$section] ?? []) as $row) {
+                if ($this->hasFilledValue($row, $keys)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function syncVendorCosts(Order $order, array $voucher, int $tenantId): void

@@ -36,6 +36,8 @@ export default function Register({ onRegistered }) {
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
+  const normalizeAgencyCode = (value = '') => value.toUpperCase();
+
   useEffect(() => {
     fetchCurrenciesAndTimezones();
   }, []);
@@ -62,15 +64,35 @@ export default function Register({ onRegistered }) {
   };
 
   const checkAgencyCode = async (value) => {
-    if (!value) return;
+    const code = normalizeAgencyCode(value).trim();
+
+    if (!/^[A-Z0-9]{3,}$/.test(code)) {
+      setAgencyCodeAvailable(null);
+      return;
+    }
 
     try {
-      const response = await fetch(`/api/v1/registration/check-code?code=${value}`);
+      const response = await fetch(`/api/v1/registration/check-code?code=${encodeURIComponent(code)}`);
       const data = await response.json();
-      setAgencyCodeAvailable(data.available);
+
+      if (normalizeAgencyCode(form.getFieldValue('agency_code')).trim() === code) {
+        setAgencyCodeAvailable(data.available);
+      }
     } catch (error) {
       console.error('Error checking code:', error);
+      setAgencyCodeAvailable(null);
     }
+  };
+
+  const handleAgencyCodeChange = (event) => {
+    const value = normalizeAgencyCode(event.target.value);
+
+    if (value !== event.target.value) {
+      form.setFieldsValue({ agency_code: value });
+    }
+
+    setAgencyCodeAvailable(null);
+    checkAgencyCode(value);
   };
 
   const handleNext = async () => {
@@ -147,12 +169,11 @@ export default function Register({ onRegistered }) {
               name="agency_code"
               rules={[
                 { required: true, message: 'Please enter agency code' },
-                { pattern: /^[a-z0-9]+$/, message: 'Code must be lowercase alphanumeric' },
+                { pattern: /^[A-Z0-9]+$/, message: 'Code must be uppercase alphanumeric' },
                 { min: 3, message: 'Code must be at least 3 characters' },
               ]}
-              onChange={(e) => checkAgencyCode(e.target.value)}
             >
-              <Input placeholder="e.g., myagency, travel123" />
+              <Input placeholder="e.g., MYAGENCY, TRAVEL123" onChange={handleAgencyCodeChange} />
             </Form.Item>
             {agencyCodeAvailable !== null && (
               <Alert
@@ -325,7 +346,7 @@ export default function Register({ onRegistered }) {
               type="primary"
               loading={loading}
               onClick={handleNext}
-              disabled={current === 0 && !agencyCodeAvailable}
+              disabled={current === 0 && agencyCodeAvailable === false}
             >
               {current === 2 ? 'Register' : 'Next'}
             </Button>

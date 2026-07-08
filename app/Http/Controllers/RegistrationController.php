@@ -18,9 +18,15 @@ class RegistrationController extends Controller
      */
     public function register(Request $request)
     {
+        if ($request->has('agency_code')) {
+            $request->merge([
+                'agency_code' => Str::upper(trim((string) $request->input('agency_code'))),
+            ]);
+        }
+
         $validated = $request->validate([
             // Tenant info
-            'agency_code' => 'required|string|max:50|unique:tenants,code',
+            'agency_code' => 'required|string|max:50|regex:/^[A-Z0-9]+$/|unique:tenants,code',
             'agency_name' => 'required|string|max:200',
             
             // Company info
@@ -47,37 +53,20 @@ class RegistrationController extends Controller
                     'is_active' => true,
                 ]);
 
-                // Get or create admin role for this tenant
-                $adminRole = Role::where('tenant_id', $tenant->id)
-                    ->where('code', 'admin')
-                    ->first();
+                $tenantRoles = [];
 
-                if (!$adminRole) {
-                    $adminRole = Role::create([
-                        'uid' => (string) Str::ulid(),
-                        'tenant_id' => $tenant->id,
-                        'code' => 'admin',
-                        'name' => 'Admin',
-                        'is_system' => false,
-                    ]);
-
-                    // Create other roles
-                    Role::create([
-                        'uid' => (string) Str::ulid(),
-                        'tenant_id' => $tenant->id,
-                        'code' => 'sales',
-                        'name' => 'Sales',
-                        'is_system' => false,
-                    ]);
-
-                    Role::create([
-                        'uid' => (string) Str::ulid(),
-                        'tenant_id' => $tenant->id,
-                        'code' => 'accounts',
-                        'name' => 'Accounts',
-                        'is_system' => false,
-                    ]);
+                foreach (Role::TENANT_DEFAULT_ROLES as $roleDefaults) {
+                    $tenantRoles[$roleDefaults['code']] = Role::firstOrCreate(
+                        ['tenant_id' => $tenant->id, 'code' => $roleDefaults['code']],
+                        [
+                            'uid' => (string) Str::ulid(),
+                            'name' => $roleDefaults['name'],
+                            'is_system' => false,
+                        ]
+                    );
                 }
+
+                $ownerRole = $tenantRoles[Role::SIGNUP_DEFAULT_ROLE];
 
                 // Create company
                 $company = Company::create([
@@ -93,12 +82,12 @@ class RegistrationController extends Controller
                     'is_active' => true,
                 ]);
 
-                // Create admin user
+                // Create owner user
                 $user = User::create([
                     'uid' => (string) Str::ulid(),
                     'tenant_id' => $tenant->id,
                     'company_id' => $company->id,
-                    'role_id' => $adminRole->id,
+                    'role_id' => $ownerRole->id,
                     'name' => $validated['admin_name'],
                     'email' => $validated['admin_email'],
                     'password' => $validated['admin_password'],
@@ -128,6 +117,7 @@ class RegistrationController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
+                        'role' => $ownerRole->code,
                         'company_name' => $company->display_name,
                         'tenant_name' => $tenant->name,
                     ],
@@ -174,7 +164,7 @@ class RegistrationController extends Controller
             'code' => 'required|string|max:50',
         ]);
 
-        $code = Str::lower(trim($validated['code']));
+        $code = Str::upper(trim($validated['code']));
         $exists = Tenant::where('code', $code)->exists();
         
         return response()->json([

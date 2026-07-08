@@ -36,10 +36,16 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $adminRole = Role::query()->firstOrCreate(
-            ['tenant_id' => $tenant->id, 'code' => 'admin'],
-            ['uid' => (string) Str::ulid(), 'name' => 'Admin', 'is_system' => false]
-        );
+        $tenantRoles = [];
+
+        foreach (Role::TENANT_DEFAULT_ROLES as $roleDefaults) {
+            $tenantRoles[$roleDefaults['code']] = Role::query()->firstOrCreate(
+                ['tenant_id' => $tenant->id, 'code' => $roleDefaults['code']],
+                ['uid' => (string) Str::ulid(), 'name' => $roleDefaults['name'], 'is_system' => false]
+            );
+        }
+
+        $ownerRole = $tenantRoles[Role::SIGNUP_DEFAULT_ROLE];
 
         User::query()->firstOrCreate([
             'email' => 'admin@demoagency.com',
@@ -47,8 +53,8 @@ class DatabaseSeeder extends Seeder
             'uid' => (string) Str::ulid(),
             'tenant_id' => $tenant->id,
             'company_id' => $company->id,
-            'role_id' => $adminRole->id,
-            'name' => 'Admin User',
+            'role_id' => $ownerRole->id,
+            'name' => 'Owner User',
             'password' => 'password123',
             'email_verified_at' => now(),
             'is_active' => true,

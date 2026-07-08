@@ -1,88 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Form, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, FileDoneOutlined } from '@ant-design/icons';
+import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, FileDoneOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
-import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
-import VoucherRowsSections from './sales-flow/VoucherRowsSections';
-import {
-  blankCityTour,
-  blankFlight,
-  blankHotel,
-  blankOtherService,
-  blankPassenger,
-  blankPricing,
-  blankTransfer,
-  blankVisa,
-  createInitialVoucher,
-  normalizeCabin,
-  normalizeFlightDate,
-} from './sales-flow/defaults';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
 
-const rowFactories = {
-  flights: blankFlight,
-  passengers: blankPassenger,
-  pricing: blankPricing,
-  hotels: blankHotel,
-  transfers: blankTransfer,
-  city_tours: blankCityTour,
-  visa: blankVisa,
-  other_services: blankOtherService,
-};
-
-const normalizeRows = (rows, factory) => (Array.isArray(rows) && rows.length ? rows : [factory()]);
-
-const voucherFromOrder = (order) => {
-  const initialVoucher = createInitialVoucher();
-  const meta = order?.meta || {};
-  const storedFlights = normalizeRows(meta.flights, blankFlight);
-  const legacyFlightVendor = storedFlights.find((flight) => flight.vendor_id || flight.vendor_name) || {};
-  const flights = storedFlights.map((flight) => {
-    const cleanFlight = {
-      ...flight,
-      cabin: normalizeCabin(flight.cabin),
-      date: normalizeFlightDate(flight.date),
-    };
-    delete cleanFlight.vendor_id;
-    delete cleanFlight.vendor_name;
-    return cleanFlight;
-  });
-  const pricing = normalizeRows(meta.pricing, blankPricing).map((row) => ({
-    ...row,
-    vendor_id: row.vendor_id ?? legacyFlightVendor.vendor_id ?? null,
-    vendor_name: row.vendor_name || legacyFlightVendor.vendor_name || '',
-  }));
-
-  return {
-    ...initialVoucher,
-    voucher_no: order?.voucher_no || meta.voucher_no || '',
-    issue_date: order?.issue_date || meta.issue_date || '',
-    package_type: order?.package_type || meta.package_type || '',
-    booking_reference: order?.booking_reference || meta.booking_reference || '',
-    gds_source: order?.gds_source || meta.gds_source || null,
-    gds_parsed_record_id: order?.gds_parsed_record_id || meta.gds_parsed_record_id || null,
-    emergency_contact: order?.emergency_contact || meta.emergency_contact || '',
-    contact: {
-      ...initialVoucher.contact,
-      ...(meta.contact || {}),
-    },
-    active_sections: Array.isArray(order?.active_sections) && order.active_sections.length
-      ? order.active_sections
-      : Array.isArray(meta.active_sections) && meta.active_sections.length
-        ? meta.active_sections
-      : initialVoucher.active_sections,
-    flights,
-    passengers: normalizeRows(meta.passengers, blankPassenger),
-    pricing,
-    hotels: normalizeRows(meta.hotels, blankHotel),
-    transfers: normalizeRows(meta.transfers, blankTransfer),
-    city_tours: normalizeRows(meta.city_tours, blankCityTour),
-    visa: normalizeRows(meta.visa, blankVisa),
-    other_services: normalizeRows(meta.other_services, blankOtherService),
-  };
-};
+const rowHasValue = (row, keys) => keys.some((key) => {
+  const value = row?.[key];
+  return value !== null && value !== undefined && String(value).trim() !== '';
+});
 
 const authHeaders = (json = false) => {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -112,12 +40,7 @@ const getStatusColor = (status) => {
 
 const formatStatus = (status) => String(status || 'order').replace(/_/g, ' ').toUpperCase();
 
-const hasValue = (row, keys) => keys.some((key) => {
-  const value = row?.[key];
-  return value !== null && value !== undefined && String(value).trim() !== '';
-});
-
-const countRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => hasValue(row, keys)).length : 0);
+const countRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => rowHasValue(row, keys)).length : 0);
 
 const getVoucherItemCount = (order) => {
   const meta = order?.meta || {};
@@ -135,7 +58,7 @@ const getVoucherItemCount = (order) => {
 const getFirstPassengerName = (order) => {
   const passengers = order?.meta?.passengers;
   const firstPassenger = Array.isArray(passengers)
-    ? passengers.find((passenger) => hasValue(passenger, ['name']))
+    ? passengers.find((passenger) => rowHasValue(passenger, ['name']))
     : null;
 
   return firstPassenger?.name || '-';
@@ -143,16 +66,15 @@ const getFirstPassengerName = (order) => {
 
 export default function OrderList() {
   const [form] = Form.useForm();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [editVoucher, setEditVoucher] = useState(createInitialVoucher());
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [invoicingOrderId, setInvoicingOrderId] = useState(null);
 
@@ -174,22 +96,6 @@ export default function OrderList() {
       setCustomers(await response.json());
     } catch (error) {
       message.error(error.message || 'Unable to load customers');
-    }
-  };
-
-  const loadVendors = async (search = '') => {
-    try {
-      const response = await fetch(`/api/v1/vendors${search ? `?search=${encodeURIComponent(search)}` : ''}`, {
-        headers: authHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error('Unable to load vendors');
-      }
-
-      setVendors(await response.json());
-    } catch (error) {
-      message.error(error.message || 'Unable to load vendors');
     }
   };
 
@@ -279,7 +185,6 @@ export default function OrderList() {
   useEffect(() => {
     fetchOrders(1);
     loadCustomers();
-    loadVendors();
   }, []);
 
   const openEditDrawer = async (order) => {
@@ -295,7 +200,6 @@ export default function OrderList() {
 
       const detail = await response.json();
       setEditingOrder(detail);
-      setEditVoucher(voucherFromOrder(detail));
       form.resetFields();
       form.setFieldsValue({
         customer_id: detail.customer?.id || detail.customer_id,
@@ -310,77 +214,8 @@ export default function OrderList() {
     }
   };
 
-  const setVoucherField = (field, value) => {
-    setEditVoucher((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const setRowField = (section, idx, field, value) => {
-    setEditVoucher((prev) => {
-      const previousRow = prev[section][idx] || {};
-      const nextVoucher = {
-        ...prev,
-        [section]: prev[section].map((row, rowIdx) => (rowIdx === idx ? { ...row, [field]: value } : row)),
-      };
-
-      if (section === 'passengers' && field === 'name') {
-        nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
-          if (rowIdx !== idx || (row.pax_name && row.pax_name !== previousRow.name)) {
-            return row;
-          }
-
-          return { ...row, pax_name: value };
-        });
-      }
-
-      if (section === 'passengers' && field === 'ticket_no') {
-        nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
-          if (rowIdx !== idx || (row.flight_ticket_no && row.flight_ticket_no !== previousRow.ticket_no)) {
-            return row;
-          }
-
-          return { ...row, flight_ticket_no: value };
-        });
-      }
-
-      return nextVoucher;
-    });
-  };
-
-  const addRow = (section, factory = rowFactories[section]) => {
-    if (!factory) {
-      return;
-    }
-
-    setEditVoucher((prev) => {
-      const nextVoucher = { ...prev, [section]: [...prev[section], factory()] };
-
-      if (section === 'passengers') {
-        nextVoucher.pricing = [...prev.pricing, blankPricing()];
-      }
-
-      return nextVoucher;
-    });
-  };
-
-  const removeRow = (section, idx) => {
-    setEditVoucher((prev) => {
-      if (prev[section].length <= 1) {
-        return prev;
-      }
-
-      const nextVoucher = { ...prev, [section]: prev[section].filter((_, rowIdx) => rowIdx !== idx) };
-
-      if (section === 'passengers' && prev.pricing.length > 1) {
-        nextVoucher.pricing = prev.pricing.filter((_, rowIdx) => rowIdx !== idx);
-      }
-
-      return nextVoucher;
-    });
-  };
-
   const closeEditDrawer = () => {
     setEditingOrder(null);
-    setEditVoucher(createInitialVoucher());
     form.resetFields();
   };
 
@@ -392,14 +227,11 @@ export default function OrderList() {
     setSaving(true);
     try {
       const values = await form.validateFields();
+
       const response = await fetch(`/api/v1/orders/${editingOrder.uid}`, {
         method: 'PATCH',
         headers: authHeaders(true),
-        body: JSON.stringify({
-          ...values,
-          booking_reference: editVoucher.booking_reference || null,
-          voucher: editVoucher,
-        }),
+        body: JSON.stringify(values),
       });
 
       const data = await response.json();
@@ -627,6 +459,12 @@ export default function OrderList() {
         size="large"
         extra={
           <Space>
+            <Button
+              icon={<ArrowsAltOutlined />}
+              onClick={() => editingOrder && navigate(`/orders/${editingOrder.uid}/edit`)}
+            >
+              Open Full Form
+            </Button>
             <Button onClick={closeEditDrawer}>Cancel</Button>
             <Button type="primary" loading={saving} onClick={handleEdit}>Save Order</Button>
           </Space>
@@ -692,15 +530,20 @@ export default function OrderList() {
           </Card>
         </Form>
 
-        <VoucherHeaderCard voucher={editVoucher} setVoucherField={setVoucherField} />
-        <VoucherRowsSections
-          voucher={editVoucher}
-          vendors={vendors}
-          onSearchVendors={loadVendors}
-          setRowField={setRowField}
-          addRow={addRow}
-          removeRow={removeRow}
-        />
+        <Card className="border-beam-aurora" style={{ marginBottom: 12 }}>
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Text type="secondary">
+              Use the full form to edit voucher header, passengers, flights, visa, hotel, transfer, tour, and service rows.
+            </Text>
+            <Button
+              block
+              icon={<ArrowsAltOutlined />}
+              onClick={() => editingOrder && navigate(`/orders/${editingOrder.uid}/edit`)}
+            >
+              Open Full Form
+            </Button>
+          </Space>
+        </Card>
       </Drawer>
     </div>
   );

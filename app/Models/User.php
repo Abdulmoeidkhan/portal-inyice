@@ -79,15 +79,19 @@ class User extends Authenticatable
             return false;
         }
 
+        if ($roleCode === 'owner' && in_array('admin', $codes, true)) {
+            return true;
+        }
+
         return in_array($roleCode, $codes, true);
     }
 
     /**
-     * Check if user is an admin
+     * Check if user is an admin or tenant owner
      */
     public function isAdmin(): bool
     {
-        return $this->hasRole('admin');
+        return $this->hasRole('admin') || $this->hasRole('owner');
     }
 
     /**
@@ -98,4 +102,3 @@ class User extends Authenticatable
         return $this->role?->is_system === true && $this->hasRole('super-admin');
     }
 }
-

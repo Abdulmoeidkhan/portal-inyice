@@ -48,7 +48,7 @@ const flightPricingFields = [
   ['Ticket Number', 'flight_ticket_no', { min: 0, precision: 0 }],
   ['Cost', 'flight_cost', { min: 0, precision: 2 }],
   ['Profit', 'flight_profit', { precision: 2 }],
-  ['Sales', 'flight_sales', { min: 0, precision: 2 }],
+  ['Amount / Sales', 'flight_sales', { min: 0, precision: 2 }],
 ];
 
 const toNumber = (value) => {
@@ -172,7 +172,7 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
               </Row>
             )}
           </RowGroupCard>
-          <RowGroupCard title="Flight Pricing (Per Passenger)" rows={voucher.pricing} addLabel="+ Add Flight Pricing" onAdd={() => addRow('pricing', blankPricing)} onRemove={(idx) => removeRow('pricing', idx)}>
+          <RowGroupCard title="Flight Amounts (Per Passenger)" rows={voucher.pricing} addLabel="+ Add Flight Amount" onAdd={() => addRow('pricing', blankPricing)} onRemove={(idx) => removeRow('pricing', idx)}>
             {(row, idx) => (
               <Row gutter={8}>
                 <Col xs={24} sm={12} md={8} lg={4} xl={4}>
