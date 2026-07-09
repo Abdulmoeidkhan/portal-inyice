@@ -24,7 +24,7 @@ return new class extends Migration
             $table->index('tenant_id');
             $table->index(['from_currency_code', 'to_currency_code']);
             $table->index('rate_date');
-            $table->unique(['tenant_id', 'from_currency_code', 'to_currency_code', 'rate_date']);
+            $table->unique(['tenant_id', 'from_currency_code', 'to_currency_code', 'rate_date'], 'exchange_rates_tenant_pair_date_unique');
 
             $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
             $table->foreign('from_currency_code')->references('code')->on('currencies')->onDelete('restrict');
