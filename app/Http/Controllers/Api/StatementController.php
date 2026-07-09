@@ -24,7 +24,8 @@ class StatementController extends Controller
         ]);
 
         $statement = $this->statementService->customerStatement(
-            auth()->user()->tenant_id,
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
             $customerId,
             $validated['from_date'] ?? null,
             $validated['to_date'] ?? null
@@ -44,7 +45,8 @@ class StatementController extends Controller
         ]);
 
         $statement = $this->statementService->vendorStatement(
-            auth()->user()->tenant_id,
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
             $vendorId,
             $validated['from_date'] ?? null,
             $validated['to_date'] ?? null

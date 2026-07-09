@@ -33,6 +33,8 @@ The four finance entry screens are Customer Receipts, Customer Payments, Vendor 
 
 Invoice payments and customer advances create customer receipts. Invoice refunds create customer payments and linked refund settlements so invoice balances and cash-direction reports remain consistent.
 
+Reports use the signed-in user's company automatically; report screens should not ask the user to choose a company. Profit Report uses invoiced order revenue minus supplier costs from `order_vendor_costs`. It can be grouped customer-wise, vendor-wise, or staff-wise, and the list is shown only after the user chooses All or one customer/vendor/staff member. Vendor-wise revenue is allocated proportionally across supplier cost rows so one multi-vendor invoiced order is not counted multiple times.
+
 ## Project Docs
 
 - [Database relations](DATABASE_RELATIONS.md)
@@ -44,14 +46,14 @@ Invoice payments and customer advances create customer receipts. Invoice refunds
 The voucher workspace currently uses a concise tabbed UI:
 
 - Passengers
-- Flights, with selectable flight vendor and service-per-passenger pricing inside the Flights tab
+- Flights, with selectable flight vendor and service-per-passenger cost/profit/sales pricing inside the Flights tab
 - Visa
 - Transfer
 - Ziarat
 - Hotels
 - Services
 
-Passenger rows and pricing rows are kept aligned in `SalesFlow.jsx`. The pricing payload is still stored as `voucher.pricing`, with fields for `flight_fare`, `hotel_price`, `visa_price`, `transfer_price`, `city_tour_ziarat_price`, `other_service_price`, and optional `total`. Visa rows store visa type, validity, visa number, selected visa vendor, price, and notes.
+Passenger rows and pricing rows are kept aligned in `SalesFlow.jsx`. The pricing payload is still stored as `voucher.pricing`, with fields for flight cost, profit, sales, ticket number, and optional `total`. Visa, hotel, transfer, ziarat, and other service rows can each store selected vendor, cost, profit, and sales. Sales creates the customer-facing order item; cost creates supplier payable/profit data.
 
 ## Local Setup
 
@@ -97,6 +99,8 @@ Authenticated API groups include:
 - `/api/accounts`
 - `/api/reports`
 - `/api/statements`
+
+Key report endpoints include `/api/v1/reports/revenue`, `/api/v1/reports/profit`, `/api/v1/reports/receipts`, and `/api/v1/reports/payments`.
 
 Route definitions in `routes/api.php` are the source of truth.
 

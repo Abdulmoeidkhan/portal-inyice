@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class MasterDataController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = Customer::where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
             ->active()
             ->orderBy('name');
 
@@ -72,6 +74,7 @@ class MasterDataController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = Vendor::where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
             ->active()
             ->orderBy('name');
 
@@ -84,6 +87,26 @@ class MasterDataController extends Controller
         }
 
         return response()->json($query->limit(50)->get(['id', 'uid', 'name', 'email', 'phone', 'currency_code', 'payment_terms']));
+    }
+
+    public function staff(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $search = trim((string) $request->query('search', ''));
+
+        $query = User::where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
+            ->where('is_active', true)
+            ->orderBy('name');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        return response()->json($query->limit(50)->get(['id', 'uid', 'name', 'email']));
     }
 
     public function storeVendor(Request $request): JsonResponse

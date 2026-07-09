@@ -19,11 +19,13 @@ class StatementService
      */
     public function customerStatement(
         int $tenantId,
+        int $companyId,
         int $customerId,
         ?string $fromDate = null,
         ?string $toDate = null
     ): array {
         $customer = Customer::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
             ->findOrFail($customerId);
 
         $baseCurrency = $customer->company->base_currency_code;
@@ -33,7 +35,10 @@ class StatementService
         $toDate = $toDate ? Carbon::parse($toDate)->toDateString() : null;
 
         $invoices = Invoice::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
             ->where('customer_id', $customerId)
+            ->where('status', '!=', 'void')
+            ->whereHas('order')
             ->when($fromDate, fn($q) => $q->where('invoice_date', '>=', $fromDate))
             ->when($toDate, fn($q) => $q->where('invoice_date', '<=', $toDate))
             ->orderBy('invoice_date')
@@ -85,9 +90,11 @@ class StatementService
             $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'description' => 'Customer invoice', 'debit' => (float) $invoice->total_amount, 'credit' => 0, 'sort_order' => 1]);
         }
         Receipt::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->where('company_id', $companyId)
             ->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get()
             ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from customer', 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 2]));
         Payment::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->where('company_id', $companyId)
             ->when($fromDate, fn ($q) => $q->where('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('payment_date', '<=', $toDate))->get()
             ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'description' => $payment->description ?: 'Payment to customer', 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 3]));
         $runningCustomerBalance = 0;
@@ -127,11 +134,13 @@ class StatementService
      */
     public function vendorStatement(
         int $tenantId,
+        int $companyId,
         int $vendorId,
         ?string $fromDate = null,
         ?string $toDate = null
     ): array {
         $vendor = Vendor::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
             ->findOrFail($vendorId);
 
         $baseCurrency = $vendor->company->base_currency_code;
@@ -140,16 +149,19 @@ class StatementService
         $toDate = $toDate ? Carbon::parse($toDate)->toDateString() : null;
 
         $eligibleOrders = Order::where('tenant_id', $tenantId)
-            ->whereNotIn('status', ['quote', 'cancel', 'void'])
+            ->where('company_id', $companyId)
+            ->whereHas('invoice', fn ($invoice) => $invoice->where('status', '!=', 'void'))
+            ->with('invoice:id,order_id,invoice_date')
             ->orderBy('created_at')
             ->get()
             ->filter(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId) > 0);
         $paymentsQuery = Payment::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
             ->where('vendor_id', $vendorId);
-        $receiptsQuery = Receipt::where('tenant_id', $tenantId)->where('vendor_id', $vendorId);
+        $receiptsQuery = Receipt::where('tenant_id', $tenantId)->where('company_id', $companyId)->where('vendor_id', $vendorId);
 
         $openingPayables = $eligibleOrders
-            ->when($fromDate, fn ($orders) => $orders->filter(fn (Order $order) => $order->created_at->toDateString() < $fromDate))
+            ->when($fromDate, fn ($orders) => $orders->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() < $fromDate))
             ->sum(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId));
         $openingPayments = (clone $paymentsQuery)
             ->when($fromDate, fn ($query) => $query->where('payment_date', '<', $fromDate))
@@ -158,8 +170,8 @@ class StatementService
         $openingBalance = $fromDate ? (float) $openingPayables - (float) $openingPayments + (float) $openingReceipts : 0;
 
         $orders = $eligibleOrders
-            ->when($fromDate, fn ($items) => $items->filter(fn (Order $order) => $order->created_at->toDateString() >= $fromDate))
-            ->when($toDate, fn ($items) => $items->filter(fn (Order $order) => $order->created_at->toDateString() <= $toDate));
+            ->when($fromDate, fn ($items) => $items->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() >= $fromDate))
+            ->when($toDate, fn ($items) => $items->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() <= $toDate));
         $payments = $paymentsQuery
             ->when($fromDate, fn ($query) => $query->where('payment_date', '>=', $fromDate))
             ->when($toDate, fn ($query) => $query->where('payment_date', '<=', $toDate))
@@ -171,7 +183,7 @@ class StatementService
         foreach ($orders as $order) {
             $transactions->push([
                 'id' => 'order-' . $order->id,
-                'date' => $order->created_at->toDateString(),
+                'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
                 'type' => 'payable',
                 'reference' => $order->order_number,
                 'description' => $order->notes ?: 'Vendor cost for order',
@@ -263,7 +275,15 @@ class StatementService
 
         foreach (($meta['visa'] ?? []) as $visa) {
             if ((int) ($visa['vendor_id'] ?? 0) === $vendorId) {
-                $amount += (float) ($visa['amount'] ?? 0);
+                $amount += $this->costAmount($visa);
+            }
+        }
+
+        foreach (['hotels', 'transfers', 'city_tours', 'other_services'] as $section) {
+            foreach (($meta[$section] ?? []) as $row) {
+                if ((int) ($row['vendor_id'] ?? 0) === $vendorId) {
+                    $amount += $this->costAmount($row);
+                }
             }
         }
 
@@ -272,5 +292,12 @@ class StatementService
         }
 
         return (int) $order->vendor_id === $vendorId ? (float) $order->total_amount : 0;
+    }
+
+    private function costAmount(array $row): float
+    {
+        $cost = $row['cost'] ?? null;
+
+        return (float) ($cost !== null && trim((string) $cost) !== '' ? $cost : ($row['amount'] ?? 0));
     }
 }

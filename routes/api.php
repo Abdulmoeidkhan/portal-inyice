@@ -57,6 +57,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::post('/customers', 'storeCustomer')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('customers.create');
         Route::get('/vendors', 'vendors')->name('vendors.list');
         Route::post('/vendors', 'storeVendor')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('vendors.create');
+        Route::get('/staff', 'staff')->name('staff.list');
     });
 
     // ========== PAYMENTS ==========
@@ -109,6 +110,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
+        Route::get('/profit', 'profitReport')->name('reports.profit');
         Route::get('/payments', 'paymentReport')->name('reports.payments');
         Route::get('/receipts', 'receiptReport')->name('reports.receipts');
         Route::get('/customer-summary', 'customerSummaryReport')->name('reports.customerSummary');

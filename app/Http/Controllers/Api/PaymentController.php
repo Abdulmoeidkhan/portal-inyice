@@ -241,9 +241,14 @@ class PaymentController extends Controller
     public function vendorPayables(int $vendorId): JsonResponse
     {
         $tenantId = (int) auth()->user()->tenant_id;
-        $vendor = Vendor::where('tenant_id', $tenantId)->findOrFail($vendorId);
+        $companyId = (int) auth()->user()->company_id;
+        $vendor = Vendor::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->findOrFail($vendorId);
         $orders = Order::where('tenant_id', $tenantId)
-            ->whereNotIn('status', ['quote', 'cancel', 'void'])
+            ->where('company_id', $companyId)
+            ->whereHas('invoice', fn ($invoice) => $invoice->where('status', '!=', 'void'))
+            ->with('invoice:id,order_id,invoice_date')
             ->orderBy('created_at')
             ->get()
             ->map(function (Order $order) use ($vendor): array {
@@ -258,7 +263,7 @@ class PaymentController extends Controller
                     'uid' => $order->uid,
                     'order_number' => $order->order_number,
                     'booking_reference' => $order->booking_reference,
-                    'date' => $order->created_at->toDateString(),
+                    'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
                     'currency_code' => $order->currency_code,
                     'net_amount' => round($payable, 4),
                     'paid_amount' => round($allocated, 4),
@@ -321,6 +326,7 @@ class PaymentController extends Controller
         }
         $statement = $this->statementService->vendorStatement(
             (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
             $vendor->id
         );
         $outstanding = max(0, (float) $statement['summary']['outstanding_balance']);

@@ -231,6 +231,7 @@ Relations:
 - `Order belongsTo User as updatedBy`
 - `Order belongsTo GdsParsedRecord`
 - `Order hasMany OrderItem`
+- `Order hasMany OrderVendorCost`
 - `Order hasMany OrderStatusHistory`
 - `Invoice belongsTo Order`
 
@@ -250,8 +251,34 @@ Voucher payload:
 - Stored in `orders.meta`
 - Includes voucher header fields, contact, active sections, flights, passengers, pricing, hotels, transfers, city tours, visa, and other services
 - Flight rows can include `vendor_id` and `vendor_name`
-- Visa rows can include `visa_type`, `validity`, `visa_no`, `vendor_id`, `visa_vendor`, `amount`, and notes
+- Visa rows can include `visa_type`, `validity`, `visa_no`, `vendor_id`, `visa_vendor`, `cost`, `profit`, `sales`, legacy `amount`, and notes
+- Hotel, transfer, city tour/ziarat, and other service rows can include `vendor_id`, `vendor_name`, `cost`, `profit`, `sales`, and legacy `amount`
 - Generated order items keep original row data in `order_items.gds_data`
+
+### order_vendor_costs
+
+Represents supplier cost rows used by vendor payments and profit reporting.
+
+Important fields:
+
+- `tenant_id`
+- `order_id`
+- `vendor_id`
+- `service_type`
+- `service_index`
+- `amount`
+
+Relations:
+
+- `OrderVendorCost belongsTo Order`
+- `OrderVendorCost belongsTo Vendor`
+
+Usage:
+
+- Flight pricing rows create `flight` costs from `voucher.pricing.*.flight_cost` when a vendor is selected.
+- Visa, hotel, transfer, city tour/ziarat, and other service rows create supplier costs from their `cost` field when a vendor is selected. Legacy rows without `cost` fall back to `amount`.
+- Profit Report subtracts these costs from invoiced order revenue.
+- Vendor-wise profit allocates an invoiced order's revenue proportionally across vendor cost rows to avoid double-counting multi-vendor orders.
 
 ### order_items
 
@@ -277,7 +304,7 @@ How voucher rows become order items:
 
 - Flight reference rows create zero-amount traceability items
 - Pricing rows create priced items per passenger and component
-- Hotels, transfers, ziarat, visa, and other services can also create order items from their amount fields
+- Hotels, transfers, ziarat, visa, and other services can also create order items from their sales fields. Legacy rows without `sales` fall back to `amount`.
 - A fallback `Voucher Booking` item is created if no items exist
 
 ### order_status_histories
@@ -633,6 +660,7 @@ Tenant
   -> Customer
   -> Vendor
   -> Order
+       -> OrderVendorCost
        -> OrderItem
        -> OrderStatusHistory
        -> Invoice

@@ -132,14 +132,37 @@ class OrderController extends Controller
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
             'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
             'voucher.hotels' => 'nullable|array',
+            'voucher.hotels.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.hotels.*.cost' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.profit' => 'nullable|numeric',
+            'voucher.hotels.*.sales' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.amount' => 'nullable|numeric|min:0',
             'voucher.transfers' => 'nullable|array',
+            'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.transfers.*.cost' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.profit' => 'nullable|numeric',
+            'voucher.transfers.*.sales' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.amount' => 'nullable|numeric|min:0',
             'voucher.city_tours' => 'nullable|array',
+            'voucher.city_tours.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.city_tours.*.cost' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.profit' => 'nullable|numeric',
+            'voucher.city_tours.*.sales' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.amount' => 'nullable|numeric|min:0',
             'voucher.visa' => 'nullable|array',
             'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
+            'voucher.visa.*.cost' => 'nullable|numeric|min:0',
+            'voucher.visa.*.profit' => 'nullable|numeric',
+            'voucher.visa.*.sales' => 'nullable|numeric|min:0',
             'voucher.visa.*.amount' => 'nullable|numeric|min:0',
             'voucher.other_services' => 'nullable|array',
+            'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.other_services.*.cost' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.profit' => 'nullable|numeric',
+            'voucher.other_services.*.sales' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
         ]);
 
         $companyId = (int) ($validated['company_id'] ?? $user->company_id);
@@ -315,14 +338,37 @@ class OrderController extends Controller
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
             'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
             'voucher.hotels' => 'nullable|array',
+            'voucher.hotels.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.hotels.*.cost' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.profit' => 'nullable|numeric',
+            'voucher.hotels.*.sales' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.amount' => 'nullable|numeric|min:0',
             'voucher.transfers' => 'nullable|array',
+            'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.transfers.*.cost' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.profit' => 'nullable|numeric',
+            'voucher.transfers.*.sales' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.amount' => 'nullable|numeric|min:0',
             'voucher.city_tours' => 'nullable|array',
+            'voucher.city_tours.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.city_tours.*.cost' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.profit' => 'nullable|numeric',
+            'voucher.city_tours.*.sales' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.amount' => 'nullable|numeric|min:0',
             'voucher.visa' => 'nullable|array',
             'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
+            'voucher.visa.*.cost' => 'nullable|numeric|min:0',
+            'voucher.visa.*.profit' => 'nullable|numeric',
+            'voucher.visa.*.sales' => 'nullable|numeric|min:0',
             'voucher.visa.*.amount' => 'nullable|numeric|min:0',
             'voucher.other_services' => 'nullable|array',
+            'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
+            'voucher.other_services.*.cost' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.profit' => 'nullable|numeric',
+            'voucher.other_services.*.sales' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
         ]);
 
         $customer = Customer::where('tenant_id', $tenantId)->findOrFail((int) $validated['customer_id']);
@@ -492,17 +538,18 @@ class OrderController extends Controller
 
         if ($hasActiveSection('hotels')) {
             foreach (($voucher['hotels'] ?? []) as $hotel) {
-                $amount = $this->toAmount($hotel['amount'] ?? null);
-                if ($amount <= 0 && !$this->hasFilledValue($hotel, ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes'])) {
+                $amount = $this->salesAmount($hotel);
+                if ($amount <= 0 && !$this->hasFilledValue($hotel, ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'vendor_id', 'vendor_name', 'notes'])) {
                     continue;
                 }
 
                 $description = trim(sprintf(
-                    'Hotel %s %s (%s to %s)',
+                    'Hotel %s %s (%s to %s)%s',
                     $hotel['hotel_name'] ?? '-',
                     $hotel['city'] ?? '-',
                     $hotel['check_in'] ?? '-',
-                    $hotel['check_out'] ?? '-'
+                    $hotel['check_out'] ?? '-',
+                    $this->vendorDescription($hotel)
                 ));
 
                 $pushItem($description, $amount, ['type' => 'hotel', 'row' => $hotel]);
@@ -511,16 +558,17 @@ class OrderController extends Controller
 
         if ($hasActiveSection('transfers')) {
             foreach (($voucher['transfers'] ?? []) as $transfer) {
-                $amount = $this->toAmount($transfer['amount'] ?? null);
-                if ($amount <= 0 && !$this->hasFilledValue($transfer, ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes'])) {
+                $amount = $this->salesAmount($transfer);
+                if ($amount <= 0 && !$this->hasFilledValue($transfer, ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes'])) {
                     continue;
                 }
 
                 $description = trim(sprintf(
-                    'Transfer %s %s to %s',
+                    'Transfer %s %s to %s%s',
                     $transfer['service'] ?? '-',
                     $transfer['from_city'] ?? '-',
-                    $transfer['to_city'] ?? '-'
+                    $transfer['to_city'] ?? '-',
+                    $this->vendorDescription($transfer)
                 ));
 
                 $pushItem($description, $amount, ['type' => 'transfer', 'row' => $transfer]);
@@ -529,16 +577,17 @@ class OrderController extends Controller
 
         if ($hasActiveSection('city_tours')) {
             foreach (($voucher['city_tours'] ?? []) as $cityTour) {
-                $amount = $this->toAmount($cityTour['amount'] ?? null);
-                if ($amount <= 0 && !$this->hasFilledValue($cityTour, ['city', 'title', 'attractions', 'date', 'notes'])) {
+                $amount = $this->salesAmount($cityTour);
+                if ($amount <= 0 && !$this->hasFilledValue($cityTour, ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes'])) {
                     continue;
                 }
 
                 $description = trim(sprintf(
-                    'City Tour %s - %s (%s)',
+                    'City Tour %s - %s (%s)%s',
                     $cityTour['city'] ?? '-',
                     $cityTour['title'] ?? '-',
-                    $cityTour['date'] ?? '-'
+                    $cityTour['date'] ?? '-',
+                    $this->vendorDescription($cityTour)
                 ));
 
                 $pushItem($description, $amount, ['type' => 'city_tour', 'row' => $cityTour]);
@@ -547,7 +596,7 @@ class OrderController extends Controller
 
         if ($hasActiveSection('visa')) {
             foreach (($voucher['visa'] ?? []) as $visaRow) {
-                $amount = $this->toAmount($visaRow['amount'] ?? null);
+                $amount = $this->salesAmount($visaRow);
                 if ($amount <= 0 && !$this->hasFilledValue($visaRow, ['passenger_name', 'validity', 'visa_no', 'vendor_id', 'visa_vendor', 'notes'])) {
                     continue;
                 }
@@ -567,12 +616,12 @@ class OrderController extends Controller
 
         if ($hasActiveSection('other_services')) {
             foreach (($voucher['other_services'] ?? []) as $otherService) {
-                $amount = $this->toAmount($otherService['amount'] ?? null);
-                if ($amount <= 0 && !$this->hasFilledValue($otherService, ['description'])) {
+                $amount = $this->salesAmount($otherService);
+                if ($amount <= 0 && !$this->hasFilledValue($otherService, ['description', 'vendor_id', 'vendor_name'])) {
                     continue;
                 }
 
-                $description = (string) ($otherService['description'] ?? 'Other Service');
+                $description = trim((string) ($otherService['description'] ?? 'Other Service') . $this->vendorDescription($otherService));
                 $pushItem($description, $amount, ['type' => 'other_service', 'row' => $otherService]);
             }
         }
@@ -637,11 +686,11 @@ class OrderController extends Controller
         }
 
         $serviceRows = [
-            'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes', 'amount'],
-            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'amount'],
-            'city_tours' => ['city', 'title', 'attractions', 'date', 'notes', 'amount'],
-            'visa' => ['passenger_name', 'validity', 'visa_no', 'vendor_id', 'visa_vendor', 'notes', 'amount'],
-            'other_services' => ['description', 'amount'],
+            'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
+            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
+            'city_tours' => ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
+            'visa' => ['passenger_name', 'validity', 'visa_no', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
+            'other_services' => ['description', 'vendor_id', 'vendor_name', 'cost', 'profit', 'sales', 'amount'],
         ];
 
         foreach ($serviceRows as $section => $keys) {
@@ -683,23 +732,33 @@ class OrderController extends Controller
             ];
         }
 
-        foreach (($voucher['visa'] ?? []) as $index => $visa) {
-            $vendorId = (int) ($visa['vendor_id'] ?? 0);
-            $amount = $this->toAmount($visa['amount'] ?? null);
-            if ($vendorId <= 0 || $amount <= 0) {
-                continue;
-            }
+        $costSections = [
+            'hotels' => 'hotel',
+            'transfers' => 'transfer',
+            'city_tours' => 'city_tour',
+            'visa' => 'visa',
+            'other_services' => 'other_service',
+        ];
 
-            $rows[] = [
-                'tenant_id' => $tenantId,
-                'order_id' => $order->id,
-                'vendor_id' => $vendorId,
-                'service_type' => 'visa',
-                'service_index' => (int) $index,
-                'amount' => $amount,
-                'created_at' => $timestamp,
-                'updated_at' => $timestamp,
-            ];
+        foreach ($costSections as $section => $serviceType) {
+            foreach (($voucher[$section] ?? []) as $index => $serviceRow) {
+                $vendorId = (int) ($serviceRow['vendor_id'] ?? 0);
+                $amount = $this->costAmount($serviceRow);
+                if ($vendorId <= 0 || $amount <= 0) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'tenant_id' => $tenantId,
+                    'order_id' => $order->id,
+                    'vendor_id' => $vendorId,
+                    'service_type' => $serviceType,
+                    'service_index' => (int) $index,
+                    'amount' => $amount,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
         }
 
         OrderVendorCost::where('order_id', $order->id)->delete();
@@ -737,5 +796,33 @@ class OrderController extends Controller
         }
 
         return 0;
+    }
+
+    private function salesAmount(array $row): float
+    {
+        return $this->toAmount($this->firstFilledValue($row['sales'] ?? null, $row['amount'] ?? null));
+    }
+
+    private function costAmount(array $row): float
+    {
+        return $this->toAmount($this->firstFilledValue($row['cost'] ?? null, $row['amount'] ?? null));
+    }
+
+    private function vendorDescription(array $row): string
+    {
+        $vendorName = trim((string) ($row['vendor_name'] ?? $row['visa_vendor'] ?? ''));
+
+        return $vendorName !== '' ? ' Vendor: ' . $vendorName : '';
+    }
+
+    private function firstFilledValue(mixed ...$values): mixed
+    {
+        foreach ($values as $value) {
+            if ($value !== null && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }

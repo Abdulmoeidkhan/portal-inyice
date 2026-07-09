@@ -10,12 +10,11 @@ export default function RevenueReport() {
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
   const [groupBy, setGroupBy] = useState('month');
-  const [companyId, setCompanyId] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   const fetchReport = async () => {
-    if (!fromDate || !toDate || !companyId) {
-      message.error('Please select date range and company');
+    if (!fromDate || !toDate) {
+      message.error('Please select date range');
       return;
     }
 
@@ -25,7 +24,6 @@ export default function RevenueReport() {
         from_date: fromDate,
         to_date: toDate,
         group_by: groupBy,
-        company_id: companyId,
       });
 
       const response = await fetch(`/api/v1/reports/revenue?${params}`, {
@@ -152,14 +150,6 @@ export default function RevenueReport() {
                 { label: 'Year', value: 'year' },
               ]}
               style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={12} lg={4}>
-            <Select
-              placeholder="Company"
-              onChange={setCompanyId}
-              style={{ width: '100%' }}
-              // TODO: Load companies from API
             />
           </Col>
           <Col xs={24} sm={12} lg={8}>

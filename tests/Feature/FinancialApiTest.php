@@ -216,6 +216,8 @@ class FinancialApiTest extends TestCase
         $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
         $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
         $secondOrder->save();
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])->assertCreated();
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $secondOrder->id])->assertCreated();
 
         $payables = $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
             ->assertOk()
@@ -337,6 +339,23 @@ class FinancialApiTest extends TestCase
         $revenue->assertOk();
         $revenue->assertJsonPath('group_by', 'month');
 
+        $profit = $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer');
+        $profit->assertOk()
+            ->assertJsonPath('filters.group_by', 'customer')
+            ->assertJsonPath('summary.total_orders', 1);
+
+        $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('filters.entity_id', $ctx['customer']->id)
+            ->assertJsonPath('data.0.group_name', 'Test Customer')
+            ->assertJsonPath('summary.total_orders', 1);
+
+        $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=staff&entity_id=' . $ctx['user']->id)
+            ->assertOk()
+            ->assertJsonPath('filters.entity_id', $ctx['user']->id)
+            ->assertJsonPath('data.0.group_name', 'API Tester')
+            ->assertJsonPath('summary.total_orders', 1);
+
         $customerSummary = $this->getJson('/api/v1/reports/customer-summary');
         $customerSummary->assertOk();
         $customerSummary->assertJsonStructure([
@@ -398,7 +417,7 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
             ->assertOk()->assertJsonPath('transactions.0.type', 'payment');
         $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
-            ->assertOk()->assertJsonPath('summary.outstanding_balance', 1080);
+            ->assertOk()->assertJsonPath('summary.outstanding_balance', 80);
 
         $this->deleteJson('/api/v1/payments/customer/' . $customerPayment['uid'])->assertOk();
         $this->deleteJson('/api/v1/receipts/vendor/' . $vendorReceipt['uid'])->assertOk();
@@ -431,7 +450,7 @@ class FinancialApiTest extends TestCase
                 'booking_reference' => 'ZXCV12',
                 'gds_source' => 'sabre',
                 'emergency_contact' => 'Emergency search value',
-                'active_sections' => ['flights', 'visa'],
+                'active_sections' => ['flights', 'visa', 'hotels', 'transfers', 'city_tours', 'other_services'],
                 'flights' => [[
                     'date' => '2026-07-01',
                     'departure' => '10:30',
@@ -469,6 +488,45 @@ class FinancialApiTest extends TestCase
                     'visa_vendor' => $secondVendor->name,
                     'amount' => 100,
                 ]],
+                'hotels' => [[
+                    'vendor_id' => $ctx['vendor']->id,
+                    'vendor_name' => $ctx['vendor']->name,
+                    'city' => 'Makkah',
+                    'hotel_name' => 'Clock Tower',
+                    'check_in' => '2026-07-01',
+                    'check_out' => '2026-07-05',
+                    'cost' => 300,
+                    'profit' => 150,
+                    'sales' => 450,
+                ]],
+                'transfers' => [[
+                    'vendor_id' => $secondVendor->id,
+                    'vendor_name' => $secondVendor->name,
+                    'service' => 'Airport transfer',
+                    'from_city' => 'Jeddah',
+                    'to_city' => 'Makkah',
+                    'cost' => 80,
+                    'profit' => 40,
+                    'sales' => 120,
+                ]],
+                'city_tours' => [[
+                    'vendor_id' => $ctx['vendor']->id,
+                    'vendor_name' => $ctx['vendor']->name,
+                    'city' => 'Madinah',
+                    'title' => 'Ziarat',
+                    'date' => '2026-07-06',
+                    'cost' => 70,
+                    'profit' => 30,
+                    'sales' => 100,
+                ]],
+                'other_services' => [[
+                    'vendor_id' => $secondVendor->id,
+                    'vendor_name' => $secondVendor->name,
+                    'description' => 'Wheelchair assistance',
+                    'cost' => 50,
+                    'profit' => 25,
+                    'sales' => 75,
+                ]],
             ],
         ]);
 
@@ -496,6 +554,34 @@ class FinancialApiTest extends TestCase
             'service_type' => 'visa',
             'amount' => 100,
         ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $ctx['vendor']->id,
+            'service_type' => 'hotel',
+            'amount' => 300,
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $secondVendor->id,
+            'service_type' => 'transfer',
+            'amount' => 80,
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $ctx['vendor']->id,
+            'service_type' => 'city_tour',
+            'amount' => 70,
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $orderId,
+            'vendor_id' => $secondVendor->id,
+            'service_type' => 'other_service',
+            'amount' => 50,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $orderId,
+            'total_amount' => 1595,
+        ]);
 
         $this->getJson('/api/v1/orders?search=VCH-SEARCH-991')
             ->assertOk()
@@ -507,24 +593,29 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('data.0.id', $orderId);
         $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
             ->assertOk()
-            ->assertJsonFragment(['id' => $orderId, 'net_amount' => 400]);
+            ->assertJsonMissing(['id' => $orderId]);
+
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $orderId])->assertCreated();
+        $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $orderId, 'net_amount' => 770]);
         $this->getJson('/api/v1/payments/vendor/' . $secondVendor->id . '/payables')
             ->assertOk()
-            ->assertJsonPath('data.0.net_amount', 300);
+            ->assertJsonPath('data.0.net_amount', 430);
 
         $this->postJson('/api/v1/payments/vendor', [
             'vendor_id' => $ctx['vendor']->id,
-            'amount' => 400,
+            'amount' => 770,
             'payment_method' => 'cash',
             'payment_date' => '2026-06-24',
             'allocations' => [
-                ['order_id' => $orderId, 'amount' => 400],
+                ['order_id' => $orderId, 'amount' => 770],
             ],
         ])->assertCreated();
 
         $this->getJson('/api/v1/payments/vendor/' . $secondVendor->id . '/payables')
             ->assertOk()
-            ->assertJsonPath('outstanding_total', 300);
+            ->assertJsonPath('outstanding_total', 430);
     }
 
     private function seedTenantContext(): array

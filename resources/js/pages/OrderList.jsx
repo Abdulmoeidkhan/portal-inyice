@@ -46,11 +46,11 @@ const getVoucherItemCount = (order) => {
   const meta = order?.meta || {};
   const count =
     countRows(meta.flights, ['gds_pnr', 'pnr', 'flight_no', 'from', 'to', 'date']) +
-    countRows(meta.visa, ['passenger_name', 'visa_type', 'visa_no', 'amount']) +
-    countRows(meta.hotels, ['hcn', 'city', 'hotel_name', 'check_in', 'check_out', 'amount']) +
-    countRows(meta.transfers, ['tn', 'service', 'from_city', 'to_city', 'amount']) +
-    countRows(meta.city_tours, ['city', 'title', 'date', 'amount']) +
-    countRows(meta.other_services, ['description', 'amount']);
+    countRows(meta.visa, ['passenger_name', 'visa_type', 'visa_no', 'cost', 'profit', 'sales', 'amount']) +
+    countRows(meta.hotels, ['hcn', 'city', 'hotel_name', 'check_in', 'check_out', 'cost', 'profit', 'sales', 'amount']) +
+    countRows(meta.transfers, ['tn', 'service', 'from_city', 'to_city', 'cost', 'profit', 'sales', 'amount']) +
+    countRows(meta.city_tours, ['city', 'title', 'date', 'cost', 'profit', 'sales', 'amount']) +
+    countRows(meta.other_services, ['description', 'cost', 'profit', 'sales', 'amount']);
 
   return count || order?.items?.length || 0;
 };

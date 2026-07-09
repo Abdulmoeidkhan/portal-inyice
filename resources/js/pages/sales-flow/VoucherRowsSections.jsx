@@ -51,6 +51,12 @@ const flightPricingFields = [
   ['Amount / Sales', 'flight_sales', { min: 0, precision: 2 }],
 ];
 
+const serviceMoneyFields = [
+  ['Cost', 'cost', { min: 0, precision: 2 }],
+  ['Profit', 'profit', { precision: 2 }],
+  ['Amount / Sales', 'sales', { min: 0, precision: 2 }],
+];
+
 const toNumber = (value) => {
   if (value === null || value === undefined || value === '') {
     return 0;
@@ -126,6 +132,73 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
       }
     }
   };
+
+  const setServiceMoneyField = (section, idx, field, value) => {
+    const row = voucher[section]?.[idx] || {};
+    const numericValue = value ?? '0';
+    const nextRow = { ...row, [field]: numericValue };
+    const cost = toNumber(nextRow.cost);
+    const profit = toNumber(nextRow.profit);
+    const sales = toNumber(nextRow.sales);
+
+    setRowField(section, idx, field, numericValue);
+
+    if (field === 'cost') {
+      if (cost !== null && profit !== null) {
+        const nextSales = moneyValue(cost + profit);
+        setRowField(section, idx, 'sales', nextSales);
+        setRowField(section, idx, 'amount', nextSales);
+      } else if (cost !== null && sales !== null) {
+        setRowField(section, idx, 'profit', moneyValue(sales - cost));
+      }
+    }
+
+    if (field === 'profit' && cost !== null && profit !== null) {
+      const nextSales = moneyValue(cost + profit);
+      setRowField(section, idx, 'sales', nextSales);
+      setRowField(section, idx, 'amount', nextSales);
+    }
+
+    if (field === 'sales' && cost !== null && sales !== null) {
+      setRowField(section, idx, 'amount', moneyValue(sales));
+      if (cost === 0 && profit === 0 && sales !== 0) {
+        setRowField(section, idx, 'cost', moneyValue(sales));
+      } else {
+        setRowField(section, idx, 'profit', moneyValue(sales - cost));
+      }
+    }
+  };
+
+  const serviceVendorSelect = (section, idx, row, label = 'Vendor', nameField = 'vendor_name') => (
+    <Col xs={24} sm={12} md={8} lg={4} xl={6}>
+      <Text>{label}</Text>
+      <Select
+        allowClear
+        showSearch
+        value={row.vendor_id}
+        placeholder="Select vendor"
+        filterOption={false}
+        onSearch={onSearchVendors}
+        options={vendorOptions}
+        onChange={(value) => setVendorFields(section, idx, 'vendor_id', nameField, value)}
+        style={{ width: '100%' }}
+      />
+    </Col>
+  );
+
+  const serviceMoneyInputs = (section, idx, row) => serviceMoneyFields.map(([label, field, inputProps]) => (
+    <Col xs={24} sm={12} md={8} lg={4} xl={6} key={field}>
+      <Text>{label}</Text>
+      <InputNumber
+        {...inputProps}
+        stringMode
+        controls={false}
+        value={row[field] === '' || row[field] === null || row[field] === undefined ? null : row[field]}
+        onChange={(value) => setServiceMoneyField(section, idx, field, value)}
+        style={{ width: '100%' }}
+      />
+    </Col>
+  ));
 
   const tabItems = [
     {
@@ -222,21 +295,8 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Visa Type</Text><Select value={row.visa_type} options={visaTypeOptions} onChange={(value) => setRowField('visa', idx, 'visa_type', value)} style={{ width: '100%' }} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Validity</Text><Input value={row.validity} onChange={(e) => setRowField('visa', idx, 'validity', e.target.value)} placeholder="30 days / 1 year" /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Visa Number</Text><Input value={row.visa_no} onChange={(e) => setRowField('visa', idx, 'visa_no', e.target.value)} /></Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={8}>
-                <Text>Visa Vendor</Text>
-                <Select
-                  allowClear
-                  showSearch
-                  value={row.vendor_id}
-                  placeholder="Select vendor"
-                  filterOption={false}
-                  onSearch={onSearchVendors}
-                  options={vendorOptions}
-                  onChange={(value) => setVendorFields('visa', idx, 'vendor_id', 'visa_vendor', value)}
-                  style={{ width: '100%' }}
-                />
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Price</Text><Input value={row.amount} onChange={(e) => setRowField('visa', idx, 'amount', e.target.value)} /></Col>
+              {serviceVendorSelect('visa', idx, row, 'Visa Vendor', 'visa_vendor')}
+              {serviceMoneyInputs('visa', idx, row)}
               <Col xs={24} sm={12} md={8} lg={4} xl={24}><Text>Notes</Text><Input value={row.notes} onChange={(e) => setRowField('visa', idx, 'notes', e.target.value)} /></Col>
             </Row>
           )}
@@ -256,7 +316,8 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>To</Text><Input value={row.to_city} onChange={(e) => setRowField('transfers', idx, 'to_city', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Vehicle</Text><Input value={row.vehicle} onChange={(e) => setRowField('transfers', idx, 'vehicle', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Contact Person</Text><Input value={row.contact_person} onChange={(e) => setRowField('transfers', idx, 'contact_person', e.target.value)} /></Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Amount</Text><Input value={row.amount} onChange={(e) => setRowField('transfers', idx, 'amount', e.target.value)} /></Col>
+              {serviceVendorSelect('transfers', idx, row)}
+              {serviceMoneyInputs('transfers', idx, row)}
               <Col xs={24} sm={12} md={8} lg={4} xl={24}><Text>Notes</Text><Input value={row.notes} onChange={(e) => setRowField('transfers', idx, 'notes', e.target.value)} /></Col>
             </Row>
           )}
@@ -274,7 +335,8 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Tour Title</Text><Input value={row.title} onChange={(e) => setRowField('city_tours', idx, 'title', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Attractions</Text><Input value={row.attractions} onChange={(e) => setRowField('city_tours', idx, 'attractions', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Date</Text><Input type="date" value={row.date} onChange={(e) => setRowField('city_tours', idx, 'date', e.target.value)} /></Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Amount</Text><Input value={row.amount} onChange={(e) => setRowField('city_tours', idx, 'amount', e.target.value)} /></Col>
+              {serviceVendorSelect('city_tours', idx, row)}
+              {serviceMoneyInputs('city_tours', idx, row)}
               <Col xs={24} sm={12} md={8} lg={4} xl={24}><Text>Notes</Text><Input value={row.notes} onChange={(e) => setRowField('city_tours', idx, 'notes', e.target.value)} /></Col>
             </Row>
           )}
@@ -293,9 +355,10 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
               <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Room Type</Text><Input value={row.room_type} onChange={(e) => setRowField('hotels', idx, 'room_type', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Check In</Text><Input type="date" value={row.check_in} onChange={(e) => setRowField('hotels', idx, 'check_in', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Check Out</Text><Input type="date" value={row.check_out} onChange={(e) => setRowField('hotels', idx, 'check_out', e.target.value)} /></Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Amount</Text><Input value={row.amount} onChange={(e) => setRowField('hotels', idx, 'amount', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Lead Passenger</Text><Input value={row.lead_passenger} onChange={(e) => setRowField('hotels', idx, 'lead_passenger', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Hotel Name</Text><Input value={row.hotel_name} onChange={(e) => setRowField('hotels', idx, 'hotel_name', e.target.value)} /></Col>
+              {serviceVendorSelect('hotels', idx, row, 'Hotel Vendor')}
+              {serviceMoneyInputs('hotels', idx, row)}
               <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Notes</Text><Input value={row.notes} onChange={(e) => setRowField('hotels', idx, 'notes', e.target.value)} /></Col>
             </Row>
           )}
@@ -309,8 +372,9 @@ export default function VoucherRowsSections({ voucher, vendors = [], onSearchVen
         <RowGroupCard title="Other Services" rows={voucher.other_services} addLabel="+ Add Service" onAdd={() => addRow('other_services', blankOtherService)} onRemove={(idx) => removeRow('other_services', idx)}>
           {(row, idx) => (
             <Row gutter={8}>
-              <Col xs={24} sm={12} md={8} lg={4} xl={16}><Text>Description</Text><Input value={row.description} onChange={(e) => setRowField('other_services', idx, 'description', e.target.value)} /></Col>
-              <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Amount</Text><Input value={row.amount} onChange={(e) => setRowField('other_services', idx, 'amount', e.target.value)} /></Col>
+              <Col xs={24} sm={12} md={8} lg={4} xl={12}><Text>Description</Text><Input value={row.description} onChange={(e) => setRowField('other_services', idx, 'description', e.target.value)} /></Col>
+              {serviceVendorSelect('other_services', idx, row)}
+              {serviceMoneyInputs('other_services', idx, row)}
             </Row>
           )}
         </RowGroupCard>

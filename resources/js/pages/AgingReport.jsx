@@ -1,25 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Table, Statistic, Spin, Select, Skeleton, Empty } from 'antd';
+import { Card, Row, Col, Table, Statistic, Skeleton, Empty, Button } from 'antd';
 import { message } from '../services/feedback';
-import { DollarOutlined, FileTextOutlined, AlertOutlined } from '@ant-design/icons';
+import { DollarOutlined, AlertOutlined } from '@ant-design/icons';
 import { Column } from '@ant-design/plots';
+
+const money = (value) => Number(value || 0).toFixed(2);
+const wholeNumber = (value) => Math.round(Number(value || 0));
+const bucketAmount = (report, key) => Number(report?.buckets?.[key]?.total_outstanding || 0);
 
 export default function AgingReport() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [companyId, setCompanyId] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   useEffect(() => {
-    if (companyId) {
-      fetchAgingReport();
-    }
-  }, [companyId]);
+    fetchAgingReport();
+  }, []);
 
   const fetchAgingReport = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/reports/aging?company_id=${companyId}`, {
+      const response = await fetch('/api/v1/reports/aging', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -50,29 +51,30 @@ export default function AgingReport() {
     {
       title: 'Amount',
       dataIndex: 'amount',
-      render: (amount) => amount.toFixed(2),
+      render: money,
       align: 'right',
     },
     {
       title: 'Outstanding',
       dataIndex: 'outstanding',
-      render: (outstanding) => outstanding.toFixed(2),
+      render: money,
       align: 'right',
     },
     {
       title: 'Days Overdue',
       dataIndex: 'days_overdue',
+      render: wholeNumber,
       align: 'center',
     },
   ];
 
   const chartData = report
     ? [
-        { bucket: 'Current', amount: Number(report.buckets.current.total_outstanding || 0) },
-        { bucket: '1-30', amount: Number(report.buckets.days_1_30.total_outstanding || 0) },
-        { bucket: '31-60', amount: Number(report.buckets.days_31_60.total_outstanding || 0) },
-        { bucket: '61-90', amount: Number(report.buckets.days_61_90.total_outstanding || 0) },
-        { bucket: '90+', amount: Number(report.buckets.days_over_90.total_outstanding || 0) },
+        { bucket: 'Current', amount: bucketAmount(report, 'current') },
+        { bucket: '1-30', amount: bucketAmount(report, 'days_1_30') },
+        { bucket: '31-60', amount: bucketAmount(report, 'days_31_60') },
+        { bucket: '61-90', amount: bucketAmount(report, 'days_61_90') },
+        { bucket: '90+', amount: bucketAmount(report, 'days_over_90') },
       ]
     : [];
 
@@ -101,12 +103,7 @@ export default function AgingReport() {
       <h1>Invoice Aging Report</h1>
 
       <div style={{ marginBottom: '20px' }}>
-        <Select
-          placeholder="Select company"
-          style={{ width: 250 }}
-          onChange={setCompanyId}
-          // TODO: Load companies from API
-        />
+        <Button onClick={fetchAgingReport} loading={loading}>Refresh</Button>
       </div>
       </div>
 
@@ -118,7 +115,7 @@ export default function AgingReport() {
 
       {!loading && !report && (
         <Card className="border-beam-aurora">
-          <Empty description="Select a company to load aging report" />
+          <Empty description="No aging data found" />
         </Card>
       )}
 
@@ -129,7 +126,7 @@ export default function AgingReport() {
           <Card className="border-beam-aurora">
             <Statistic
               title="Not Yet Due"
-              value={report.buckets.current.total_outstanding}
+              value={bucketAmount(report, 'current')}
               prefix={<DollarOutlined />}
             />
           </Card>
@@ -138,7 +135,7 @@ export default function AgingReport() {
           <Card className="border-beam-aurora">
             <Statistic
               title="1-30 Days"
-              value={report.buckets.days_1_30.total_outstanding}
+              value={bucketAmount(report, 'days_1_30')}
               prefix={<DollarOutlined />}
               valueStyle={{ color: '#faad14' }}
             />
@@ -148,7 +145,7 @@ export default function AgingReport() {
           <Card className="border-beam-aurora">
             <Statistic
               title="31-60 Days"
-              value={report.buckets.days_31_60.total_outstanding}
+              value={bucketAmount(report, 'days_31_60')}
               prefix={<DollarOutlined />}
               valueStyle={{ color: '#ff7a45' }}
             />
@@ -158,7 +155,7 @@ export default function AgingReport() {
           <Card className="border-beam-aurora">
             <Statistic
               title="Over 90 Days"
-              value={report.buckets.days_over_90.total_outstanding}
+              value={bucketAmount(report, 'days_over_90')}
               prefix={<AlertOutlined />}
               valueStyle={{ color: '#ff4d4f' }}
             />
@@ -170,12 +167,12 @@ export default function AgingReport() {
         <Column {...chartConfig} />
       </Card>
 
-      {Object.entries(report.buckets).map(([key, bucket]) => (
+      {Object.entries(report.buckets || {}).map(([key, bucket]) => (
         <Card key={key} className="border-beam-aurora" title={`${bucket.description} (${bucket.count})`} style={{ marginBottom: '20px' }}>
           <Table
             scroll={{ x: 'max-content' }}
             columns={getBucketColumns()}
-            dataSource={bucket.invoices}
+            dataSource={bucket.invoices || []}
             rowKey="invoice_uid"
             pagination={false}
           />

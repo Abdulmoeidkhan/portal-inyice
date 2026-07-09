@@ -10,8 +10,10 @@ use App\Models\Customer;
 use App\Models\Vendor;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderVendorCost;
 use App\Models\CashAccount;
 use App\Models\BankAccount;
+use App\Services\InvoiceService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -164,8 +166,11 @@ class DemoDataSeeder extends Seeder
 
         for ($i = 1; $i <= 5; $i++) {
             $flightAmount = 30000;
+            $flightCost = 25000;
             $hotelAmount = 20000;
+            $hotelCost = 16000;
             $otherServiceAmount = $i * 5000;
+            $otherServiceCost = $i * 3500;
             $totalAmount = $flightAmount + $hotelAmount + $otherServiceAmount;
 
             $order = Order::firstOrNew(['tenant_id' => $tenant->id, 'booking_reference' => 'DEMO-PNR-' . $i]);
@@ -211,22 +216,32 @@ class DemoDataSeeder extends Seeder
                         'flight_ticket_no' => '157000' . str_pad((string) $i, 4, '0', STR_PAD_LEFT),
                         'vendor_id' => $vendor1->id,
                         'vendor_name' => $vendor1->name,
-                        'flight_cost' => 25000,
-                        'flight_profit' => 5000,
+                        'flight_cost' => $flightCost,
+                        'flight_profit' => $flightAmount - $flightCost,
                         'flight_sales' => $flightAmount,
                     ]],
                     'hotels' => [[
+                        'vendor_id' => $vendor1->id,
+                        'vendor_name' => $vendor1->name,
                         'city' => 'Dubai',
                         'hotel_name' => 'Demo City Hotel',
                         'room_type' => 'Standard',
                         'check_in' => now()->addDays($i * 3)->toDateString(),
                         'check_out' => now()->addDays(($i * 3) + 5)->toDateString(),
                         'lead_passenger' => $i % 2 === 0 ? 'John Smith' : 'ABC Travel Guest',
+                        'cost' => $hotelCost,
+                        'profit' => $hotelAmount - $hotelCost,
+                        'sales' => $hotelAmount,
                         'amount' => $hotelAmount,
                         'notes' => 'Demo hotel accommodation.',
                     ]],
                     'other_services' => [[
+                        'vendor_id' => $vendor1->id,
+                        'vendor_name' => $vendor1->name,
                         'description' => 'Miscellaneous seeded service amount',
+                        'cost' => $otherServiceCost,
+                        'profit' => $otherServiceAmount - $otherServiceCost,
+                        'sales' => $otherServiceAmount,
                         'amount' => $otherServiceAmount,
                     ]],
                 ],
@@ -262,6 +277,29 @@ class DemoDataSeeder extends Seeder
                     'total_price' => $otherServiceAmount,
                 ]
             );
+
+            foreach ([
+                ['service_type' => 'flight', 'service_index' => 0, 'amount' => $flightCost],
+                ['service_type' => 'hotel', 'service_index' => 0, 'amount' => $hotelCost],
+                ['service_type' => 'other_service', 'service_index' => 0, 'amount' => $otherServiceCost],
+            ] as $vendorCost) {
+                OrderVendorCost::updateOrCreate(
+                    [
+                        'order_id' => $order->id,
+                        'service_type' => $vendorCost['service_type'],
+                        'service_index' => $vendorCost['service_index'],
+                    ],
+                    [
+                        'tenant_id' => $tenant->id,
+                        'vendor_id' => $vendor1->id,
+                        'amount' => $vendorCost['amount'],
+                    ]
+                );
+            }
+
+            if ($order->status !== 'quote') {
+                app(InvoiceService::class)->createFromOrder($order->fresh(['company', 'items']));
+            }
         }
 
         $this->command->info('Demo data seeded successfully!');

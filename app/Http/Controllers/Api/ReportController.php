@@ -65,11 +65,9 @@ class ReportController extends Controller
      */
     public function agingReport(Request $request): JsonResponse
     {
-        $companyId = $request->query('company_id', auth()->user()->company_id);
-
         $report = $this->reportService->invoiceAgingReport(
-            auth()->user()->tenant_id,
-            $companyId
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id
         );
 
         return response()->json($report);
@@ -84,17 +82,37 @@ class ReportController extends Controller
             'from_date' => 'required|date',
             'to_date' => 'required|date|after_or_equal:from_date',
             'group_by' => 'nullable|in:day,week,month,year',
-            'company_id' => 'nullable|exists:companies,id',
         ]);
 
-        $companyId = $validated['company_id'] ?? auth()->user()->company_id;
-
         $report = $this->reportService->revenueReport(
-            auth()->user()->tenant_id,
-            $companyId,
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
             $validated['group_by'] ?? 'month'
+        );
+
+        return response()->json($report);
+    }
+
+    public function profitReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+            'group_by' => 'nullable|in:customer,vendor,staff',
+            'entity_id' => 'nullable|integer|min:1',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        $report = $this->reportService->profitReport(
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
+            $validated['from_date'],
+            $validated['to_date'],
+            $validated['group_by'] ?? 'customer',
+            isset($validated['entity_id']) ? (int) $validated['entity_id'] : null,
+            isset($validated['search']) ? trim($validated['search']) : null,
         );
 
         return response()->json($report);
@@ -105,11 +123,9 @@ class ReportController extends Controller
      */
     public function customerSummaryReport(Request $request): JsonResponse
     {
-        $companyId = $request->query('company_id', auth()->user()->company_id);
-
         $report = $this->reportService->customerSummaryReport(
-            auth()->user()->tenant_id,
-            $companyId
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id
         );
 
         return response()->json($report);

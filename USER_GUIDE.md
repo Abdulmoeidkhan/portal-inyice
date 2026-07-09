@@ -102,6 +102,7 @@ The sidebar contains:
 - Reports
 - Aging Report
 - Revenue Report
+- Profit Report
 
 The top bar contains:
 
@@ -219,12 +220,9 @@ Pricing is inside the Flights tab and is service-per-passenger.
 Pricing fields:
 
 - Passenger
-- Flight
-- Visa
-- Transfer
-- Ziarat
-- Hotel
-- Other Service
+- Flight cost
+- Flight profit
+- Flight amount/sales
 - Total (optional)
 
 Pricing behavior:
@@ -245,7 +243,9 @@ Fields:
 - Validity
 - Visa Number
 - Visa Vendor selected from the vendor list
-- Price
+- Cost
+- Profit
+- Amount/Sales
 - Notes
 
 ### Transfer Tab
@@ -260,7 +260,10 @@ Fields:
 - To
 - Vehicle
 - Contact Person
-- Amount
+- Transfer Vendor selected from the vendor list
+- Cost
+- Profit
+- Amount/Sales
 - Notes
 
 ### Ziarat Tab
@@ -273,7 +276,10 @@ Fields:
 - Tour Title
 - Attractions
 - Date
-- Amount
+- Ziarat Vendor selected from the vendor list
+- Cost
+- Profit
+- Amount/Sales
 - Notes
 
 ### Hotels Tab
@@ -289,7 +295,10 @@ Fields:
 - Check In
 - Check Out
 - Lead Passenger
-- Amount
+- Hotel Vendor selected from the vendor list
+- Cost
+- Profit
+- Amount/Sales
 - Notes
 
 ### Services Tab
@@ -299,7 +308,10 @@ Use this for other service rows.
 Fields:
 
 - Description
-- Amount
+- Vendor selected from the vendor list
+- Cost
+- Profit
+- Amount/Sales
 
 ## Creating A Quotation Or Order
 
@@ -345,6 +357,7 @@ Use this module to create suppliers once and reuse them across voucher services.
 - Order vendor
 - Flight vendor
 - Visa vendor
+- Hotel, transfer, ziarat, and other service vendors
 
 They are also ready for upcoming service modules such as hotels, transport, ziarat, and other supplier-based workflows.
 
@@ -360,7 +373,7 @@ Vendor fields:
 - Currency Code
 - Payment Terms
 
-Vendors created here immediately become available in order, flight, and visa vendor selectors.
+Vendors created here immediately become available in order and service vendor selectors.
 
 When submitted:
 
@@ -374,7 +387,8 @@ Order item rules:
 
 - Flight references are kept as zero-value traceability rows.
 - Passenger pricing creates priced line items per service.
-- Hotel, transfer, ziarat, visa, and other service amount fields can also create priced line items.
+- Hotel, transfer, ziarat, visa, and other service amount/sales fields can also create priced line items.
+- Vendor cost fields create supplier cost rows for profit reporting and vendor payables.
 - Visa order item descriptions include visa type, visa number, validity, and visa vendor when provided.
 - Flight reference rows include flight vendor when provided.
 - If no items are generated, a zero-value `Voucher Booking` item is created for traceability.
@@ -450,6 +464,27 @@ Use this to review outstanding invoices by aging bucket.
 Open Reports -> Revenue Report.
 
 Use this to review revenue over a selected period and grouping.
+
+The report uses the signed-in user's company automatically.
+
+### Profit Report
+
+Open Reports -> Profit Report.
+
+Use this to check gross profit over a selected period. The View selector switches between customer-wise, vendor-wise, and staff-wise reporting. After choosing the view, select All or one customer/vendor/staff member before the report list is shown.
+
+Profit is calculated from invoiced order revenue minus supplier costs captured from voucher flight costs and visa vendor amounts. Draft quotations and uninvoiced orders are not included. Customer-wise and staff-wise views show the full invoiced order revenue and cost under the customer or staff member. Vendor-wise view allocates each invoiced order's revenue proportionally across its supplier cost rows so multi-vendor orders are not double-counted.
+
+The company is selected automatically from the signed-in user.
+
+The report includes:
+
+- Summary profit by currency
+- Grouped totals with revenue, cost, profit, and margin
+- Order-level details for checking vouchers, PNRs, customers, vendors, staff, and status
+- CSV export for the grouped and detail data
+
+Customer Statement and Vendor Statement also use the signed-in user's company automatically. Vendor payable rows include invoiced orders only.
 
 ## Profiles
 

@@ -25,6 +25,7 @@ import OrderList from './OrderList';
 import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
+import ProfitReport from './ProfitReport';
 import PaymentReport from './PaymentReport';
 import InvoiceDetail from './InvoiceDetail';
 import CounterpartyTransaction from './CounterpartyTransaction';
@@ -227,6 +228,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={<AgingReport />} />
               <Route path="/reports/revenue" element={<RevenueReport />} />
+              <Route path="/reports/profit" element={<ProfitReport />} />
               <Route path="/reports/payments" element={<PaymentReport />} />
               <Route path="/reports/receipts" element={<PaymentReport direction="receipt" />} />
               <Route path="/statements/customers" element={<CustomerStatement />} />
@@ -439,6 +441,10 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         {
           key: '/reports/revenue',
           label: <Link to="/reports/revenue">Revenue Report</Link>,
+        },
+        {
+          key: '/reports/profit',
+          label: <Link to="/reports/profit">Profit Report</Link>,
         },
         {
           key: '/reports/receipts',

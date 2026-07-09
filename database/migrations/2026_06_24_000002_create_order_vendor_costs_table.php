@@ -47,12 +47,29 @@ return new class extends Migration
 
                 foreach (($meta['visa'] ?? []) as $index => $visa) {
                     $vendorId = (int) ($visa['vendor_id'] ?? 0);
-                    $amount = (float) ($visa['amount'] ?? 0);
+                    $amount = (float) ($this->firstFilledValue($visa['cost'] ?? null, $visa['amount'] ?? null) ?? 0);
                     if ($vendorId <= 0 || $amount <= 0 || (int) ($vendorTenants[$vendorId] ?? 0) !== (int) $order->tenant_id) {
                         continue;
                     }
 
                     $rows[] = $this->row($order, $vendorId, 'visa', (int) $index, $amount, $now);
+                }
+
+                foreach ([
+                    'hotels' => 'hotel',
+                    'transfers' => 'transfer',
+                    'city_tours' => 'city_tour',
+                    'other_services' => 'other_service',
+                ] as $section => $serviceType) {
+                    foreach (($meta[$section] ?? []) as $index => $serviceRow) {
+                        $vendorId = (int) ($serviceRow['vendor_id'] ?? 0);
+                        $amount = (float) ($this->firstFilledValue($serviceRow['cost'] ?? null, $serviceRow['amount'] ?? null) ?? 0);
+                        if ($vendorId <= 0 || $amount <= 0 || (int) ($vendorTenants[$vendorId] ?? 0) !== (int) $order->tenant_id) {
+                            continue;
+                        }
+
+                        $rows[] = $this->row($order, $vendorId, $serviceType, (int) $index, $amount, $now);
+                    }
                 }
             }
 
@@ -79,5 +96,16 @@ return new class extends Migration
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
         ];
+    }
+
+    private function firstFilledValue(mixed ...$values): mixed
+    {
+        foreach ($values as $value) {
+            if ($value !== null && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 };

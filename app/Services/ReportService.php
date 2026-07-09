@@ -347,7 +347,14 @@ class ReportService
     {
         $customers = \App\Models\Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->with(['invoices'])
+            ->whereHas('invoices', fn ($invoice) => $invoice
+                ->where('company_id', $companyId)
+                ->where('status', '!=', 'void')
+                ->whereHas('order'))
+            ->with(['invoices' => fn ($invoice) => $invoice
+                ->where('company_id', $companyId)
+                ->where('status', '!=', 'void')
+                ->whereHas('order')])
             ->get();
 
         $customerData = $customers->map(function ($customer) {
@@ -377,6 +384,194 @@ class ReportService
                 'total_revenue' => $customerData->sum('total_invoiced'),
                 'total_outstanding' => $customerData->sum('total_outstanding'),
             ],
+        ];
+    }
+
+    public function profitReport(
+        int $tenantId,
+        int $companyId,
+        string $fromDate,
+        string $toDate,
+        string $groupBy = 'customer',
+        ?int $entityId = null,
+        ?string $search = null
+    ): array {
+        $orders = Order::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereHas('invoice', fn ($invoice) => $invoice
+                ->where('status', '!=', 'void')
+                ->whereBetween('invoice_date', [$fromDate, $toDate]))
+            ->when($entityId && $groupBy === 'customer', fn ($query) => $query->where('customer_id', $entityId))
+            ->when($entityId && $groupBy === 'staff', fn ($query) => $query->where('created_by_user_id', $entityId))
+            ->when($entityId && $groupBy === 'vendor', function ($query) use ($entityId) {
+                $query->where(function ($vendorQuery) use ($entityId) {
+                    $vendorQuery->where('vendor_id', $entityId)
+                        ->orWhereHas('vendorCosts', fn ($costQuery) => $costQuery->where('vendor_id', $entityId));
+                });
+            })
+            ->when($search, function ($query, string $search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('order_number', 'like', "%{$search}%")
+                        ->orWhere('voucher_no', 'like', "%{$search}%")
+                        ->orWhere('booking_reference', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('vendor', fn ($vendor) => $vendor->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('createdBy', fn ($user) => $user->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->with([
+                'customer:id,name',
+                'vendor:id,name',
+                'createdBy:id,name',
+                'vendorCosts.vendor:id,name',
+                'invoice:id,order_id,invoice_number,invoice_date,status',
+            ])
+            ->orderByDesc(
+                Invoice::select('invoice_date')
+                    ->whereColumn('invoices.order_id', 'orders.id')
+                    ->limit(1)
+            )
+            ->orderByDesc('created_at')
+            ->get();
+
+        $detailRows = collect();
+
+        foreach ($orders as $order) {
+            $revenue = (float) $order->total_amount;
+            $cost = (float) $order->vendorCosts->sum('amount');
+            $currency = $order->currency_code;
+            $date = $order->invoice?->invoice_date?->toDateString() ?? $order->issue_date?->toDateString() ?? $order->created_at->toDateString();
+
+            if ($groupBy === 'vendor') {
+                if ($order->vendorCosts->isEmpty()) {
+                    if ($entityId && (int) $order->vendor_id !== $entityId) {
+                        continue;
+                    }
+
+                    $detailRows->push($this->profitRow(
+                        $order,
+                        'vendor',
+                        $order->vendor_id,
+                        $order->vendor?->name ?? 'Unassigned vendor',
+                        $date,
+                        $currency,
+                        $revenue,
+                        0.0
+                    ));
+                    continue;
+                }
+
+                $costRowsForReport = $entityId
+                    ? $order->vendorCosts->where('vendor_id', $entityId)
+                    : $order->vendorCosts;
+
+                $costByVendor = $costRowsForReport->groupBy('vendor_id');
+                foreach ($costByVendor as $vendorId => $costRows) {
+                    $vendorCost = (float) $costRows->sum('amount');
+                    $allocatedRevenue = $cost > 0 ? $revenue * ($vendorCost / $cost) : 0.0;
+                    $detailRows->push($this->profitRow(
+                        $order,
+                        'vendor',
+                        (int) $vendorId,
+                        $costRows->first()?->vendor?->name ?? 'Unassigned vendor',
+                        $date,
+                        $currency,
+                        $allocatedRevenue,
+                        $vendorCost
+                    ));
+                }
+                continue;
+            }
+
+            $entityId = $groupBy === 'staff' ? $order->created_by_user_id : $order->customer_id;
+            $entityName = $groupBy === 'staff'
+                ? ($order->createdBy?->name ?? 'Unassigned staff')
+                : ($order->customer?->name ?? 'Unassigned customer');
+
+            $detailRows->push($this->profitRow($order, $groupBy, $entityId, $entityName, $date, $currency, $revenue, $cost));
+        }
+
+        $groups = $detailRows
+            ->groupBy(fn (array $row) => $row['group_id'] . '|' . $row['currency_code'])
+            ->map(function (Collection $rows) {
+                $revenue = (float) $rows->sum('revenue');
+                $cost = (float) $rows->sum('cost');
+
+                return [
+                    'key' => $rows->first()['group_id'] . '-' . $rows->first()['currency_code'],
+                    'group_id' => $rows->first()['group_id'],
+                    'group_name' => $rows->first()['group_name'],
+                    'currency_code' => $rows->first()['currency_code'],
+                    'order_count' => $rows->pluck('order_id')->unique()->count(),
+                    'revenue' => round($revenue, 4),
+                    'cost' => round($cost, 4),
+                    'profit' => round($revenue - $cost, 4),
+                    'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
+                ];
+            })
+            ->sortByDesc('profit')
+            ->values();
+
+        $currencySummary = $detailRows
+            ->groupBy('currency_code')
+            ->map(function (Collection $rows, string $currency) {
+                $revenue = (float) $rows->sum('revenue');
+                $cost = (float) $rows->sum('cost');
+
+                return [
+                    'currency_code' => $currency,
+                    'revenue' => round($revenue, 4),
+                    'cost' => round($cost, 4),
+                    'profit' => round($revenue - $cost, 4),
+                    'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
+                ];
+            })
+            ->values();
+
+        return [
+            'report_date' => now()->toDateString(),
+            'company_id' => $companyId,
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'filters' => ['group_by' => $groupBy, 'entity_id' => $entityId, 'search' => $search],
+            'data' => $groups->all(),
+            'details' => $detailRows->values()->all(),
+            'summary' => [
+                'total_orders' => $orders->count(),
+                'total_rows' => $detailRows->count(),
+                'by_currency' => $currencySummary->all(),
+            ],
+        ];
+    }
+
+    private function profitRow(
+        Order $order,
+        string $groupBy,
+        ?int $groupId,
+        string $groupName,
+        string $date,
+        string $currency,
+        float $revenue,
+        float $cost
+    ): array {
+        return [
+            'key' => $groupBy . '-' . ($groupId ?? 0) . '-' . $order->id . '-' . $currency,
+            'group_id' => $groupId ?? 0,
+            'group_name' => $groupName,
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'voucher_no' => $order->voucher_no,
+            'booking_reference' => $order->booking_reference,
+            'date' => $date,
+            'status' => $order->status,
+            'customer_name' => $order->customer?->name,
+            'vendor_name' => $order->vendor?->name,
+            'staff_name' => $order->createdBy?->name,
+            'currency_code' => $currency,
+            'revenue' => round($revenue, 4),
+            'cost' => round($cost, 4),
+            'profit' => round($revenue - $cost, 4),
+            'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
         ];
     }
 }

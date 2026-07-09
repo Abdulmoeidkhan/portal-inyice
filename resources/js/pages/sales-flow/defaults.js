@@ -104,6 +104,8 @@ export const blankPricing = () => ({
 });
 
 export const blankHotel = () => ({
+  vendor_id: null,
+  vendor_name: '',
   hcn: '',
   city: '',
   hotel_name: '',
@@ -112,10 +114,15 @@ export const blankHotel = () => ({
   check_out: '',
   lead_passenger: '',
   notes: '',
+  cost: '',
+  profit: '',
+  sales: '',
   amount: '',
 });
 
 export const blankTransfer = () => ({
+  vendor_id: null,
+  vendor_name: '',
   tn: '',
   service: '',
   from_city: '',
@@ -123,15 +130,23 @@ export const blankTransfer = () => ({
   vehicle: '',
   contact_person: '',
   notes: '',
+  cost: '',
+  profit: '',
+  sales: '',
   amount: '',
 });
 
 export const blankCityTour = () => ({
+  vendor_id: null,
+  vendor_name: '',
   city: '',
   title: '',
   attractions: '',
   date: '',
   notes: '',
+  cost: '',
+  profit: '',
+  sales: '',
   amount: '',
 });
 
@@ -143,11 +158,19 @@ export const blankVisa = () => ({
   vendor_id: null,
   visa_vendor: '',
   notes: '',
+  cost: '',
+  profit: '',
+  sales: '',
   amount: '',
 });
 
 export const blankOtherService = () => ({
+  vendor_id: null,
+  vendor_name: '',
   description: '',
+  cost: '',
+  profit: '',
+  sales: '',
   amount: '',
 });
 

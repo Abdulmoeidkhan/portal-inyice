@@ -92,6 +92,7 @@ For focused JSX edits, parse touched files with `@babel/parser` when available.
 - `resources/js/pages/Payments.jsx`: payments
 - `resources/js/pages/AgingReport.jsx`: aging report
 - `resources/js/pages/RevenueReport.jsx`: revenue report
+- `resources/js/pages/ProfitReport.jsx`: customer/vendor/staff gross profit report
 - `resources/js/pages/CompanyProfile.jsx`: company profile
 - `resources/js/pages/UserProfile.jsx`: user profile
 - `resources/js/pages/sales-flow`: focused sales-flow components and helpers
@@ -255,8 +256,20 @@ Visa rows now support:
 - `visa_no`
 - `vendor_id`
 - `visa_vendor`
-- `amount`
+- `cost`
+- `profit`
+- `sales`
+- `amount` as a legacy sales alias
 - `notes`
+
+Hotel, transfer, city tour/ziarat, and other service rows now support:
+
+- `vendor_id`
+- `vendor_name`
+- `cost`
+- `profit`
+- `sales`
+- `amount` as a legacy sales alias
 
 ### Passenger/Pricing Alignment
 
@@ -304,7 +317,8 @@ Important behavior:
 - Pricing component amounts create per-passenger priced items.
 - If only `total` is provided, it creates a package total item.
 - Visa rows include visa type, visa number, validity, and visa vendor in their order item description.
-- Service rows with amount fields also create order items.
+- Service rows with sales fields create customer-facing order items.
+- Service rows with cost fields create `order_vendor_costs` rows for supplier payables and profit reporting.
 - A fallback `Voucher Booking` item is created if no items are generated.
 
 ## Customer And Vendor Modules
@@ -375,6 +389,8 @@ Relevant services:
 - `LedgerService.php`
 - `ReportService.php`
 - `StatementService.php`
+
+Profit reporting lives in `ReportService::profitReport()` and `ReportController::profitReport()`. It reads invoiced order revenue and `order_vendor_costs`, supports `group_by=customer|vendor|staff` with optional `entity_id`, and exposes `GET /api/v1/reports/profit`. The React page requires the user to choose All or a specific customer/vendor/staff member before loading the list. Vendor grouping allocates order revenue by vendor cost share so one invoiced order with multiple suppliers does not duplicate the full sale amount.
 
 Invoice model tracks:
 
@@ -455,7 +471,16 @@ API route groups:
 - `/reports`
 - `/statements`
 
+Report endpoints include:
+
+- `GET /api/v1/reports/revenue`
+- `GET /api/v1/reports/profit`
+- `GET /api/v1/reports/receipts`
+- `GET /api/v1/reports/payments`
+
 Controller responses are JSON.
+
+Report and statement endpoints must use `auth()->user()->company_id` for company scoping. Do not accept frontend `company_id` selectors for these report screens unless multi-company switching is deliberately reintroduced with authorization checks.
 
 When adding endpoints:
 
