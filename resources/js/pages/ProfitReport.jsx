@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statistic, Table, Tag, Typography, theme } from 'antd';
 import { message } from '../services/feedback';
 
 const { Title, Paragraph, Text } = Typography;
@@ -28,6 +28,7 @@ export default function ProfitReport() {
     search: '',
   });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const { token: themeToken } = theme.useToken();
 
   const groupLabel = useMemo(() => label(filters.group_by), [filters.group_by]);
   const hasEntitySelection = filters.entity_id === 'all' || Number(filters.entity_id) > 0;
@@ -240,7 +241,7 @@ export default function ProfitReport() {
                 value={item.profit}
                 precision={2}
                 prefix={item.currency_code}
-                valueStyle={{ color: Number(item.profit) < 0 ? '#cf1322' : '#3f8600' }}
+                valueStyle={{ color: Number(item.profit) < 0 ? themeToken.colorError : themeToken.colorSuccess }}
                 suffix={<Text type="secondary"> {margin(item.profit_margin)}</Text>}
               />
             ))}

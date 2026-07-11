@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, Statistic, Skeleton, Empty } from 'antd';
+import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, Skeleton, Empty, Grid, theme } from 'antd';
 import { message } from '../services/feedback';
 import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
@@ -11,6 +11,12 @@ export default function RevenueReport() {
   const [toDate, setToDate] = useState(null);
   const [groupBy, setGroupBy] = useState('month');
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const screens = Grid.useBreakpoint();
+  const { token: themeToken } = theme.useToken();
+  const chartHeight = screens.md ? 300 : 240;
+  const chartTextColor = themeToken.colorText;
+  const chartMutedColor = themeToken.colorTextSecondary;
+  const chartGridColor = themeToken.colorSplit;
 
   const fetchReport = async () => {
     if (!fromDate || !toDate) {
@@ -80,6 +86,40 @@ export default function RevenueReport() {
     },
   ];
 
+  const chartAxis = {
+    x: {
+      title: false,
+      labelFill: chartMutedColor,
+      labelFontSize: screens.md ? 12 : 11,
+      labelAutoHide: true,
+      labelAutoRotate: false,
+      lineStroke: chartGridColor,
+      tickStroke: chartGridColor,
+    },
+    y: {
+      title: false,
+      labelFill: chartMutedColor,
+      labelFontSize: screens.md ? 12 : 11,
+      grid: true,
+      gridStroke: chartGridColor,
+      gridLineDash: [4, 4],
+    },
+  };
+
+  const chartTheme = {
+    view: {
+      viewFill: 'transparent',
+      plotFill: 'transparent',
+    },
+  };
+
+  const legendConfig = {
+    color: {
+      itemLabelFill: chartMutedColor,
+      itemLabelFontSize: screens.md ? 12 : 11,
+    },
+  };
+
   const revenueChartData = report
     ? report.data.map((row) => ({
         period: row.period,
@@ -99,11 +139,20 @@ export default function RevenueReport() {
     autoFit: true,
     xField: 'period',
     yField: 'revenue',
-    height: 280,
-    color: '#3b82f6',
+    height: chartHeight,
+    color: themeToken.colorPrimary,
+    theme: chartTheme,
+    axis: chartAxis,
+    padding: screens.md ? 'auto' : [20, 16, 44, 44],
     label: {
       position: 'top',
       text: (d) => d.revenue.toFixed(0),
+      fill: chartTextColor,
+      fontSize: screens.md ? 12 : 11,
+      fontWeight: 600,
+    },
+    tooltip: {
+      title: (d) => d.period,
     },
   };
 
@@ -113,7 +162,16 @@ export default function RevenueReport() {
     xField: 'period',
     yField: 'value',
     colorField: 'metric',
-    height: 280,
+    height: chartHeight,
+    theme: chartTheme,
+    axis: chartAxis,
+    legend: legendConfig,
+    padding: screens.md ? 'auto' : [20, 16, 44, 44],
+    scale: {
+      color: {
+        range: [themeToken.colorSuccess, themeToken.colorWarning],
+      },
+    },
     point: true,
   };
 
@@ -123,7 +181,7 @@ export default function RevenueReport() {
       <h1>Revenue Report</h1>
 
       <Card className="border-beam-aurora" style={{ marginBottom: '20px' }}>
-        <Row gutter={16} align="middle">
+        <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={12} lg={4}>
             <DatePicker
               placeholder="From Date"
@@ -175,46 +233,46 @@ export default function RevenueReport() {
 
       {!loading && report && (
         <>
-          <Row gutter={16} style={{ marginBottom: '20px' }}>
+          <Row className="revenue-summary-grid" gutter={[16, 16]} style={{ marginBottom: '20px' }}>
             <Col xs={24} sm={12} lg={6}>
-              <Card className="border-beam-aurora">
-                <div style={{ textAlign: 'center' }}>
+              <Card className="revenue-summary-card border-beam-aurora">
+                <div className="revenue-summary-content">
                   <DollarOutlined style={{ fontSize: '24px' }} />
                   <h3>Total Revenue</h3>
-                  <p style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                  <p>
                     {report.summary.total_revenue.toFixed(2)}
                   </p>
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card className="border-beam-aurora">
-                <div style={{ textAlign: 'center' }}>
-                  <CheckCircleOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
+              <Card className="revenue-summary-card border-beam-aurora">
+                <div className="revenue-summary-content">
+                  <CheckCircleOutlined style={{ fontSize: '24px', color: themeToken.colorSuccess }} />
                   <h3>Collected</h3>
-                  <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#52c41a' }}>
+                  <p style={{ color: themeToken.colorSuccess }}>
                     {report.summary.total_collected.toFixed(2)}
                   </p>
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card className="border-beam-aurora">
-                <div style={{ textAlign: 'center' }}>
-                  <AlertOutlined style={{ fontSize: '24px', color: '#faad14' }} />
+              <Card className="revenue-summary-card border-beam-aurora">
+                <div className="revenue-summary-content">
+                  <AlertOutlined style={{ fontSize: '24px', color: themeToken.colorWarning }} />
                   <h3>Outstanding</h3>
-                  <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#faad14' }}>
+                  <p style={{ color: themeToken.colorWarning }}>
                     {report.summary.total_outstanding.toFixed(2)}
                   </p>
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card className="border-beam-aurora">
-                <div style={{ textAlign: 'center' }}>
+              <Card className="revenue-summary-card border-beam-aurora">
+                <div className="revenue-summary-content">
                   <FileTextOutlined style={{ fontSize: '24px' }} />
                   <h3>Invoices</h3>
-                  <p style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                  <p>
                     {report.summary.total_invoices}
                   </p>
                 </div>
@@ -224,12 +282,12 @@ export default function RevenueReport() {
 
           <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
             <Col xs={24} xl={12}>
-              <Card className="border-beam-aurora" title="Revenue Trend">
+              <Card className="report-chart-card revenue-chart-card border-beam-aurora" title="Revenue Trend">
                 <Column {...columnConfig} />
               </Card>
             </Col>
             <Col xs={24} xl={12}>
-              <Card className="border-beam-aurora" title="Collections vs Outstanding">
+              <Card className="report-chart-card revenue-chart-card border-beam-aurora" title="Collections vs Outstanding">
                 <Line {...lineConfig} />
               </Card>
             </Col>

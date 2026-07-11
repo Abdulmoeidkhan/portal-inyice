@@ -1,35 +1,36 @@
 import React from 'react';
-import { Layout, Card, Row, Col, Statistic, Button } from 'antd';
+import { Layout, Card, Row, Col, Button, theme } from 'antd';
 import { FileTextOutlined, DollarOutlined, UserOutlined, BarChartOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { token } = theme.useToken();
 
   const stats = [
     {
       title: 'Total Invoices',
       value: 0,
       icon: <FileTextOutlined />,
-      color: '#1890ff',
+      color: token.colorInfo,
     },
     {
       title: 'Pending Payments',
       value: 0,
       icon: <DollarOutlined />,
-      color: '#faad14',
+      color: token.colorWarning,
     },
     {
       title: 'Customers',
       value: 0,
       icon: <UserOutlined />,
-      color: '#52c41a',
+      color: token.colorSuccess,
     },
     {
       title: 'This Month Revenue',
       value: 0,
       icon: <BarChartOutlined />,
-      color: '#722ed1',
+      color: token.colorPrimary,
     },
   ];
 

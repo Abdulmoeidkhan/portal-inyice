@@ -404,6 +404,54 @@ body {
   min-width: max-content;
 }
 
+.revenue-summary-card {
+  height: 100%;
+}
+
+.revenue-summary-card .ant-card-body {
+  height: 100%;
+}
+
+.revenue-summary-content {
+  min-height: 132px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--app-text);
+}
+
+.revenue-summary-content h3,
+.revenue-summary-content p {
+  margin: 0;
+  color: inherit;
+}
+
+.revenue-summary-content h3 {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.revenue-summary-content p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.report-chart-card .ant-card-body,
+.revenue-chart-card .ant-card-body {
+  min-height: 332px;
+}
+
+.report-chart-card canvas,
+.revenue-chart-card canvas {
+  max-width: 100%;
+}
+
 .responsive-summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
@@ -665,6 +713,25 @@ body {
     gap: 12px !important;
   }
 
+  .revenue-summary-content {
+    min-height: 112px;
+    gap: 9px;
+  }
+
+  .revenue-summary-content h3 {
+    font-size: 14px;
+  }
+
+  .revenue-summary-content p {
+    font-size: 19px;
+  }
+
+  .report-chart-card .ant-card-body,
+  .revenue-chart-card .ant-card-body {
+    min-height: 292px;
+    padding-inline: 10px;
+  }
+
   .edit-order-fields,
   .edit-order-fields > .ant-space-item {
     width: 100%;
@@ -757,6 +824,16 @@ body {
 
   .responsive-summary-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .revenue-summary-grid .ant-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .report-chart-card .ant-card-head-title,
+  .revenue-chart-card .ant-card-head-title {
+    white-space: normal;
   }
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Table, Statistic, Skeleton, Empty, Button } from 'antd';
+import { Card, Row, Col, Table, Statistic, Skeleton, Empty, Button, Grid, theme } from 'antd';
 import { message } from '../services/feedback';
 import { DollarOutlined, AlertOutlined } from '@ant-design/icons';
 import { Column } from '@ant-design/plots';
@@ -12,6 +12,12 @@ export default function AgingReport() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const screens = Grid.useBreakpoint();
+  const { token: themeToken } = theme.useToken();
+  const chartHeight = screens.md ? 300 : 240;
+  const chartTextColor = themeToken.colorText;
+  const chartMutedColor = themeToken.colorTextSecondary;
+  const chartGridColor = themeToken.colorSplit;
 
   useEffect(() => {
     fetchAgingReport();
@@ -84,17 +90,53 @@ export default function AgingReport() {
     xField: 'bucket',
     yField: 'amount',
     colorField: 'bucket',
-    height: 280,
+    height: chartHeight,
     legend: false,
+    theme: {
+      view: {
+        viewFill: 'transparent',
+        plotFill: 'transparent',
+      },
+    },
+    scale: {
+      color: {
+        range: [
+          themeToken.colorPrimary,
+          themeToken.colorWarning,
+          themeToken.colorOrange,
+          themeToken.colorError,
+          themeToken.colorErrorActive,
+        ],
+      },
+    },
     label: {
       position: 'top',
       text: (d) => d.amount.toFixed(0),
+      fill: chartTextColor,
+      fontSize: screens.md ? 12 : 11,
+      fontWeight: 600,
     },
     axis: {
+      x: {
+        title: false,
+        labelFill: chartMutedColor,
+        labelFontSize: screens.md ? 12 : 11,
+        labelAutoHide: true,
+        labelAutoRotate: false,
+        lineStroke: chartGridColor,
+        tickStroke: chartGridColor,
+      },
       y: {
+        title: false,
+        labelFill: chartMutedColor,
+        labelFontSize: screens.md ? 12 : 11,
+        grid: true,
+        gridStroke: chartGridColor,
+        gridLineDash: [4, 4],
         labelFormatter: (v) => Number(v).toLocaleString(),
       },
     },
+    padding: screens.md ? 'auto' : [20, 16, 44, 44],
   };
 
   return (
@@ -121,7 +163,7 @@ export default function AgingReport() {
 
       {!loading && report && (
       <>
-      <Row gutter={16} style={{ marginBottom: '20px' }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: '20px' }}>
         <Col xs={24} sm={12} lg={6}>
           <Card className="border-beam-aurora">
             <Statistic
@@ -137,7 +179,7 @@ export default function AgingReport() {
               title="1-30 Days"
               value={bucketAmount(report, 'days_1_30')}
               prefix={<DollarOutlined />}
-              valueStyle={{ color: '#faad14' }}
+              valueStyle={{ color: themeToken.colorWarning }}
             />
           </Card>
         </Col>
@@ -147,7 +189,7 @@ export default function AgingReport() {
               title="31-60 Days"
               value={bucketAmount(report, 'days_31_60')}
               prefix={<DollarOutlined />}
-              valueStyle={{ color: '#ff7a45' }}
+              valueStyle={{ color: themeToken.colorOrange }}
             />
           </Card>
         </Col>
@@ -157,13 +199,13 @@ export default function AgingReport() {
               title="Over 90 Days"
               value={bucketAmount(report, 'days_over_90')}
               prefix={<AlertOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
+              valueStyle={{ color: themeToken.colorError }}
             />
           </Card>
         </Col>
       </Row>
 
-      <Card className="border-beam-aurora" title="Aging Distribution" style={{ marginBottom: 20 }}>
+      <Card className="report-chart-card border-beam-aurora" title="Aging Distribution" style={{ marginBottom: 20 }}>
         <Column {...chartConfig} />
       </Card>
 

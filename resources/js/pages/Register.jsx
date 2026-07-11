@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Steps, Form, Input, Select, Button, Card, Alert, Typography, Space } from 'antd';
+import { Steps, Form, Input, Select, Button, Card, Alert, Typography, Space, theme } from 'antd';
 import { message } from '../services/feedback';
 import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +35,7 @@ export default function Register({ onRegistered }) {
   const [registered, setRegistered] = useState(null);
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const { token: themeToken } = theme.useToken();
 
   const normalizeAgencyCode = (value = '') => value.toUpperCase();
 
@@ -313,7 +314,7 @@ export default function Register({ onRegistered }) {
 
         {current === 3 && registered && (
           <div style={{ textAlign: 'center', padding: '40px 0' }} className="stagger-2">
-            <CheckCircleOutlined style={{ fontSize: 60, color: '#22c55e', marginBottom: 20, display: 'block' }} />
+            <CheckCircleOutlined style={{ fontSize: 60, color: themeToken.colorSuccess, marginBottom: 20, display: 'block' }} />
             <Title level={3}>Registration Successful!</Title>
             <Paragraph style={{ fontSize: 16, marginBottom: 10 }}>
               Welcome to <strong>{registered.user.company_name}</strong>
