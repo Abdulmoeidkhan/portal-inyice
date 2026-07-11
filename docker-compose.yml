@@ -1,4 +1,18 @@
 services:
+  frontend-build:
+    image: node:22-alpine
+    working_dir: /app
+    command: >
+      sh -c "
+        set -e;
+        npm ci;
+        npm run build;
+        rm -f public/hot
+      "
+    volumes:
+      - ./:/app
+    restart: "no"
+
   app:
     image: webdevops/php-nginx:8.4-alpine
     restart: unless-stopped
@@ -45,6 +59,8 @@ services:
     volumes:
       - ./:/app
     depends_on:
+      frontend-build:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
     networks:
