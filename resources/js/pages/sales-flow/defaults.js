@@ -155,6 +155,7 @@ export const blankVisa = () => ({
   visa_type: 'umrah',
   validity: '',
   visa_no: '',
+  visa_publisher: '',
   vendor_id: null,
   visa_vendor: '',
   notes: '',
@@ -173,6 +174,77 @@ export const blankOtherService = () => ({
   sales: '',
   amount: '',
 });
+
+const passengerNameFields = {
+  passengers: 'name',
+  pricing: 'pax_name',
+  visa: 'passenger_name',
+};
+
+export const syncPassengerNameFields = (prevVoucher, nextVoucher, section, idx, field, value) => {
+  const sourceField = passengerNameFields[section];
+
+  if (!sourceField || field !== sourceField) {
+    return nextVoucher;
+  }
+
+  const previousValue = prevVoucher?.[section]?.[idx]?.[sourceField] ?? '';
+
+  return Object.entries(passengerNameFields).reduce((voucher, [targetSection, targetField]) => {
+    if (!Array.isArray(voucher[targetSection]) || !voucher[targetSection][idx]) {
+      return voucher;
+    }
+
+    const targetValue = voucher[targetSection][idx]?.[targetField] ?? '';
+    const shouldSync = targetSection === section || targetValue === '' || targetValue === previousValue;
+
+    if (!shouldSync) {
+      return voucher;
+    }
+
+    return {
+      ...voucher,
+      [targetSection]: voucher[targetSection].map((row, rowIdx) => (
+        rowIdx === idx ? { ...row, [targetField]: value } : row
+      )),
+    };
+  }, nextVoucher);
+};
+
+const visaNumberFields = {
+  passengers: 'visa_no',
+  visa: 'visa_no',
+};
+
+export const syncVisaNumberFields = (prevVoucher, nextVoucher, section, idx, field, value) => {
+  const sourceField = visaNumberFields[section];
+
+  if (!sourceField || field !== sourceField) {
+    return nextVoucher;
+  }
+
+  const previousValue = prevVoucher?.[section]?.[idx]?.[sourceField] ?? '';
+
+  return Object.entries(visaNumberFields).reduce((voucher, [targetSection, targetField]) => {
+    if (!Array.isArray(voucher[targetSection]) || !voucher[targetSection][idx]) {
+      return voucher;
+    }
+
+    const targetValue = voucher[targetSection][idx]?.[targetField] ?? '';
+    const shouldSync = targetSection === section || targetValue === '' || targetValue === previousValue;
+
+    if (!shouldSync) {
+      return voucher;
+    }
+
+    return {
+      ...voucher,
+      [targetSection]: voucher[targetSection].map((row, rowIdx) => (
+        rowIdx === idx ? { ...row, [targetField]: value } : row
+      )),
+    };
+  }, nextVoucher);
+};
 
 export const optionalVoucherSections = [
   { label: 'Flights', value: 'flights' },

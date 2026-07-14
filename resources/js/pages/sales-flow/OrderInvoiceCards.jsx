@@ -6,7 +6,7 @@ import { createCustomerApi, listCustomersApi } from '../../services/salesFlowApi
 const { Text } = Typography;
 const { TextArea } = Input;
 
-export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) {
+export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, showSubmit = true }) {
   const [customers, setCustomers] = useState([]);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
@@ -105,7 +105,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder }) 
           </Col>
         </Row>
 
-        <Button type="primary" htmlType="submit" loading={loading}>Create Order</Button>
+        {showSubmit && <Button type="primary" htmlType="submit" loading={loading}>Create Order</Button>}
       </Form>
 
       <Modal

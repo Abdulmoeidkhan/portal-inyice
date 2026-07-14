@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
+import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import {
   blankCityTour,
   blankFlight,
@@ -17,6 +18,8 @@ import {
   createInitialVoucher,
   normalizeCabin,
   normalizeFlightDate,
+  syncPassengerNameFields,
+  syncVisaNumberFields,
 } from './sales-flow/defaults';
 
 const { Title, Paragraph } = Typography;
@@ -40,7 +43,7 @@ const sectionValueKeys = {
   hotels: ['vendor_id', 'vendor_name', 'hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes', 'cost', 'profit', 'sales', 'amount'],
   transfers: ['vendor_id', 'vendor_name', 'tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'cost', 'profit', 'sales', 'amount'],
   city_tours: ['vendor_id', 'vendor_name', 'city', 'title', 'attractions', 'date', 'notes', 'cost', 'profit', 'sales', 'amount'],
-  visa: ['passenger_name', 'validity', 'visa_no', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
+  visa: ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
   other_services: ['vendor_id', 'vendor_name', 'description', 'cost', 'profit', 'sales', 'amount'],
 };
 
@@ -217,17 +220,13 @@ export default function OrderEdit() {
   const setRowField = (section, idx, field, value) => {
     setVoucher((prev) => {
       const previousRow = prev[section][idx] || {};
-      const nextVoucher = {
+      let nextVoucher = {
         ...prev,
         [section]: prev[section].map((row, rowIdx) => (rowIdx === idx ? { ...row, [field]: value } : row)),
       };
 
-      if (section === 'passengers' && field === 'name') {
-        nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
-          if (rowIdx !== idx || (row.pax_name && row.pax_name !== previousRow.name)) return row;
-          return { ...row, pax_name: value };
-        });
-      }
+      nextVoucher = syncPassengerNameFields(prev, nextVoucher, section, idx, field, value);
+      nextVoucher = syncVisaNumberFields(prev, nextVoucher, section, idx, field, value);
 
       if (section === 'passengers' && field === 'ticket_no') {
         nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
@@ -266,6 +265,37 @@ export default function OrderEdit() {
 
       return nextVoucher;
     });
+  };
+
+  const useFlightPassengersForVisa = () => {
+    setVoucher((prev) => {
+      const passengerNames = (prev.pricing || [])
+        .map((row, idx) => (row.pax_name || prev.passengers?.[idx]?.name || '').trim())
+        .filter(Boolean);
+
+      if (passengerNames.length === 0) {
+        return prev;
+      }
+
+      const visaRows = [...prev.visa];
+      while (visaRows.length < passengerNames.length) {
+        visaRows.push(blankVisa());
+      }
+
+      return {
+        ...prev,
+        visa: visaRows.map((row, idx) => (
+          passengerNames[idx] ? { ...row, passenger_name: passengerNames[idx] } : row
+        )),
+      };
+    });
+  };
+
+  const setHotelLeadPassenger = (name) => {
+    setVoucher((prev) => ({
+      ...prev,
+      hotels: prev.hotels.map((row) => ({ ...row, lead_passenger: name })),
+    }));
   };
 
   const handleSave = async () => {
@@ -367,7 +397,11 @@ export default function OrderEdit() {
           setRowField={setRowField}
           addRow={addRow}
           removeRow={removeRow}
+          onUseFlightPassengersForVisa={useFlightPassengersForVisa}
+          onSetHotelLeadPassenger={setHotelLeadPassenger}
         />
+
+        <VoucherSummaryCard voucher={voucher} />
 
         <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
           <Space>

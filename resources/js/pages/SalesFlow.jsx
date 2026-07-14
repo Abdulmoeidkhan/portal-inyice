@@ -1,16 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Form, Steps, Tabs, Typography } from 'antd';
+import { Button, Card, Form, Space, Steps, Tabs, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { createOrderFromVoucherApi, listVendorsApi } from '../services/salesFlowApi';
 import {
   blankPricing,
+  blankVisa,
   buildVoucherFromParsed,
   createInitialVoucher,
+  syncPassengerNameFields,
+  syncVisaNumberFields,
 } from './sales-flow/defaults';
 import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
+import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import { CreateOrderCard } from './sales-flow/OrderInvoiceCards';
 
 const { Title, Paragraph } = Typography;
@@ -83,20 +87,13 @@ export default function SalesFlow() {
   const setRowField = (section, idx, field, value) => {
     setVoucher((prev) => {
       const previousRow = prev[section][idx] || {};
-      const nextVoucher = {
+      let nextVoucher = {
         ...prev,
         [section]: prev[section].map((row, rowIdx) => (rowIdx === idx ? { ...row, [field]: value } : row)),
       };
 
-      if (section === 'passengers' && field === 'name') {
-        nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
-          if (rowIdx !== idx || (row.pax_name && row.pax_name !== previousRow.name)) {
-            return row;
-          }
-
-          return { ...row, pax_name: value };
-        });
-      }
+      nextVoucher = syncPassengerNameFields(prev, nextVoucher, section, idx, field, value);
+      nextVoucher = syncVisaNumberFields(prev, nextVoucher, section, idx, field, value);
 
       if (section === 'passengers' && field === 'ticket_no') {
         nextVoucher.pricing = prev.pricing.map((row, rowIdx) => {
@@ -138,6 +135,37 @@ export default function SalesFlow() {
 
       return nextVoucher;
     });
+  };
+
+  const useFlightPassengersForVisa = () => {
+    setVoucher((prev) => {
+      const passengerNames = (prev.pricing || [])
+        .map((row, idx) => (row.pax_name || prev.passengers?.[idx]?.name || '').trim())
+        .filter(Boolean);
+
+      if (passengerNames.length === 0) {
+        return prev;
+      }
+
+      const visaRows = [...prev.visa];
+      while (visaRows.length < passengerNames.length) {
+        visaRows.push(blankVisa());
+      }
+
+      return {
+        ...prev,
+        visa: visaRows.map((row, idx) => (
+          passengerNames[idx] ? { ...row, passenger_name: passengerNames[idx] } : row
+        )),
+      };
+    });
+  };
+
+  const setHotelLeadPassenger = (name) => {
+    setVoucher((prev) => ({
+      ...prev,
+      hotels: prev.hotels.map((row) => ({ ...row, lead_passenger: name })),
+    }));
   };
 
   const handleParse = ({ raw_text }) => {
@@ -255,6 +283,7 @@ export default function SalesFlow() {
                     loading={loadingOrder}
                     createdOrder={createdOrder}
                     onCreateOrder={handleCreateOrder}
+                    showSubmit={false}
                   />
                 </div>
                 <VoucherHeaderCard
@@ -268,8 +297,19 @@ export default function SalesFlow() {
                   setRowField={setRowField}
                   addRow={addRow}
                   removeRow={removeRow}
+                  onUseFlightPassengersForVisa={useFlightPassengersForVisa}
+                  onSetHotelLeadPassenger={setHotelLeadPassenger}
                 />
 
+                <VoucherSummaryCard voucher={voucher} />
+
+                <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
+                  <Space>
+                    <Button type="primary" loading={loadingOrder} onClick={() => orderForm.submit()}>
+                      Create Order
+                    </Button>
+                  </Space>
+                </Card>
               </>
             ),
           },
