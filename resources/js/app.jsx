@@ -46,6 +46,20 @@ function RootApp() {
     return tokenMap[themeStyle] || tokenMap.ocean;
   }, [themeStyle]);
 
+  const readabilityTokens = useMemo(() => {
+    if (themeMode === 'dark') {
+      return {};
+    }
+
+    return {
+      colorText: '#0b1220',
+      colorTextBase: '#0b1220',
+      colorTextSecondary: '#334155',
+      colorTextTertiary: '#475569',
+      colorTextQuaternary: '#64748b',
+    };
+  }, [themeMode]);
+
   const currentAlgorithm = useMemo(() => {
     return themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
   }, [themeMode]);
@@ -59,6 +73,7 @@ function RootApp() {
           fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
           borderRadius: 12,
           colorPrimary: styleTokens.colorPrimary,
+          ...readabilityTokens,
         },
       }}
     >

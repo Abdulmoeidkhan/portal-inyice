@@ -14,8 +14,8 @@
   --app-bg: #edf3fb;
   --app-surface: #ffffff;
   --app-surface-2: #f4f7fb;
-  --app-text: #0f1b2d;
-  --app-muted: #5c6b7f;
+  --app-text: #0b1220;
+  --app-muted: #334155;
   --app-primary: #1f7ae0;
   --app-primary-2: #0ea5a1;
   --app-border: rgba(15, 27, 45, 0.08);
@@ -32,8 +32,8 @@
   --app-bg: #f1f5f9;
   --app-surface: #ffffff;
   --app-surface-2: #eef2f7;
-  --app-text: #0f172a;
-  --app-muted: #64748b;
+  --app-text: #0b1220;
+  --app-muted: #334155;
   --app-primary: #64748b;
   --app-primary-2: #334155;
   --hero-grad: radial-gradient(circle at 14% 16%, rgba(100, 116, 139, 0.2), transparent 40%),
@@ -48,8 +48,8 @@
   --app-bg: #fbf5ea;
   --app-surface: #fffdf8;
   --app-surface-2: #f6efe1;
-  --app-text: #362714;
-  --app-muted: #8b6e49;
+  --app-text: #24180a;
+  --app-muted: #5f4525;
   --app-primary: #b97316;
   --app-primary-2: #8b5e34;
   --hero-grad: radial-gradient(circle at 12% 18%, rgba(185, 115, 22, 0.2), transparent 40%),
@@ -90,6 +90,22 @@ body {
   transition: background 0.35s ease, color 0.35s ease;
   min-width: 320px;
   overflow-x: hidden;
+}
+
+:root:not([data-theme='dark']) .ant-typography,
+:root:not([data-theme='dark']) .ant-card,
+:root:not([data-theme='dark']) .ant-table,
+:root:not([data-theme='dark']) .ant-statistic-content {
+  color: var(--app-text);
+}
+
+:root:not([data-theme='dark']) .ant-typography-secondary,
+:root:not([data-theme='dark']) .ant-form-item-label > label,
+:root:not([data-theme='dark']) .ant-statistic-title,
+:root:not([data-theme='dark']) .ant-table-thead > tr > th,
+:root:not([data-theme='dark']) .ant-select-selection-placeholder,
+:root:not([data-theme='dark']) .ant-input::placeholder {
+  color: var(--app-muted) !important;
 }
 
 .center-screen {
@@ -225,6 +241,14 @@ body {
 
 .profile-btn {
   color: var(--app-text) !important;
+}
+
+.ant-btn .anticon,
+.app-nav-menu .anticon,
+.app-header .anticon,
+.page-shell .ant-btn .anticon {
+  opacity: 1;
+  color: currentColor;
 }
 
 .app-content {
@@ -407,8 +431,22 @@ body {
   right: 18px;
   bottom: 14px;
   font-size: 42px;
-  opacity: 0.2;
+  opacity: 0.72;
   pointer-events: none;
+}
+
+.dashboard-event-card .ant-card-head .anticon,
+.dashboard-notification-card .ant-card-head .anticon {
+  color: var(--app-primary);
+  opacity: 1;
+}
+
+.dashboard-event-item .ant-btn-text {
+  color: var(--app-primary);
+}
+
+.dashboard-event-item .ant-btn-text .anticon {
+  font-size: 17px;
 }
 
 .dashboard-event-card,
