@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('uid', 26)->unique();
             $table->unsignedBigInteger('tenant_id');
             $table->unsignedBigInteger('company_id');
-            $table->string('account_code', 50)->unique();
+            $table->string('account_code', 50);
             $table->string('account_name', 200);
             $table->char('currency_code', 3);
             $table->decimal('opening_balance', 18, 4)->default(0);
@@ -24,6 +24,7 @@ return new class extends Migration
             $table->index('tenant_id');
             $table->index('company_id');
             $table->unique(['tenant_id', 'uid']);
+            $table->unique(['company_id', 'account_code']);
 
             $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');

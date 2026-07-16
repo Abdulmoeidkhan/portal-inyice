@@ -100,6 +100,7 @@ class ReportController extends Controller
         $validated = $request->validate([
             'from_date' => 'required|date',
             'to_date' => 'required|date|after_or_equal:from_date',
+            'date_by' => 'nullable|in:creation,invoice,departure,checkin,service',
             'group_by' => 'nullable|in:customer,vendor,staff',
             'entity_id' => 'nullable|integer|min:1',
             'search' => 'nullable|string|max:100',
@@ -110,6 +111,7 @@ class ReportController extends Controller
             (int) auth()->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
+            $validated['date_by'] ?? 'invoice',
             $validated['group_by'] ?? 'customer',
             isset($validated['entity_id']) ? (int) $validated['entity_id'] : null,
             isset($validated['search']) ? trim($validated['search']) : null,
@@ -129,5 +131,18 @@ class ReportController extends Controller
         );
 
         return response()->json($report);
+    }
+
+    public function dashboardUpcoming(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'days' => 'nullable|integer|min:1|max:90',
+        ]);
+
+        return response()->json($this->reportService->dashboardUpcoming(
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
+            (int) ($validated['days'] ?? 30),
+        ));
     }
 }

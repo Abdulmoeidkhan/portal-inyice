@@ -11,11 +11,12 @@ return new class extends Migration
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
             $table->string('uid', 26)->unique();
+            $table->string('share_token', 64)->nullable()->unique();
             $table->unsignedBigInteger('tenant_id');
             $table->unsignedBigInteger('company_id');
             $table->unsignedBigInteger('order_id');
             $table->unsignedBigInteger('customer_id');
-            $table->string('invoice_number', 50)->unique();
+            $table->string('invoice_number', 50);
             $table->date('invoice_date');
             $table->date('due_date')->nullable();
             $table->char('currency_code', 3);

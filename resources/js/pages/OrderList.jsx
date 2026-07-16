@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Form, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, FileDoneOutlined } from '@ant-design/icons';
+import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
+import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -339,7 +340,7 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 140,
+      width: 250,
       render: (_, record) => (
         <Space>
           {record.status === 'invoice' && !record.invoice && (
@@ -353,6 +354,13 @@ export default function OrderList() {
               Create Invoice
             </Button>
           )}
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/orders/${record.uid}/voucher`)}
+          >
+            Voucher
+          </Button>
           <Button
             size="small"
             icon={<EditOutlined />}
@@ -529,6 +537,8 @@ export default function OrderList() {
             </Space>
           </Card>
         </Form>
+
+        {editingOrder?.meta && <VoucherSummaryCard voucher={editingOrder.meta} />}
 
         <Card className="border-beam-aurora" style={{ marginBottom: 12 }}>
           <Space direction="vertical" size={8} style={{ width: '100%' }}>

@@ -28,6 +28,7 @@ import RevenueReport from './RevenueReport';
 import ProfitReport from './ProfitReport';
 import PaymentReport from './PaymentReport';
 import InvoiceDetail from './InvoiceDetail';
+import VoucherDetail from './VoucherDetail';
 import CounterpartyTransaction from './CounterpartyTransaction';
 import Login from './Login';
 import Register from './Register';
@@ -216,6 +217,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/invoices" element={<InvoiceList />} />
               <Route path="/invoices/:uid" element={<InvoiceDetail />} />
               <Route path="/orders" element={<OrderList />} />
+              <Route path="/orders/:uid/voucher" element={<VoucherDetail />} />
               <Route path="/orders/:uid/edit" element={<OrderEdit />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={<Payments />} />
@@ -470,6 +472,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
     return (
       <Routes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
+        <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -480,6 +483,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   return (
     <Routes>
       <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
+      <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
       <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} />} />
     </Routes>
   );

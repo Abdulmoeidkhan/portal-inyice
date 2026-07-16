@@ -14,6 +14,13 @@ const firstOfMonth = () => {
 const money = (value) => Number(value || 0).toFixed(2);
 const margin = (value) => `${Number(value || 0).toFixed(2)}%`;
 const label = (value) => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const dateByOptions = [
+  { label: 'Invoice Date', value: 'invoice' },
+  { label: 'Creation Date', value: 'creation' },
+  { label: 'Departure Date', value: 'departure' },
+  { label: 'Check-in Date', value: 'checkin' },
+  { label: 'Service Date', value: 'service' },
+];
 
 export default function ProfitReport() {
   const [report, setReport] = useState(null);
@@ -23,6 +30,7 @@ export default function ProfitReport() {
   const [filters, setFilters] = useState({
     from_date: firstOfMonth(),
     to_date: dateString(new Date()),
+    date_by: 'invoice',
     group_by: 'customer',
     entity_id: null,
     search: '',
@@ -112,9 +120,14 @@ export default function ProfitReport() {
         row.profit_margin,
       ]),
       [],
-      ['Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Revenue', 'Cost', 'Profit', 'Margin'],
+      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Revenue', 'Cost', 'Profit', 'Margin'],
       ...(report.details || []).map((row) => [
         row.date,
+        row.creation_date,
+        row.invoice_date,
+        row.departure_date,
+        row.checkin_date,
+        row.service_date,
         row.order_number,
         row.voucher_no,
         row.booking_reference,
@@ -157,6 +170,11 @@ export default function ProfitReport() {
 
   const detailColumns = [
     { title: 'Date', dataIndex: 'date', width: 115 },
+    { title: 'Creation Date', dataIndex: 'creation_date', width: 125, render: (value) => value || '-' },
+    { title: 'Invoice Date', dataIndex: 'invoice_date', width: 120, render: (value) => value || '-' },
+    { title: 'Departure Date', dataIndex: 'departure_date', width: 145, render: (value) => value || '-' },
+    { title: 'Check-in Date', dataIndex: 'checkin_date', width: 135, render: (value) => value || '-' },
+    { title: 'Service Date', dataIndex: 'service_date', width: 160, render: (value) => value || '-' },
     { title: 'Order #', dataIndex: 'order_number', width: 150 },
     { title: 'Voucher', dataIndex: 'voucher_no', width: 135, render: (value) => value || '-' },
     { title: 'PNR', dataIndex: 'booking_reference', width: 120, render: (value) => value || '-' },
@@ -210,6 +228,15 @@ export default function ProfitReport() {
                 setFilters((current) => ({ ...current, entity_id: value || null }));
               }}
               options={entitySelectOptions}
+              style={{ width: '100%' }}
+            />
+          </Col>
+          <Col xs={24} md={5}>
+            <Text strong>Date By</Text>
+            <Select
+              value={filters.date_by}
+              onChange={(value) => setFilters((current) => ({ ...current, date_by: value }))}
+              options={dateByOptions}
               style={{ width: '100%' }}
             />
           </Col>
@@ -269,7 +296,7 @@ export default function ProfitReport() {
         ) : !loading && report?.details?.length === 0 ? (
           <Empty description="No matching orders" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 1470 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2060 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
         )}
       </Card>
     </div>

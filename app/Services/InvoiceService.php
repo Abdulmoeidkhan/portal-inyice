@@ -18,6 +18,7 @@ class InvoiceService
     {
         return DB::transaction(function () use ($order): Invoice {
             $existingInvoice = Invoice::where('tenant_id', $order->tenant_id)
+                ->where('company_id', $order->company_id)
                 ->where('order_id', $order->id)
                 ->first();
 

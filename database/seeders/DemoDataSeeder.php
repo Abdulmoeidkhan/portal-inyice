@@ -22,7 +22,7 @@ class DemoDataSeeder extends Seeder
     public function run(): void
     {
         $tenant = Tenant::firstOrCreate(
-            ['code' => 'demo001'],
+            ['code' => 'DEMO001'],
             [
                 'uid' => (string) Str::ulid(),
                 'name' => 'Demo Travel Agency',

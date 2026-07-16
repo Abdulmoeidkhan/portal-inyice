@@ -8,7 +8,6 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\OrderVendorCost;
 use App\Services\GdsParserService;
 use App\Services\InvoiceService;
 use App\Services\OrderNumberService;
@@ -94,8 +93,9 @@ class OrderController extends Controller
 
         $user = $request->user();
         $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
         $tenantVendor = Rule::exists('vendors', 'id')->where(
-            fn ($query) => $query->where('tenant_id', $tenantId)
+            fn ($query) => $query->where('tenant_id', $tenantId)->where('company_id', $companyId)
         );
         $validated = $request->validate([
             'company_id' => 'nullable|integer|exists:companies,id',
@@ -227,9 +227,10 @@ class OrderController extends Controller
             'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
         ]);
 
-        $companyId = (int) ($validated['company_id'] ?? $user->company_id);
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
-        $customer = Customer::where('tenant_id', $tenantId)->findOrFail((int) $validated['customer_id']);
+        $customer = Customer::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->findOrFail((int) $validated['customer_id']);
 
         $voucher = $validated['voucher'];
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
@@ -294,7 +295,7 @@ class OrderController extends Controller
                 OrderItem::insert($items);
             }
 
-            $this->syncVendorCosts($order, $voucher, $tenantId);
+            $order->syncVendorCostsFromVoucher($voucher);
 
             $total = OrderItem::where('order_id', $order->id)->sum('total_price');
             $order->update(['total_amount' => $total]);
@@ -315,6 +316,7 @@ class OrderController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $orders = Order::where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
             ->with(['customer:id,name', 'items:id,order_id,description,total_price', 'invoice:id,order_id,uid,invoice_number,status,outstanding_amount'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
@@ -340,9 +342,61 @@ class OrderController extends Controller
     public function show(string $uid, Request $request): JsonResponse
     {
         $order = Order::where('tenant_id', $request->user()->tenant_id)
+            ->where('company_id', $request->user()->company_id)
             ->where('uid', $uid)
             ->with(['customer', 'vendor', 'items', 'gdsParsedRecord'])
             ->firstOrFail();
+
+        return response()->json($order);
+    }
+
+    public function share(string $uid, Request $request): JsonResponse
+    {
+        $order = Order::where('tenant_id', $request->user()->tenant_id)
+            ->where('company_id', $request->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $shareToken = $order->ensureShareToken();
+
+        return response()->json([
+            'share_url' => url('/shared/vouchers/' . $shareToken),
+            'share_token' => $shareToken,
+        ]);
+    }
+
+    public function revokeShare(string $uid, Request $request): JsonResponse
+    {
+        $order = Order::where('tenant_id', $request->user()->tenant_id)
+            ->where('company_id', $request->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $order->update(['share_token' => null]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function shared(string $token): JsonResponse
+    {
+        $order = Order::where('share_token', $token)
+            ->with(['customer', 'items'])
+            ->firstOrFail();
+
+        $order->makeHidden([
+            'share_token',
+            'tenant_id',
+            'company_id',
+            'customer_id',
+            'vendor_id',
+            'created_by_user_id',
+            'updated_by_user_id',
+            'gds_parsed_record_id',
+            'deleted_at',
+            'updated_at',
+        ]);
+        $order->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
+        $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
         return response()->json($order);
     }
@@ -353,10 +407,12 @@ class OrderController extends Controller
 
         $user = $request->user();
         $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
         $tenantVendor = Rule::exists('vendors', 'id')->where(
-            fn ($query) => $query->where('tenant_id', $tenantId)
+            fn ($query) => $query->where('tenant_id', $tenantId)->where('company_id', $companyId)
         );
         $order = Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
             ->where('uid', $uid)
             ->firstOrFail();
         $allowedPackageTypes = array_values(array_unique(array_filter([
@@ -495,7 +551,9 @@ class OrderController extends Controller
             'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
         ]);
 
-        $customer = Customer::where('tenant_id', $tenantId)->findOrFail((int) $validated['customer_id']);
+        $customer = Customer::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->findOrFail((int) $validated['customer_id']);
         DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId): void {
             $voucher = $validated['voucher'] ?? null;
             $totalAmount = $validated['total_amount'] ?? $order->total_amount;
@@ -511,7 +569,7 @@ class OrderController extends Controller
                         OrderItem::insert($items);
                     }
 
-                    $this->syncVendorCosts($order, $voucher, $tenantId);
+                    $order->syncVendorCostsFromVoucher($voucher);
 
                     $totalAmount = OrderItem::where('order_id', $order->id)->sum('total_price');
                 }
@@ -566,6 +624,7 @@ class OrderController extends Controller
     public function destroy(string $uid, Request $request): JsonResponse
     {
         $order = Order::where('tenant_id', $request->user()->tenant_id)
+            ->where('company_id', $request->user()->company_id)
             ->where('uid', $uid)
             ->firstOrFail();
 
@@ -832,65 +891,6 @@ class OrderController extends Controller
         return false;
     }
 
-    private function syncVendorCosts(Order $order, array $voucher, int $tenantId): void
-    {
-        $rows = [];
-        $timestamp = now();
-
-        foreach (($voucher['pricing'] ?? []) as $index => $pricing) {
-            $vendorId = (int) ($pricing['vendor_id'] ?? 0);
-            $amount = $this->toAmount($pricing['flight_cost'] ?? null);
-            if ($vendorId <= 0 || $amount <= 0) {
-                continue;
-            }
-
-            $rows[] = [
-                'tenant_id' => $tenantId,
-                'order_id' => $order->id,
-                'vendor_id' => $vendorId,
-                'service_type' => 'flight',
-                'service_index' => (int) $index,
-                'amount' => $amount,
-                'created_at' => $timestamp,
-                'updated_at' => $timestamp,
-            ];
-        }
-
-        $costSections = [
-            'hotels' => 'hotel',
-            'transfers' => 'transfer',
-            'city_tours' => 'city_tour',
-            'visa' => 'visa',
-            'other_services' => 'other_service',
-        ];
-
-        foreach ($costSections as $section => $serviceType) {
-            foreach (($voucher[$section] ?? []) as $index => $serviceRow) {
-                $vendorId = (int) ($serviceRow['vendor_id'] ?? 0);
-                $amount = $this->costAmount($serviceRow);
-                if ($vendorId <= 0 || $amount <= 0) {
-                    continue;
-                }
-
-                $rows[] = [
-                    'tenant_id' => $tenantId,
-                    'order_id' => $order->id,
-                    'vendor_id' => $vendorId,
-                    'service_type' => $serviceType,
-                    'service_index' => (int) $index,
-                    'amount' => $amount,
-                    'created_at' => $timestamp,
-                    'updated_at' => $timestamp,
-                ];
-            }
-        }
-
-        OrderVendorCost::where('order_id', $order->id)->delete();
-        if ($rows !== []) {
-            OrderVendorCost::insert($rows);
-        }
-    }
-
     private function hasFilledValue(array $row, array $keys): bool
     {
         foreach ($keys as $key) {
@@ -925,11 +925,6 @@ class OrderController extends Controller
     private function salesAmount(array $row): float
     {
         return $this->toAmount($this->firstFilledValue($row['sales'] ?? null, $row['amount'] ?? null));
-    }
-
-    private function costAmount(array $row): float
-    {
-        return $this->toAmount($this->firstFilledValue($row['cost'] ?? null, $row['amount'] ?? null));
     }
 
     private function vendorDescription(array $row): string

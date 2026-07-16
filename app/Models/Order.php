@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Traits\TenantAware;
 
 class Order extends Model
@@ -17,6 +19,7 @@ class Order extends Model
     protected $fillable = [
         'tenant_id',
         'uid',
+        'share_token',
         'company_id',
         'customer_id',
         'vendor_id',
@@ -193,6 +196,164 @@ class Order extends Model
         ]);
 
         return true;
+    }
+
+    public function ensureShareToken(): string
+    {
+        if (!$this->share_token) {
+            $this->forceFill(['share_token' => Str::random(64)])->save();
+        }
+
+        return $this->share_token;
+    }
+
+    public function voucherSearchAttributes(): array
+    {
+        $meta = $this->meta ?? [];
+
+        return self::voucherSearchAttributesFromMeta(is_array($meta) ? $meta : []);
+    }
+
+    public static function voucherSearchAttributesFromMeta(array $meta): array
+    {
+        return [
+            'voucher_no' => $meta['voucher_no'] ?? null,
+            'issue_date' => ($meta['issue_date'] ?? null) ?: null,
+            'package_type' => $meta['package_type'] ?? null,
+            'active_sections' => $meta['active_sections'] ?? null,
+            'emergency_contact' => $meta['emergency_contact'] ?? null,
+        ];
+    }
+
+    public static function voucherSearchDatabaseAttributesFromMeta(array $meta): array
+    {
+        $attributes = self::voucherSearchAttributesFromMeta($meta);
+
+        if (is_array($attributes['active_sections'])) {
+            $attributes['active_sections'] = json_encode($attributes['active_sections'], JSON_THROW_ON_ERROR);
+        }
+
+        return $attributes;
+    }
+
+    public static function decodeMeta(mixed $meta): array
+    {
+        if (is_array($meta)) {
+            return $meta;
+        }
+
+        if (!is_string($meta) || trim($meta) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($meta, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    public function syncVendorCostsFromVoucher(array $voucher): void
+    {
+        $rows = self::vendorCostRowsFromVoucher(
+            $voucher,
+            $this->id,
+            $this->tenant_id,
+            $this->vendor_id
+        );
+
+        DB::transaction(function () use ($rows): void {
+            $this->vendorCosts()->delete();
+
+            if ($rows !== []) {
+                OrderVendorCost::insert($rows);
+            }
+        });
+    }
+
+    public static function vendorCostRowsFromVoucher(
+        array $voucher,
+        int $orderId,
+        int $tenantId,
+        ?int $fallbackVendorId = null,
+        mixed $timestamp = null,
+        ?array $allowedVendorTenantIds = null
+    ): array {
+        $rows = [];
+        $timestamp ??= now();
+
+        foreach (($voucher['pricing'] ?? []) as $index => $pricing) {
+            $vendorId = (int) ($pricing['vendor_id'] ?? $fallbackVendorId ?? 0);
+            $amount = OrderVendorCost::toAmount($pricing['flight_cost'] ?? null);
+
+            if (!self::canUseVendorCost($vendorId, $amount, $tenantId, $allowedVendorTenantIds)) {
+                continue;
+            }
+
+            $rows[] = self::vendorCostRow($orderId, $tenantId, $vendorId, 'flight', (int) $index, $amount, $timestamp);
+        }
+
+        foreach (OrderVendorCost::SERVICE_SECTIONS as $section => $serviceType) {
+            foreach (($voucher[$section] ?? []) as $index => $serviceRow) {
+                $vendorId = (int) ($serviceRow['vendor_id'] ?? 0);
+                $amount = OrderVendorCost::amountFromServiceRow((array) $serviceRow);
+
+                if (!self::canUseVendorCost($vendorId, $amount, $tenantId, $allowedVendorTenantIds)) {
+                    continue;
+                }
+
+                $rows[] = self::vendorCostRow($orderId, $tenantId, $vendorId, $serviceType, (int) $index, $amount, $timestamp);
+            }
+        }
+
+        return $rows;
+    }
+
+    public function vendorPayableAmountFor(int $vendorId): float
+    {
+        if ($this->relationLoaded('vendorCosts') ? $this->vendorCosts->isNotEmpty() : $this->vendorCosts()->exists()) {
+            return (float) $this->vendorCosts()
+                ->where('vendor_id', $vendorId)
+                ->sum('amount');
+        }
+
+        $amount = collect(self::vendorCostRowsFromVoucher($this->meta ?? [], $this->id, $this->tenant_id, $this->vendor_id))
+            ->where('vendor_id', $vendorId)
+            ->sum('amount');
+
+        if ($amount > 0) {
+            return (float) $amount;
+        }
+
+        return (int) $this->vendor_id === $vendorId ? (float) $this->total_amount : 0;
+    }
+
+    private static function canUseVendorCost(int $vendorId, float $amount, int $tenantId, ?array $allowedVendorTenantIds): bool
+    {
+        if ($vendorId <= 0 || $amount <= 0) {
+            return false;
+        }
+
+        return $allowedVendorTenantIds === null || (int) ($allowedVendorTenantIds[$vendorId] ?? 0) === $tenantId;
+    }
+
+    private static function vendorCostRow(
+        int $orderId,
+        int $tenantId,
+        int $vendorId,
+        string $serviceType,
+        int $serviceIndex,
+        float $amount,
+        mixed $timestamp
+    ): array {
+        return [
+            'tenant_id' => $tenantId,
+            'order_id' => $orderId,
+            'vendor_id' => $vendorId,
+            'service_type' => $serviceType,
+            'service_index' => $serviceIndex,
+            'amount' => $amount,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ];
     }
 
     /**

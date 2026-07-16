@@ -9,6 +9,7 @@ use App\Services\LedgerService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AccountController extends Controller
 {
@@ -21,7 +22,7 @@ class AccountController extends Controller
      */
     public function cashAccounts(Request $request): JsonResponse
     {
-        $companyId = $request->query('company_id', auth()->user()->company_id);
+        $companyId = auth()->user()->company_id;
 
         $accounts = CashAccount::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
@@ -48,7 +49,12 @@ class AccountController extends Controller
     public function createCashAccount(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'account_code' => 'required|string|max:50|unique:cash_accounts',
+            'account_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('cash_accounts')->where(fn ($query) => $query->where('company_id', auth()->user()->company_id)),
+            ],
             'account_name' => 'required|string|max:200',
             'currency_code' => 'required|exists:currencies,code',
             'opening_balance' => 'nullable|numeric|min:0',
@@ -76,7 +82,7 @@ class AccountController extends Controller
      */
     public function bankAccounts(Request $request): JsonResponse
     {
-        $companyId = $request->query('company_id', auth()->user()->company_id);
+        $companyId = auth()->user()->company_id;
 
         $accounts = BankAccount::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
@@ -105,7 +111,12 @@ class AccountController extends Controller
     {
         $validated = $request->validate([
             'bank_name' => 'required|string|max:200',
-            'account_number' => 'required|string|max:50|unique:bank_accounts',
+            'account_number' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('bank_accounts')->where(fn ($query) => $query->where('company_id', auth()->user()->company_id)),
+            ],
             'account_holder' => 'required|string|max:200',
             'currency_code' => 'required|exists:currencies,code',
             'opening_balance' => 'nullable|numeric|min:0',
@@ -136,11 +147,13 @@ class AccountController extends Controller
     {
         if ($accountType === 'cash') {
             $account = CashAccount::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
                 ->findOrFail($accountId);
 
             $balance = $this->ledgerService->getCashBalance($accountId);
         } else {
             $account = BankAccount::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
                 ->findOrFail($accountId);
 
             $balance = $this->ledgerService->getBankBalance($accountId);
@@ -162,6 +175,10 @@ class AccountController extends Controller
     public function ledgerEntries(string $accountType, int $accountId, Request $request): JsonResponse
     {
         $perPage = $request->query('per_page', 100);
+        $model = $accountType === 'cash' ? CashAccount::class : BankAccount::class;
+        $model::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->findOrFail($accountId);
 
         $entries = \App\Models\LedgerEntry::where('tenant_id', auth()->user()->tenant_id)
             ->where('account_id', $accountId)

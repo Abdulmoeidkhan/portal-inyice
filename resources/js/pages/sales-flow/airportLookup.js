@@ -20,3 +20,12 @@ export const getAirportLabel = (code) => {
 
   return [airport.city, airport.name, airport.country].filter(Boolean).join(' - ');
 };
+
+export const getAirportCity = (code) => {
+  const normalized = (code || '').trim().toUpperCase();
+  if (!normalized) {
+    return '';
+  }
+
+  return airportByIata[normalized]?.city || '';
+};

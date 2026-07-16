@@ -14,13 +14,19 @@ return new class extends Migration
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
             $table->string('uid', 26)->unique();
+            $table->string('share_token', 64)->nullable()->unique();
             $table->unsignedBigInteger('tenant_id');
             $table->unsignedBigInteger('company_id');
             $table->unsignedBigInteger('customer_id');
             $table->unsignedBigInteger('vendor_id')->nullable();
             $table->unsignedBigInteger('created_by_user_id');
             $table->unsignedBigInteger('updated_by_user_id');
-            $table->string('order_number', 50)->unique();
+            $table->string('order_number', 50);
+            $table->string('voucher_no', 100)->nullable();
+            $table->date('issue_date')->nullable();
+            $table->string('package_type', 100)->nullable();
+            $table->json('active_sections')->nullable();
+            $table->text('emergency_contact')->nullable();
             $table->string('booking_reference', 50)->nullable();
             $table->enum('status', ['quote', 'order', 'confirm', 'cancel', 'invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'])->default('quote');
             $table->char('currency_code', 3);
@@ -28,6 +34,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->string('gds_source', 50)->nullable();
             $table->unsignedBigInteger('gds_parsed_record_id')->nullable();
+            $table->json('meta')->nullable();
             $table->timestamps();
             $table->softDeletes();
 
@@ -41,6 +48,11 @@ return new class extends Migration
             $table->index('status');
             $table->index('booking_reference');
             $table->index('gds_parsed_record_id');
+            $table->index(['tenant_id', 'voucher_no'], 'orders_tenant_voucher_no_index');
+            $table->index(['tenant_id', 'booking_reference'], 'orders_tenant_booking_reference_index');
+            $table->index(['tenant_id', 'issue_date'], 'orders_tenant_issue_date_index');
+            $table->index(['tenant_id', 'package_type'], 'orders_tenant_package_type_index');
+            $table->index(['tenant_id', 'gds_source'], 'orders_tenant_gds_source_index');
             $table->unique(['tenant_id', 'uid']);
             $table->unique(['company_id', 'order_number']);
 

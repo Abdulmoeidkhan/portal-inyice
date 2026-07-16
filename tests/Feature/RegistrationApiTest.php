@@ -28,7 +28,7 @@ class RegistrationApiTest extends TestCase
     {
         Tenant::create([
             'uid' => (string) Str::ulid(),
-            'code' => 'demo001',
+            'code' => 'DEMO001',
             'name' => 'Demo Agency',
             'is_active' => true,
         ]);
@@ -36,13 +36,13 @@ class RegistrationApiTest extends TestCase
         $taken = $this->getJson('/api/v1/registration/check-code?code=demo001');
         $taken->assertOk()->assertJson([
             'available' => false,
-            'code' => 'demo001',
+            'code' => 'DEMO001',
         ]);
 
         $available = $this->getJson('/api/v1/registration/check-code?code=newcode');
         $available->assertOk()->assertJson([
             'available' => true,
-            'code' => 'newcode',
+            'code' => 'NEWCODE',
         ]);
     }
 
@@ -70,11 +70,11 @@ class RegistrationApiTest extends TestCase
         $response->assertJsonPath('user.email', 'owner@herd.test');
 
         $this->assertDatabaseHas('tenants', [
-            'code' => 'herd001',
+            'code' => 'HERD001',
             'name' => 'HERD Travel',
         ]);
 
-        $tenant = Tenant::where('code', 'herd001')->firstOrFail();
+        $tenant = Tenant::where('code', 'HERD001')->firstOrFail();
 
         $this->assertDatabaseHas('companies', [
             'tenant_id' => $tenant->id,

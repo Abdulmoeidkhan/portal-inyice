@@ -20,7 +20,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $tenant = Tenant::query()->firstOrCreate(
-            ['code' => 'demo001'],
+            ['code' => 'DEMO001'],
             ['uid' => (string) Str::ulid(), 'name' => 'Demo Tenant', 'is_active' => true]
         );
 

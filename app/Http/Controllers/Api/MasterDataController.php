@@ -147,8 +147,6 @@ class MasterDataController extends Controller
 
     private function resolveCompany(Request $request, int $tenantId, int $defaultCompanyId): Company
     {
-        $companyId = (int) ($request->input('company_id') ?: $defaultCompanyId);
-
-        return Company::where('tenant_id', $tenantId)->findOrFail($companyId);
+        return Company::where('tenant_id', $tenantId)->findOrFail($defaultCompanyId);
     }
 }

@@ -28,7 +28,7 @@ class UserFactory extends Factory
     {
         $tenant = Tenant::query()->first() ?? Tenant::query()->create([
             'uid' => (string) Str::ulid(),
-            'code' => 'demo001',
+            'code' => 'DEMO001',
             'name' => 'Demo Tenant',
             'is_active' => true,
         ]);

@@ -19,6 +19,7 @@ Route::get('/registration/timezones', [RegistrationController::class, 'getTimezo
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
 Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])->middleware('throttle:public-api');
+Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])->middleware('throttle:public-api');
 
 
 Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
@@ -44,6 +45,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     // ========== ORDERS ==========
     Route::prefix('orders')->controller(OrderController::class)->group(function () {
         Route::get('/', 'index')->name('orders.list');
+        Route::post('/{uid}/share', 'share')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share');
+        Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share.revoke');
         Route::get('/{uid}', 'show')->name('orders.show');
         Route::patch('/{uid}', 'update')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.update');
         Route::delete('/{uid}', 'destroy')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.destroy');
@@ -114,6 +117,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/payments', 'paymentReport')->name('reports.payments');
         Route::get('/receipts', 'receiptReport')->name('reports.receipts');
         Route::get('/customer-summary', 'customerSummaryReport')->name('reports.customerSummary');
+        Route::get('/dashboard-upcoming', 'dashboardUpcoming')->name('reports.dashboardUpcoming');
     });
 
     // ========== STATEMENTS ==========

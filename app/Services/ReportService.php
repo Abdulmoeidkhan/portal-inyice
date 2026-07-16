@@ -387,11 +387,106 @@ class ReportService
         ];
     }
 
+    public function dashboardUpcoming(int $tenantId, int $companyId, int $days = 30): array
+    {
+        $days = max(1, min($days, 90));
+        $from = now()->startOfDay();
+        $to = now()->addDays($days)->endOfDay();
+
+        $events = collect();
+        $orders = Order::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotIn('status', ['cancel', 'void'])
+            ->with('customer:id,name')
+            ->orderByDesc('created_at')
+            ->get(['id', 'uid', 'order_number', 'voucher_no', 'booking_reference', 'customer_id', 'status', 'meta', 'created_at']);
+
+        foreach ($orders as $order) {
+            $meta = is_array($order->meta) ? $order->meta : [];
+
+            foreach (($meta['flights'] ?? []) as $index => $flight) {
+                if (!is_array($flight)) {
+                    continue;
+                }
+
+                $date = $this->dashboardDate($flight['date'] ?? null);
+                if (!$date || !$date->betweenIncluded($from, $to)) {
+                    continue;
+                }
+
+                $events->push($this->dashboardEvent($order, 'departure', $date, [
+                    'time' => $flight['departure'] ?? null,
+                    'title' => trim(sprintf(
+                        'Flight %s %s-%s',
+                        $flight['flight_no'] ?? '-',
+                        strtoupper((string) ($flight['from'] ?? '-')),
+                        strtoupper((string) ($flight['to'] ?? '-'))
+                    )),
+                    'description' => trim((string) ($flight['pnr'] ?? $flight['gds_pnr'] ?? $order->booking_reference ?? '')),
+                    'source_index' => $index,
+                ]));
+            }
+
+            foreach (($meta['hotels'] ?? []) as $index => $hotel) {
+                if (!is_array($hotel)) {
+                    continue;
+                }
+
+                foreach (['checkin' => 'check_in', 'checkout' => 'check_out'] as $type => $field) {
+                    $date = $this->dashboardDate($hotel[$field] ?? null);
+                    if (!$date || !$date->betweenIncluded($from, $to)) {
+                        continue;
+                    }
+
+                    $events->push($this->dashboardEvent($order, $type, $date, [
+                        'title' => trim((string) ($hotel['hotel_name'] ?? 'Hotel')),
+                        'description' => trim(collect([$hotel['city'] ?? null, $hotel['lead_passenger'] ?? null])->filter()->join(' - ')),
+                        'source_index' => $index,
+                    ]));
+                }
+            }
+        }
+
+        $events = $events
+            ->sortBy(fn (array $event) => $event['date'] . ' ' . ($event['time'] ?: '00:00') . ' ' . $event['order_number'])
+            ->values();
+
+        $byType = $events->groupBy('type');
+        $notifications = $events
+            ->filter(fn (array $event) => $event['days_until'] <= 7)
+            ->values()
+            ->take(12)
+            ->map(fn (array $event) => [
+                ...$event,
+                'message' => $this->dashboardNotificationMessage($event),
+                'severity' => $event['days_until'] <= 1 ? 'high' : ($event['days_until'] <= 3 ? 'medium' : 'normal'),
+            ])
+            ->values();
+
+        return [
+            'report_date' => now()->toDateString(),
+            'company_id' => $companyId,
+            'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'days' => $days],
+            'summary' => [
+                'departures' => $byType->get('departure', collect())->count(),
+                'checkins' => $byType->get('checkin', collect())->count(),
+                'checkouts' => $byType->get('checkout', collect())->count(),
+                'notifications' => $notifications->count(),
+            ],
+            'departures' => $byType->get('departure', collect())->values()->all(),
+            'checkins' => $byType->get('checkin', collect())->values()->all(),
+            'checkouts' => $byType->get('checkout', collect())->values()->all(),
+            'notifications' => $notifications->all(),
+        ];
+    }
+
     public function profitReport(
         int $tenantId,
         int $companyId,
         string $fromDate,
         string $toDate,
+        string $dateBy = 'invoice',
         string $groupBy = 'customer',
         ?int $entityId = null,
         ?string $search = null
@@ -399,9 +494,17 @@ class ReportService
         $orders = Order::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereHas('invoice', fn ($invoice) => $invoice
-                ->where('status', '!=', 'void')
-                ->whereBetween('invoice_date', [$fromDate, $toDate]))
+            ->whereHas('invoice', function ($invoice) use ($fromDate, $toDate, $dateBy) {
+                $invoice->where('status', '!=', 'void');
+
+                if ($dateBy === 'invoice') {
+                    $invoice->whereBetween('invoice_date', [$fromDate, $toDate]);
+                }
+            })
+            ->when($dateBy === 'creation', fn ($query) => $query->whereBetween('created_at', [
+                Carbon::parse($fromDate)->startOfDay(),
+                Carbon::parse($toDate)->endOfDay(),
+            ]))
             ->when($entityId && $groupBy === 'customer', fn ($query) => $query->where('customer_id', $entityId))
             ->when($entityId && $groupBy === 'staff', fn ($query) => $query->where('created_by_user_id', $entityId))
             ->when($entityId && $groupBy === 'vendor', function ($query) use ($entityId) {
@@ -434,6 +537,12 @@ class ReportService
             )
             ->orderByDesc('created_at')
             ->get();
+
+        if (in_array($dateBy, ['departure', 'checkin', 'service'], true)) {
+            $orders = $orders
+                ->filter(fn (Order $order) => $this->orderMatchesVoucherDateRange($order, $dateBy, $fromDate, $toDate))
+                ->values();
+        }
 
         $detailRows = collect();
 
@@ -533,7 +642,7 @@ class ReportService
             'report_date' => now()->toDateString(),
             'company_id' => $companyId,
             'period' => ['from' => $fromDate, 'to' => $toDate],
-            'filters' => ['group_by' => $groupBy, 'entity_id' => $entityId, 'search' => $search],
+            'filters' => ['date_by' => $dateBy, 'group_by' => $groupBy, 'entity_id' => $entityId, 'search' => $search],
             'data' => $groups->all(),
             'details' => $detailRows->values()->all(),
             'summary' => [
@@ -542,6 +651,63 @@ class ReportService
                 'by_currency' => $currencySummary->all(),
             ],
         ];
+    }
+
+    private function dashboardDate(mixed $value): ?Carbon
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function dashboardEvent(Order $order, string $type, Carbon $date, array $data): array
+    {
+        $daysUntil = now()->startOfDay()->diffInDays($date, false);
+
+        return [
+            'key' => $type . '-' . $order->id . '-' . ($data['source_index'] ?? 0) . '-' . $date->toDateString(),
+            'type' => $type,
+            'date' => $date->toDateString(),
+            'time' => $data['time'] ?? null,
+            'days_until' => $daysUntil,
+            'relative_label' => $this->dashboardRelativeLabel($daysUntil),
+            'title' => $data['title'] ?: ucfirst($type),
+            'description' => $data['description'] ?: null,
+            'order_uid' => $order->uid,
+            'order_number' => $order->order_number,
+            'voucher_no' => $order->voucher_no,
+            'booking_reference' => $order->booking_reference,
+            'customer_name' => $order->customer?->name,
+            'status' => $order->status,
+        ];
+    }
+
+    private function dashboardRelativeLabel(int $daysUntil): string
+    {
+        return match (true) {
+            $daysUntil < 0 => abs($daysUntil) . ' days ago',
+            $daysUntil === 0 => 'Today',
+            $daysUntil === 1 => 'Tomorrow',
+            default => 'In ' . $daysUntil . ' days',
+        };
+    }
+
+    private function dashboardNotificationMessage(array $event): string
+    {
+        $label = match ($event['type']) {
+            'departure' => 'Departure',
+            'checkin' => 'Check-in',
+            'checkout' => 'Check-out',
+            default => 'Update',
+        };
+
+        return $label . ' ' . strtolower($event['relative_label']) . ' for ' . ($event['customer_name'] ?: $event['order_number']);
     }
 
     private function profitRow(
@@ -554,6 +720,9 @@ class ReportService
         float $revenue,
         float $cost
     ): array {
+        $departureDate = $this->voucherDates($order, 'flights', 'date');
+        $checkinDate = $this->voucherDates($order, 'hotels', 'check_in');
+
         return [
             'key' => $groupBy . '-' . ($groupId ?? 0) . '-' . $order->id . '-' . $currency,
             'group_id' => $groupId ?? 0,
@@ -563,6 +732,11 @@ class ReportService
             'voucher_no' => $order->voucher_no,
             'booking_reference' => $order->booking_reference,
             'date' => $date,
+            'creation_date' => $order->created_at?->toDateString(),
+            'invoice_date' => $order->invoice?->invoice_date?->toDateString(),
+            'departure_date' => $departureDate,
+            'checkin_date' => $checkinDate,
+            'service_date' => $this->joinDateValues($departureDate, $checkinDate),
             'status' => $order->status,
             'customer_name' => $order->customer?->name,
             'vendor_name' => $order->vendor?->name,
@@ -573,5 +747,73 @@ class ReportService
             'profit' => round($revenue - $cost, 4),
             'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
         ];
+    }
+
+    private function voucherDates(Order $order, string $section, string $field): string
+    {
+        return collect($this->voucherDateList($order, $section, $field))->join(' / ');
+    }
+
+    private function joinDateValues(string ...$values): string
+    {
+        return collect($values)
+            ->flatMap(fn ($value) => explode(' / ', $value))
+            ->map(fn ($value) => trim($value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->join(' / ');
+    }
+
+    private function orderMatchesVoucherDateRange(Order $order, string $dateBy, string $fromDate, string $toDate): bool
+    {
+        $dates = match ($dateBy) {
+            'departure' => $this->voucherDateList($order, 'flights', 'date'),
+            'checkin' => $this->voucherDateList($order, 'hotels', 'check_in'),
+            'service' => collect([
+                ...$this->voucherDateList($order, 'flights', 'date'),
+                ...$this->voucherDateList($order, 'hotels', 'check_in'),
+            ])->unique()->values()->all(),
+            default => [],
+        };
+
+        if (!$dates) {
+            return false;
+        }
+
+        $from = Carbon::parse($fromDate)->startOfDay();
+        $to = Carbon::parse($toDate)->endOfDay();
+
+        return collect($dates)->contains(function (string $date) use ($from, $to): bool {
+            try {
+                return Carbon::parse($date)->betweenIncluded($from, $to);
+            } catch (\Throwable) {
+                return false;
+            }
+        });
+    }
+
+    private function voucherDateList(Order $order, string $section, string $field): array
+    {
+        $rows = $order->meta[$section] ?? [];
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        return collect($rows)
+            ->map(fn ($row) => is_array($row) ? ($row[$field] ?? null) : null)
+            ->map(fn ($value) => is_string($value) ? trim($value) : $value)
+            ->filter()
+            ->map(function ($value) {
+                try {
+                    return Carbon::parse($value)->toDateString();
+                } catch (\Throwable) {
+                    return (string) $value;
+                }
+            })
+            ->unique()
+            ->values()
+            ->all();
     }
 }

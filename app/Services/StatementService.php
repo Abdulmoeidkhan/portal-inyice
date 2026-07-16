@@ -257,47 +257,6 @@ class StatementService
      */
     public function vendorPayableAmount(Order $order, int $vendorId): float
     {
-        if ($order->vendorCosts()->exists()) {
-            return (float) $order->vendorCosts()
-                ->where('vendor_id', $vendorId)
-                ->sum('amount');
-        }
-
-        $meta = $order->meta ?? [];
-        $amount = 0;
-
-        foreach (($meta['pricing'] ?? []) as $pricing) {
-            $pricingVendorId = (int) ($pricing['vendor_id'] ?? $order->vendor_id ?? 0);
-            if ($pricingVendorId === $vendorId) {
-                $amount += (float) ($pricing['flight_cost'] ?? 0);
-            }
-        }
-
-        foreach (($meta['visa'] ?? []) as $visa) {
-            if ((int) ($visa['vendor_id'] ?? 0) === $vendorId) {
-                $amount += $this->costAmount($visa);
-            }
-        }
-
-        foreach (['hotels', 'transfers', 'city_tours', 'other_services'] as $section) {
-            foreach (($meta[$section] ?? []) as $row) {
-                if ((int) ($row['vendor_id'] ?? 0) === $vendorId) {
-                    $amount += $this->costAmount($row);
-                }
-            }
-        }
-
-        if ($amount > 0) {
-            return $amount;
-        }
-
-        return (int) $order->vendor_id === $vendorId ? (float) $order->total_amount : 0;
-    }
-
-    private function costAmount(array $row): float
-    {
-        $cost = $row['cost'] ?? null;
-
-        return (float) ($cost !== null && trim((string) $cost) !== '' ? $cost : ($row['amount'] ?? 0));
+        return $order->vendorPayableAmountFor($vendorId);
     }
 }

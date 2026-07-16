@@ -13,8 +13,9 @@ return new class extends Migration
             $table->string('uid', 26)->unique();
             $table->unsignedBigInteger('tenant_id');
             $table->unsignedBigInteger('company_id');
-            $table->unsignedBigInteger('vendor_id');
-            $table->string('payment_number', 50)->unique();
+            $table->unsignedBigInteger('vendor_id')->nullable();
+            $table->unsignedBigInteger('customer_id')->nullable();
+            $table->string('payment_number', 50);
             $table->date('payment_date');
             $table->decimal('amount', 18, 4);
             $table->char('currency_code', 3);
@@ -29,12 +30,15 @@ return new class extends Migration
             $table->index('tenant_id');
             $table->index('company_id');
             $table->index('vendor_id');
+            $table->index('customer_id');
             $table->index('payment_date');
             $table->unique(['tenant_id', 'uid']);
+            $table->unique(['company_id', 'payment_number']);
 
             $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
             $table->foreign('vendor_id')->references('id')->on('vendors')->onDelete('restrict');
+            $table->foreign('customer_id')->references('id')->on('customers')->onDelete('restrict');
             $table->foreign('created_by_user_id')->references('id')->on('users')->onDelete('restrict');
             $table->foreign('currency_code')->references('code')->on('currencies')->onDelete('restrict');
         });

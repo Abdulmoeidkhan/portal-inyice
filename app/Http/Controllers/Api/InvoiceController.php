@@ -25,12 +25,9 @@ class InvoiceController extends Controller
             'order_id' => 'required|exists:orders,id',
         ]);
 
-        $order = Order::findOrFail($validated['order_id']);
-
-        // Check tenant authorization
-        if ($order->tenant_id !== auth()->user()->tenant_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        $order = Order::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->findOrFail($validated['order_id']);
 
         $invoice = $this->invoiceService->createFromOrder($order);
 
@@ -48,7 +45,7 @@ class InvoiceController extends Controller
         $perPage = $request->query('per_page', 50);
         $status = $request->query('status');
         $customerId = $request->query('customer_id');
-        $companyId = $request->query('company_id', auth()->user()->company_id);
+        $companyId = auth()->user()->company_id;
         $search = trim((string) $request->query('search', ''));
 
         $query = Invoice::where('tenant_id', auth()->user()->tenant_id)
@@ -87,6 +84,7 @@ class InvoiceController extends Controller
     public function show(string $uid): JsonResponse
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
             ->with(['lines', 'customer', 'order', 'company', 'settlements'])
             ->firstOrFail();
@@ -96,7 +94,10 @@ class InvoiceController extends Controller
 
     public function share(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
         if (!$invoice->share_token) $invoice->update(['share_token' => Str::random(64)]);
         return response()->json([
             'share_url' => url('/shared/invoices/' . $invoice->share_token),
@@ -106,7 +107,10 @@ class InvoiceController extends Controller
 
     public function revokeShare(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
         $invoice->update(['share_token' => null]);
         return response()->json(['success' => true]);
     }
@@ -130,6 +134,7 @@ class InvoiceController extends Controller
     public function markAsSent(string $uid): JsonResponse
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
             ->firstOrFail();
 
@@ -147,6 +152,7 @@ class InvoiceController extends Controller
     public function void(string $uid): JsonResponse
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
             ->firstOrFail();
 
@@ -171,6 +177,7 @@ class InvoiceController extends Controller
     public function agingStatus(string $uid): JsonResponse
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
             ->firstOrFail();
 

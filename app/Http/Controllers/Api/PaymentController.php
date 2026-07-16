@@ -33,6 +33,7 @@ class PaymentController extends Controller
     public function vendorPayments(Request $request): JsonResponse
     {
         $query = Payment::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->with(['vendor:id,name', 'allocations.order:id,order_number']);
 
         if ($request->filled('vendor_id')) {
@@ -57,6 +58,7 @@ class PaymentController extends Controller
     public function customerReceipts(Request $request): JsonResponse
     {
         $query = Receipt::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->with(['customer:id,name', 'settlements.invoice:id,invoice_number']);
 
         if ($request->filled('customer_id')) {
@@ -68,14 +70,14 @@ class PaymentController extends Controller
 
     public function vendorReceipts(Request $request): JsonResponse
     {
-        $query = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->with('vendor:id,name');
+        $query = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('vendor_id')->with('vendor:id,name');
         if ($request->filled('vendor_id')) $query->where('vendor_id', (int) $request->query('vendor_id'));
         return response()->json($query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50));
     }
 
     public function customerPayments(Request $request): JsonResponse
     {
-        $query = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->with('customer:id,name');
+        $query = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('customer_id')->with('customer:id,name');
         if ($request->filled('customer_id')) $query->where('customer_id', (int) $request->query('customer_id'));
         return response()->json($query->orderByDesc('payment_date')->orderByDesc('id')->paginate(50));
     }
@@ -88,7 +90,10 @@ class PaymentController extends Controller
             'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
             'description' => 'nullable|string|max:1000',
         ]);
-        $customer = Customer::where('tenant_id', auth()->user()->tenant_id)->with('company')->findOrFail($validated['customer_id']);
+        $customer = Customer::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->with('company')
+            ->findOrFail($validated['customer_id']);
         $currency = $customer->currency_code ?: $customer->company->base_currency_code;
         if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $customer->company_id, $currency)) return response()->json(['error' => 'The selected account is unavailable for this customer payment.'], 422);
         $payment = $this->paymentService->recordCustomerPayment($customer, (float) $validated['amount'], $validated['payment_method'], $validated['account_id'] ?? null, $validated['reference_number'] ?? null, $validated['description'] ?? null, $validated['payment_date'] ?? null, auth()->id());
@@ -97,14 +102,14 @@ class PaymentController extends Controller
 
     public function deleteCustomerPayment(string $uid): JsonResponse
     {
-        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
         $this->paymentService->deleteCustomerPayment($payment);
         return response()->json(['success' => true]);
     }
 
     public function updateCustomerPayment(Request $request, string $uid): JsonResponse
     {
-        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('customer_id')->where('uid', $uid)->firstOrFail();
         $validated = $request->validate($this->standaloneTransactionRules());
         if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $payment->company_id, $payment->currency_code)) return response()->json(['error' => 'The selected account is unavailable.'], 422);
         try { $payment = $this->paymentService->updateCustomerPayment($payment, $validated); }
@@ -120,7 +125,10 @@ class PaymentController extends Controller
             'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
             'description' => 'nullable|string|max:1000',
         ]);
-        $vendor = Vendor::where('tenant_id', auth()->user()->tenant_id)->with('company')->findOrFail($validated['vendor_id']);
+        $vendor = Vendor::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->with('company')
+            ->findOrFail($validated['vendor_id']);
         $currency = $vendor->currency_code ?: $vendor->company->base_currency_code;
         if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $vendor->company_id, $currency)) return response()->json(['error' => 'The selected account is unavailable for this vendor receipt.'], 422);
         $receipt = $this->paymentService->recordVendorReceipt($vendor, (float) $validated['amount'], $validated['payment_method'], $validated['account_id'] ?? null, $validated['reference_number'] ?? null, $validated['description'] ?? null, $validated['receipt_date'] ?? null, auth()->id());
@@ -129,14 +137,14 @@ class PaymentController extends Controller
 
     public function deleteVendorReceipt(string $uid): JsonResponse
     {
-        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
         $this->paymentService->deleteVendorReceipt($receipt);
         return response()->json(['success' => true]);
     }
 
     public function updateVendorReceipt(Request $request, string $uid): JsonResponse
     {
-        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('vendor_id')->where('uid', $uid)->firstOrFail();
         $validated = $request->validate($this->standaloneTransactionRules());
         if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $receipt->company_id, $receipt->currency_code)) return response()->json(['error' => 'The selected account is unavailable.'], 422);
         $receipt = $this->paymentService->updateVendorReceipt($receipt, $validated);
@@ -145,7 +153,7 @@ class PaymentController extends Controller
 
     public function showCustomerReceipt(string $uid): JsonResponse
     {
-        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)
             ->with(['customer:id,name,currency_code', 'settlements.invoice:id,uid,invoice_number,outstanding_amount,total_amount'])
             ->firstOrFail();
         return response()->json($receipt);
@@ -153,7 +161,7 @@ class PaymentController extends Controller
 
     public function updateCustomerReceipt(Request $request, string $uid): JsonResponse
     {
-        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)->firstOrFail();
         $validated = $request->validate([
             'date' => 'required|date', 'payment_method' => 'required|in:cash,bank_transfer,check,card',
             'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
@@ -162,6 +170,7 @@ class PaymentController extends Controller
             'allocations.*.amount' => 'required|numeric|min:0.01',
         ]);
         $invoices = Invoice::where('tenant_id', $receipt->tenant_id)
+            ->where('company_id', $receipt->company_id)
             ->where('customer_id', $receipt->customer_id)
             ->whereIn('id', collect($validated['allocations'])->pluck('invoice_id'))->get();
         if ($invoices->count() !== count($validated['allocations'])) {
@@ -180,7 +189,7 @@ class PaymentController extends Controller
 
     public function deleteCustomerReceipt(string $uid): JsonResponse
     {
-        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)->firstOrFail();
         try {
             $this->paymentService->deleteReceipt($receipt);
         } catch (\InvalidArgumentException $exception) {
@@ -191,14 +200,14 @@ class PaymentController extends Controller
 
     public function showVendorPayment(string $uid): JsonResponse
     {
-        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)
             ->with(['vendor:id,name,currency_code', 'allocations.order:id,order_number,booking_reference'])->firstOrFail();
         return response()->json($payment);
     }
 
     public function updateVendorPayment(Request $request, string $uid): JsonResponse
     {
-        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->with('vendor.company')->firstOrFail();
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)->with('vendor.company')->firstOrFail();
         $validated = $request->validate([
             'date' => 'required|date', 'payment_method' => 'required|in:cash,bank_transfer,check,card',
             'account_id' => 'nullable|integer', 'reference_number' => 'nullable|string|max:100',
@@ -206,14 +215,16 @@ class PaymentController extends Controller
             'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
             'allocations.*.amount' => 'required|numeric|min:0.01',
         ]);
-        $orders = Order::where('tenant_id', $payment->tenant_id)->whereIn('id', collect($validated['allocations'])->pluck('order_id'))->get();
+        $orders = Order::where('tenant_id', $payment->tenant_id)->where('company_id', $payment->company_id)->whereIn('id', collect($validated['allocations'])->pluck('order_id'))->get();
         if ($orders->count() !== count($validated['allocations'])) return response()->json(['error' => 'One or more orders are unavailable.'], 422);
         foreach ($validated['allocations'] as $allocation) {
             $order = $orders->firstWhere('id', (int) $allocation['order_id']);
             $payable = $this->statementService->vendorPayableAmount($order, $payment->vendor_id);
             $allocatedElsewhere = (float) VendorPaymentAllocation::where('order_id', $order->id)
                 ->where('payment_id', '!=', $payment->id)
-                ->whereHas('payment', fn ($query) => $query->where('vendor_id', $payment->vendor_id))
+                ->whereHas('payment', fn ($query) => $query
+                    ->where('company_id', $payment->company_id)
+                    ->where('vendor_id', $payment->vendor_id))
                 ->sum('amount');
             if ((float) $allocation['amount'] > max(0, $payable - $allocatedElsewhere)) {
                 return response()->json(['error' => 'An allocation exceeds the selected order balance.'], 422);
@@ -230,7 +241,7 @@ class PaymentController extends Controller
 
     public function deleteVendorPayment(string $uid): JsonResponse
     {
-        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('uid', $uid)->firstOrFail();
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)->firstOrFail();
         $this->paymentService->deleteVendorPayment($payment);
         return response()->json(['success' => true]);
     }
@@ -255,7 +266,9 @@ class PaymentController extends Controller
                 $payable = $this->statementService->vendorPayableAmount($order, $vendor->id);
                 $allocated = (float) VendorPaymentAllocation::where('tenant_id', $order->tenant_id)
                     ->where('order_id', $order->id)
-                    ->whereHas('payment', fn ($query) => $query->where('vendor_id', $vendor->id))
+                    ->whereHas('payment', fn ($query) => $query
+                        ->where('company_id', $order->company_id)
+                        ->where('vendor_id', $vendor->id))
                     ->sum('amount');
 
                 return [
@@ -275,9 +288,11 @@ class PaymentController extends Controller
             ->values();
 
         // Payments created before allocation support are treated as oldest-first.
-        $totalPayments = (float) Payment::where('tenant_id', $tenantId)->where('vendor_id', $vendor->id)->sum('amount');
+        $totalPayments = (float) Payment::where('tenant_id', $tenantId)->where('company_id', $companyId)->where('vendor_id', $vendor->id)->sum('amount');
         $totalAllocated = (float) VendorPaymentAllocation::where('tenant_id', $tenantId)
-            ->whereHas('payment', fn ($query) => $query->where('vendor_id', $vendor->id))
+            ->whereHas('payment', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('vendor_id', $vendor->id))
             ->sum('amount');
         $legacyBalance = max(0, $totalPayments - $totalAllocated);
         $orders = $orders->map(function (array $order) use (&$legacyBalance): array {
@@ -315,6 +330,7 @@ class PaymentController extends Controller
         ]);
 
         $vendor = Vendor::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->with('company')
             ->findOrFail((int) $validated['vendor_id']);
         $expectedAccountType = $validated['payment_method'] === 'cash' ? 'cash' : 'bank';
@@ -391,6 +407,7 @@ class PaymentController extends Controller
         ]);
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
@@ -452,6 +469,7 @@ class PaymentController extends Controller
             ? $requestedAllocations->pluck('invoice_uid')->all()
             : $validated['invoice_uids'];
         $invoices = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->whereIn('uid', $invoiceUids)
             ->whereNotIn('status', ['paid', 'void'])
             ->where('outstanding_amount', '>', 0)
@@ -534,6 +552,7 @@ class PaymentController extends Controller
         ]);
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
@@ -572,6 +591,7 @@ class PaymentController extends Controller
         ]);
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
@@ -605,6 +625,7 @@ class PaymentController extends Controller
         ]);
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
@@ -632,6 +653,7 @@ class PaymentController extends Controller
     public function settlements(string $invoiceUid): JsonResponse
     {
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
             ->where('uid', $invoiceUid)
             ->firstOrFail();
 
