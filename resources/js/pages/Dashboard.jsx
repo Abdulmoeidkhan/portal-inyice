@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Col, Empty, Layout, List, Row, Skeleton, Space, Statistic, Tag, Typography, theme } from 'antd';
+import { Badge, Button, Card, Col, Empty, Layout, Row, Skeleton, Space, Statistic, Tag, Typography, theme } from 'antd';
 import {
   ArrowRightOutlined,
   BellOutlined,
@@ -44,6 +44,20 @@ const eventConfig = {
   },
 };
 
+const urgencyBuckets = [
+  { maxDays: 2, color: 'red', className: 'urgency-red' },
+  { maxDays: 7, color: 'gold', className: 'urgency-yellow' },
+  { maxDays: 12, color: 'green', className: 'urgency-green' },
+  { maxDays: Infinity, color: 'blue', className: 'urgency-blue' },
+];
+
+function getEventUrgency(event) {
+  const daysUntil = Number(event?.days_until);
+  const bucket = urgencyBuckets.find((item) => daysUntil <= item.maxDays);
+
+  return bucket || urgencyBuckets[urgencyBuckets.length - 1];
+}
+
 function eventDateLabel(event) {
   const date = event.time ? `${event.date} ${event.time}` : event.date;
 
@@ -64,33 +78,32 @@ function EventListCard({ type, events, loading, onOpen }) {
       ) : events.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={config.empty} />
       ) : (
-        <List
-          className="dashboard-event-list"
-          dataSource={events.slice(0, 7)}
-          rowKey="key"
-          renderItem={(event) => (
-            <List.Item className="dashboard-event-item" onClick={() => onOpen(event)}>
-              <List.Item.Meta
-                title={
-                  <Space size={8} wrap>
+        <div className="dashboard-event-list">
+          {events.slice(0, 7).map((event) => {
+            const urgency = getEventUrgency(event);
+
+            return (
+              <button key={event.key} type="button" className={`dashboard-event-item ${urgency.className}`} onClick={() => onOpen(event)}>
+                <span className="dashboard-item-main">
+                  <span className="dashboard-item-title">
                     <span>{event.title}</span>
-                    <Tag color={config.color}>{event.relative_label}</Tag>
-                  </Space>
-                }
-                description={
-                  <Space direction="vertical" size={2}>
+                    <Tag color={urgency.color}>{event.relative_label}</Tag>
+                  </span>
+                  <span className="dashboard-item-description">
                     <Text type="secondary">{eventDateLabel(event)}</Text>
                     <Text type="secondary">
                       {[event.customer_name, event.order_number, event.booking_reference].filter(Boolean).join(' - ')}
                     </Text>
                     {event.description && <Text type="secondary">{event.description}</Text>}
-                  </Space>
-                }
-              />
-              <Button type="text" icon={<ArrowRightOutlined />} aria-label="Open voucher" />
-            </List.Item>
-          )}
-        />
+                  </span>
+                </span>
+                <span className="dashboard-row-arrow" aria-hidden="true">
+                  <ArrowRightOutlined />
+                </span>
+              </button>
+            );
+          })}
+        </div>
       )}
     </Card>
   );
@@ -215,26 +228,28 @@ export default function Dashboard() {
               {loading ? (
                 <Skeleton active paragraph={{ rows: 8 }} />
               ) : !report?.notifications?.length ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No urgent updates" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No upcoming updates" />
               ) : (
-                <List
-                  className="dashboard-notification-list"
-                  dataSource={report.notifications}
-                  rowKey="key"
-                  renderItem={(item) => (
-                    <List.Item className={`dashboard-notification-item severity-${item.severity}`} onClick={() => openVoucher(item)}>
-                      <List.Item.Meta
-                        title={<span>{item.message}</span>}
-                        description={
-                          <Space direction="vertical" size={2}>
+                <div className="dashboard-notification-list">
+                  {report.notifications.map((item) => {
+                    const urgency = getEventUrgency(item);
+
+                    return (
+                      <button key={item.key} type="button" className={`dashboard-notification-item ${urgency.className}`} onClick={() => openVoucher(item)}>
+                        <span className="dashboard-item-main">
+                          <span className="dashboard-item-title">
+                            <span>{item.message}</span>
+                            <Tag color={urgency.color}>{item.relative_label}</Tag>
+                          </span>
+                          <span className="dashboard-item-description">
                             <Text type="secondary">{eventDateLabel(item)}</Text>
                             <Text type="secondary">{[item.title, item.order_number].filter(Boolean).join(' - ')}</Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </Card>
           </Col>

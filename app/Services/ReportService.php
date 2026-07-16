@@ -454,13 +454,12 @@ class ReportService
 
         $byType = $events->groupBy('type');
         $notifications = $events
-            ->filter(fn (array $event) => $event['days_until'] <= 7)
             ->values()
             ->take(12)
             ->map(fn (array $event) => [
                 ...$event,
                 'message' => $this->dashboardNotificationMessage($event),
-                'severity' => $event['days_until'] <= 1 ? 'high' : ($event['days_until'] <= 3 ? 'medium' : 'normal'),
+                'severity' => $this->dashboardUrgency($event['days_until']),
             ])
             ->values();
 
@@ -695,6 +694,16 @@ class ReportService
             $daysUntil === 0 => 'Today',
             $daysUntil === 1 => 'Tomorrow',
             default => 'In ' . $daysUntil . ' days',
+        };
+    }
+
+    private function dashboardUrgency(int $daysUntil): string
+    {
+        return match (true) {
+            $daysUntil <= 2 => 'red',
+            $daysUntil <= 7 => 'yellow',
+            $daysUntil <= 12 => 'green',
+            default => 'blue',
         };
     }
 
