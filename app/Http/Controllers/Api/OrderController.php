@@ -344,7 +344,7 @@ class OrderController extends Controller
         $order = Order::where('tenant_id', $request->user()->tenant_id)
             ->where('company_id', $request->user()->company_id)
             ->where('uid', $uid)
-            ->with(['customer', 'vendor', 'items', 'gdsParsedRecord'])
+            ->with(['customer', 'vendor', 'items', 'gdsParsedRecord', 'company', 'invoices.lines'])
             ->firstOrFail();
 
         return response()->json($order);
@@ -380,7 +380,7 @@ class OrderController extends Controller
     public function shared(string $token): JsonResponse
     {
         $order = Order::where('share_token', $token)
-            ->with(['customer', 'items'])
+            ->with(['customer', 'items', 'company'])
             ->firstOrFail();
 
         $order->makeHidden([
@@ -396,6 +396,7 @@ class OrderController extends Controller
             'updated_at',
         ]);
         $order->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
+        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url']);
         $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
         return response()->json($order);
@@ -427,6 +428,7 @@ class OrderController extends Controller
             'currency_code' => 'required|string|size:3|exists:currencies,code',
             'total_amount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'confirm_invoice_revision' => 'nullable|boolean',
             'voucher' => 'nullable|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
             'voucher.issue_date' => 'nullable|date',
@@ -554,7 +556,24 @@ class OrderController extends Controller
         $customer = Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->findOrFail((int) $validated['customer_id']);
-        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId): void {
+        $activeInvoice = Invoice::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('order_id', $order->id)
+            ->where('status', '!=', 'void')
+            ->latest('id')
+            ->first();
+
+        if ($activeInvoice && !$request->boolean('confirm_invoice_revision')) {
+            return response()->json([
+                'error' => 'This order already has an invoice. Saving changes will cancel the current invoice and create a replacement invoice.',
+                'requires_invoice_revision' => true,
+                'invoice' => $activeInvoice->only(['uid', 'invoice_number', 'status', 'total_amount', 'outstanding_amount']),
+            ], 409);
+        }
+
+        $replacementInvoice = null;
+
+        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $activeInvoice, &$replacementInvoice): void {
             $voucher = $validated['voucher'] ?? null;
             $totalAmount = $validated['total_amount'] ?? $order->total_amount;
             $meta = $order->meta ?? [];
@@ -600,7 +619,7 @@ class OrderController extends Controller
                 'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
                 'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
                 'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? $order->booking_reference,
-                'status' => $validated['status'],
+                'status' => $activeInvoice ? 'invoice' : $validated['status'],
                 'currency_code' => strtoupper($validated['currency_code']),
                 'total_amount' => $totalAmount,
                 'notes' => $validated['notes'] ?? null,
@@ -610,14 +629,18 @@ class OrderController extends Controller
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
-            if ($validated['status'] === 'invoice') {
-                $this->invoiceService->createFromOrder($order->fresh());
+            if ($activeInvoice) {
+                $replacementInvoice = $this->invoiceService->reviseFromOrder($order->fresh(['items', 'company']), $activeInvoice);
+            } elseif ($validated['status'] === 'invoice') {
+                $replacementInvoice = $this->invoiceService->createFromOrder($order->fresh());
             }
         });
 
         return response()->json([
             'success' => true,
             'order' => $order->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']),
+            'invoice' => $replacementInvoice,
+            'invoice_revised' => (bool) ($activeInvoice && $replacementInvoice),
         ]);
     }
 

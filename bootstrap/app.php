@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\RequireSystemRole;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Http\Request;
 
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active.user' => EnsureUserIsActive::class,
             'role' => RequireRole::class,
+            'system-role' => RequireSystemRole::class,
             'security.headers' => SecurityHeaders::class,
         ]);
     })

@@ -552,6 +552,189 @@ body {
   border-left-color: #38bdf8;
 }
 
+.internal-portal {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--hero-grad);
+}
+
+.internal-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.internal-header-inner {
+  width: min(100%, 1480px);
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+.internal-brand {
+  min-width: 0;
+}
+
+.internal-brand-mark {
+  flex: 0 0 auto;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--app-primary), var(--app-primary-2));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--app-primary) 25%, transparent);
+}
+
+.internal-kicker {
+  display: block;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.internal-brand h3 {
+  margin: 1px 0 0 !important;
+  color: var(--app-text);
+  font-size: 20px !important;
+  line-height: 1.25 !important;
+}
+
+.internal-header-actions {
+  flex: 0 0 auto;
+}
+
+.internal-header-actions .ant-segmented {
+  flex: 0 0 auto;
+}
+
+.internal-body {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 24px 28px 34px;
+}
+
+.internal-hero {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(520px, 1.55fr);
+  gap: 22px;
+  align-items: stretch;
+  margin-bottom: 18px;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: var(--app-shadow);
+  background:
+    linear-gradient(color-mix(in srgb, var(--app-surface) 94%, transparent), color-mix(in srgb, var(--app-surface) 94%, transparent)) padding-box,
+    conic-gradient(from var(--beam-angle), var(--aurora-a), var(--aurora-b), var(--aurora-c), var(--aurora-a)) border-box;
+}
+
+.internal-hero h2 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.internal-hero p {
+  max-width: 640px;
+  margin: 8px 0 0;
+  color: var(--app-muted);
+}
+
+.internal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.internal-summary-card {
+  min-height: 104px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-primary) 5%, var(--app-surface));
+}
+
+.internal-summary-card .ant-typography {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.internal-summary-card strong {
+  color: var(--app-text);
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.internal-tabs > .ant-tabs-nav {
+  margin-bottom: 14px;
+  padding: 0 2px;
+}
+
+.internal-company-grid {
+  display: grid;
+  grid-template-columns: minmax(330px, 430px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.internal-company-list {
+  position: sticky;
+  top: 96px;
+}
+
+.internal-company-list .ant-table-row {
+  cursor: pointer;
+}
+
+.internal-company-list .ant-table-row-selected > td {
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface)) !important;
+}
+
+.internal-detail-stack {
+  width: 100%;
+  min-width: 0;
+}
+
+.internal-detail-stack > .ant-space-item {
+  min-width: 0;
+}
+
+.internal-limit-form {
+  margin-top: 16px;
+  gap: 10px 14px;
+}
+
+.internal-limit-form .ant-input-number {
+  width: 150px;
+}
+
+.internal-portal .ant-table-wrapper {
+  max-width: 100%;
+}
+
+.internal-portal .ant-table-content {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.internal-portal .ant-tabs-nav-wrap {
+  overflow-x: auto;
+}
+
+.internal-portal .ant-tabs-nav-list {
+  min-width: max-content;
+}
+
 @media (max-width: 760px) {
   .financial-entry-hero,
   .financial-entry-toolbar {
@@ -694,17 +877,40 @@ body {
 }
 
 .voucher-preview-header {
-  display: block;
-  align-items: start;
-  padding-bottom: 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 18px 16px;
   border-bottom: 2px solid color-mix(in srgb, var(--app-primary) 24%, #d9e5f2);
+  background: linear-gradient(180deg, #f2f7ff 0%, #eaf2fd 100%);
 }
 
 .voucher-preview-header h3 {
-  margin: 2px 0 4px;
+  margin: 0 0 7px;
   color: #102033;
-  font-size: 20px;
+  font-size: 30px;
   line-height: 1.2;
+  font-weight: 800;
+}
+
+.voucher-preview-header .ant-typography-secondary {
+  display: block;
+  white-space: pre-line;
+  color: #52657c;
+  font-size: 13px;
+  line-height: 1.38;
+}
+
+.voucher-preview-logo {
+  justify-self: end;
+  width: 86px;
+  height: 86px;
+  object-fit: contain;
+  padding: 8px;
+  border: 1px solid rgba(15, 27, 45, 0.14);
+  border-radius: 10px;
+  background: #ffffff;
 }
 
 .voucher-preview-kicker,
@@ -720,7 +926,7 @@ body {
 
 .voucher-reference-table {
   display: grid;
-  margin-top: 7px;
+  margin-top: 12px;
   border: 1px solid rgba(15, 27, 45, 0.12);
   border-radius: 6px;
   overflow: hidden;
@@ -728,18 +934,18 @@ body {
 }
 
 .voucher-reference-table-primary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .voucher-reference-table-secondary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .voucher-reference-cell {
   display: grid;
   gap: 2px;
   min-width: 0;
-  padding: 5px 7px;
+  padding: 8px 11px;
   border-right: 1px solid rgba(15, 27, 45, 0.1);
   background: #f4f7fb;
 }
@@ -750,7 +956,7 @@ body {
 
 .voucher-reference-cell .ant-typography {
   overflow-wrap: anywhere;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.2;
 }
 
@@ -776,13 +982,19 @@ body {
   flex-wrap: wrap;
   gap: 5px 12px;
   align-items: center;
-  margin: 8px 0 10px;
+  margin: 8px 0 0;
   color: #52657c;
   font-size: 12px;
 }
 
 .voucher-preview-section {
-  margin-top: 8px;
+  margin-top: 16px;
+}
+
+.voucher-preview-section > .voucher-preview-section-title {
+  margin-bottom: 8px;
+  color: #a46f15;
+  font-size: 14px;
 }
 
 .voucher-preview-section .ant-table-wrapper {
@@ -807,34 +1019,85 @@ body {
 }
 
 .voucher-preview-section .ant-table-cell {
-  padding: 5px 7px !important;
+  padding: 8px 10px !important;
   overflow-wrap: anywhere;
 }
 
 .voucher-preview-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(15, 27, 45, 0.1);
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 .voucher-preview-footer p {
-  margin: 4px 0 0;
-  font-size: 12px;
+  margin: 6px 0 0;
+  font-size: 13px;
   line-height: 1.35;
 }
 
-.voucher-preview-total {
+.voucher-preview-footer-notes {
   display: grid;
-  gap: 2px;
-  align-content: center;
+  gap: 10px;
+}
+
+.voucher-preview-footer-notes > div,
+.voucher-preview-footer-logo {
+  padding: 14px;
+  border: 1px solid rgba(15, 27, 45, 0.12);
+  border-radius: 10px;
+  background: #eaf4ff;
+}
+
+.voucher-preview-footer-logo {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 10px;
+  text-align: center;
+  background: #ffffff;
+}
+
+.voucher-preview-footer-logo img {
+  width: 136px;
+  height: 136px;
+  object-fit: contain;
+}
+
+.invoice-company-logo {
+  width: 94px;
+  height: 94px;
+  object-fit: contain;
   padding: 8px;
-  text-align: right;
-  background: #f4f7fb;
-  border: 1px solid rgba(15, 27, 45, 0.08);
-  border-radius: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.company-profile-assets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.company-profile-assets > div {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-height: 142px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-primary) 4%, var(--app-surface));
+}
+
+.company-profile-assets img {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .auth-wrap {
@@ -957,6 +1220,27 @@ body {
   .app-content {
     padding: 14px;
   }
+
+  .internal-header-inner {
+    padding-inline: 18px;
+  }
+
+  .internal-body {
+    padding: 18px;
+  }
+
+  .internal-hero,
+  .internal-company-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .internal-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .internal-company-list {
+    position: static;
+  }
 }
 
 @media (max-width: 991px) {
@@ -975,6 +1259,56 @@ body {
 }
 
 @media (max-width: 767px) {
+  .internal-header-inner {
+    min-height: auto;
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .internal-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .internal-body {
+    padding: 12px;
+  }
+
+  .internal-hero {
+    gap: 16px;
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .internal-summary-grid {
+    gap: 10px;
+  }
+
+  .internal-summary-card {
+    min-height: 86px;
+    padding: 12px;
+  }
+
+  .internal-summary-card strong {
+    font-size: 23px;
+  }
+
+  .internal-company-grid {
+    gap: 12px;
+  }
+
+  .internal-limit-form {
+    display: grid;
+  }
+
+  .internal-limit-form .ant-form-item,
+  .internal-limit-form .ant-input-number,
+  .internal-limit-form .ant-btn {
+    width: 100%;
+  }
+
   .app-header {
     height: 60px;
     line-height: 60px;
@@ -1117,6 +1451,12 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .voucher-preview-logo {
+    justify-self: start;
+    width: 76px;
+    height: 76px;
+  }
+
   .voucher-reference-table-primary,
   .voucher-reference-table-secondary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1126,8 +1466,12 @@ body {
     border-right: 0;
   }
 
-  .voucher-preview-total {
-    text-align: left;
+  .voucher-preview-footer-logo {
+    justify-items: start;
+  }
+
+  .company-profile-assets {
+    grid-template-columns: 1fr;
   }
 
   .ant-drawer .ant-drawer-content-wrapper {
@@ -1158,6 +1502,22 @@ body {
 }
 
 @media (max-width: 479px) {
+  .internal-brand h3 {
+    font-size: 18px !important;
+  }
+
+  .internal-header-actions .ant-space-item:last-child {
+    margin-left: auto;
+  }
+
+  .internal-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .internal-hero h2 {
+    font-size: 23px !important;
+  }
+
   .header-actions .ant-segmented-item-label {
     padding-inline: 5px;
     font-size: 11px;
@@ -1243,11 +1603,25 @@ body {
   }
 
   .voucher-preview-header {
-    padding-bottom: 7px !important;
+    grid-template-columns: minmax(0, 1fr) 70px !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
   }
 
   .voucher-preview-header h3 {
-    font-size: 17px !important;
+    font-size: 18px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .voucher-preview-header .ant-typography-secondary {
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+  }
+
+  .voucher-preview-logo {
+    width: 58px !important;
+    height: 58px !important;
+    padding: 4px !important;
   }
 
   .voucher-reference-table {
@@ -1293,12 +1667,21 @@ body {
 
   .voucher-preview-footer {
     margin-top: 7px !important;
-    padding-top: 7px !important;
-    grid-template-columns: minmax(0, 1fr) 170px !important;
+    grid-template-columns: minmax(0, 1fr) 112px !important;
+    gap: 8px !important;
   }
 
-  .voucher-preview-footer p,
-  .voucher-preview-total .ant-typography {
+  .voucher-preview-footer-notes > div,
+  .voucher-preview-footer-logo {
+    padding: 7px !important;
+  }
+
+  .voucher-preview-footer p {
     font-size: 10px !important;
+  }
+
+  .voucher-preview-footer-logo img {
+    width: 84px !important;
+    height: 84px !important;
   }
 }

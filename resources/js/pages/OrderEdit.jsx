@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Form, Input, InputNumber, Select, Space, Spin, Typography } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
@@ -24,6 +24,18 @@ import {
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
+
+const invoiceStatusColors = {
+  draft: 'default',
+  issued: 'blue',
+  sent: 'cyan',
+  partial_paid: 'gold',
+  paid: 'success',
+  overdue: 'red',
+  void: 'default',
+};
+
+const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
 
 const rowFactories = {
   flights: blankFlight,
@@ -155,6 +167,58 @@ export default function OrderEdit() {
     value: customer.id,
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
   }));
+
+  const invoiceHistoryColumns = [
+    {
+      title: 'Invoice',
+      dataIndex: 'invoice_number',
+      render: (value, invoice) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong>{value}</Typography.Text>
+          <Typography.Text type="secondary">{String(invoice.created_at || '').slice(0, 16).replace('T', ' ')}</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Date',
+      dataIndex: 'invoice_date',
+      width: 120,
+      render: (value) => String(value || '').slice(0, 10),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      width: 130,
+      render: (value) => <Tag color={invoiceStatusColors[value] || 'default'}>{String(value || '').replaceAll('_', ' ').toUpperCase()}</Tag>,
+    },
+    {
+      title: 'Total',
+      width: 140,
+      align: 'right',
+      render: (_, invoice) => money(invoice.total_amount, invoice.currency_code),
+    },
+    {
+      title: 'Outstanding',
+      width: 140,
+      align: 'right',
+      render: (_, invoice) => money(invoice.outstanding_amount, invoice.currency_code),
+    },
+    {
+      title: 'Notes',
+      dataIndex: 'notes',
+      ellipsis: true,
+      render: (value) => value || '-',
+    },
+    {
+      title: '',
+      width: 88,
+      render: (_, invoice) => (
+        <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
+          Open
+        </Button>
+      ),
+    },
+  ];
 
   const loadCustomers = async (search = '') => {
     try {
@@ -298,7 +362,7 @@ export default function OrderEdit() {
     }));
   };
 
-  const handleSave = async () => {
+  const submitOrder = async (confirmInvoiceRevision = false) => {
     setSaving(true);
     try {
       const values = await form.validateFields();
@@ -310,12 +374,38 @@ export default function OrderEdit() {
           ...values,
           booking_reference: voucherPayload.booking_reference || null,
           voucher: voucherPayload,
+          confirm_invoice_revision: confirmInvoiceRevision,
         }),
       });
       const data = await response.json();
 
+      if (response.status === 409 && data?.requires_invoice_revision) {
+        Modal.confirm({
+          title: 'Create replacement invoice?',
+          icon: <ExclamationCircleOutlined />,
+          content: (
+            <Space direction="vertical" size={8}>
+              <span>
+                Invoice {data.invoice?.invoice_number || ''} will be canceled, its amount will become 0,
+                and a new invoice will be generated from these order changes.
+              </span>
+              <span>This keeps invoice history clean instead of editing an issued invoice directly.</span>
+            </Space>
+          ),
+          okText: 'Create Replacement',
+          cancelText: 'Keep Current Invoice',
+          okButtonProps: { danger: true },
+          onOk: () => submitOrder(true),
+        });
+        return;
+      }
+
       if (!response.ok) throw new Error(data?.message || data?.error || 'Failed to update order');
-      message.success('Order updated');
+      if (data.invoice_revised && data.invoice?.invoice_number) {
+        message.success(`Replacement invoice ${data.invoice.invoice_number} created`);
+      } else {
+        message.success('Order updated');
+      }
       navigate('/orders');
     } catch (error) {
       if (!error?.errorFields) {
@@ -325,6 +415,8 @@ export default function OrderEdit() {
       setSaving(false);
     }
   };
+
+  const handleSave = () => submitOrder(false);
 
   return (
     <div className="page-shell page-fade-up">
@@ -344,6 +436,15 @@ export default function OrderEdit() {
 
       <Spin spinning={loading}>
         <Card className="border-beam-aurora" style={{ marginBottom: 16 }} title="Order Details">
+          {order?.invoice && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Invoice ${order.invoice.invoice_number} already exists`}
+              description="Saving changes will ask for confirmation, then cancel the current invoice and create a new replacement invoice."
+            />
+          )}
           <Form form={form} layout="vertical">
             <Space className="edit-order-fields" wrap align="start" style={{ width: '100%' }}>
               <Form.Item name="customer_id" label="Customer" rules={[{ required: true, message: 'Customer required' }]} style={{ minWidth: 300 }}>
@@ -387,6 +488,22 @@ export default function OrderEdit() {
               <TextArea rows={3} />
             </Form.Item>
           </Form>
+        </Card>
+
+        <Card
+          className="border-beam-aurora"
+          style={{ marginBottom: 16 }}
+          title="Invoice History"
+        >
+          <Table
+            rowKey="uid"
+            size="small"
+            columns={invoiceHistoryColumns}
+            dataSource={order?.invoices || []}
+            pagination={false}
+            scroll={{ x: 900 }}
+            locale={{ emptyText: 'No invoices have been generated for this order yet' }}
+          />
         </Card>
 
         <VoucherHeaderCard voucher={voucher} setVoucherField={setVoucherField} />

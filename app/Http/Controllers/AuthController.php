@@ -48,6 +48,8 @@ class AuthController extends Controller
                 'tenant_id' => $user->tenant_id,
                 'company_id' => $user->company_id,
                 'role' => $user->role?->code,
+                'role_name' => $user->role?->name,
+                'is_system_user' => (bool) $user->role?->is_system,
                 'tenant_name' => $user->tenant?->name,
                 'company_name' => $user->company?->display_name,
             ],

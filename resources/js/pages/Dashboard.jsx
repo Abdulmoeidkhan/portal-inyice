@@ -119,7 +119,7 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/v1/reports/dashboard-upcoming?days=30', {
+      const response = await fetch('/api/v1/reports/dashboard-upcoming?days=7', {
         headers: authHeaders(),
       });
       const data = await response.json();

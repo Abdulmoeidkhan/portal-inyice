@@ -101,4 +101,9 @@ class User extends Authenticatable
     {
         return $this->role?->is_system === true && $this->hasRole('super-admin');
     }
+
+    public function isSystemUser(): bool
+    {
+        return $this->role?->is_system === true;
+    }
 }

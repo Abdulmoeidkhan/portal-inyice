@@ -1,18 +1,19 @@
 import React from 'react';
-import { Empty, Table, Tag, Typography } from 'antd';
+import { Empty, Table, Typography } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
 import { getAirportCity } from './airportLookup';
 
 const { Text, Title } = Typography;
 
 const firstFilled = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '') || '';
+const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
 
 const cleanRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => keys.some((key) => firstFilled(row?.[key]))) : []);
 
 const formatDate = (value) => {
   const raw = String(value || '').trim();
   if (!raw) {
-    return '-';
+    return '';
   }
 
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -30,13 +31,13 @@ const formatDate = (value) => {
 
 const formatAirport = (value) => {
   const code = String(value || '').trim().toUpperCase();
-  return code ? (getAirportCity(code) || code) : '-';
+  return code ? (getAirportCity(code) || code) : '';
 };
 
 const formatPlace = (value) => {
   const raw = String(value || '').trim();
   if (!raw) {
-    return '-';
+    return '';
   }
 
   const code = raw.toUpperCase();
@@ -92,17 +93,35 @@ const Section = ({ title, children }) => (
   </section>
 );
 
-const PreviewTable = ({ columns, data }) => (
-  <Table
-    size="small"
-    rowKey={(row, index) => row.key || index}
-    columns={columns}
-    dataSource={data}
-    pagination={false}
-    scroll={{ x: 'max-content' }}
-    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" /> }}
-  />
-);
+const compactColumns = (columns, data) => columns.filter((column) => {
+  if (column.alwaysVisible) {
+    return true;
+  }
+
+  const key = column.dataIndex;
+
+  return data.some((row) => hasValue(row?.[key]));
+});
+
+const PreviewTable = ({ columns, data }) => {
+  const visibleColumns = compactColumns(columns, data);
+
+  if (!data.length || !visibleColumns.length) {
+    return null;
+  }
+
+  return (
+    <Table
+      size="small"
+      rowKey={(row, index) => row.key || index}
+      columns={visibleColumns}
+      dataSource={data}
+      pagination={false}
+      scroll={{ x: 'max-content' }}
+      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" /> }}
+    />
+  );
+};
 
 export default function VoucherPreview({ order }) {
   if (!order) {
@@ -111,6 +130,7 @@ export default function VoucherPreview({ order }) {
 
   const voucher = voucherFromOrder(order);
   const contact = voucher.contact || {};
+  const company = order.company || {};
   const summaryRows = buildVoucherSummaryRows(voucher);
   const grandTotal = summaryRows.reduce((sum, row) => sum + row.total, 0);
 
@@ -134,90 +154,103 @@ export default function VoucherPreview({ order }) {
   const primaryReferenceItems = [
     ['Voucher', voucher.voucher_no],
     ['Issue Date', formatDate(voucher.issue_date)],
-    ['Lead Passenger', leadPassenger],
-  ];
+    ['Travel', voucher.package_type],
+    ['Pax', passengerRows.length || voucher.pricing?.length || ''],
+  ].filter(([, value]) => hasValue(value));
   const secondaryReferenceItems = [
+    ['Lead Passenger', leadPassenger],
     ['Booking Ref', bookingRef],
     ['Airline Ref', airlineRef],
     ['HCN', hcnRef],
     ['TN', tnRef],
-  ];
+  ].filter(([, value]) => hasValue(value));
+  const companyName = firstFilled(company.display_name, company.legal_name, contact.company_name, 'inYice Travel Voucher');
+  const companyAddress = firstFilled(company.address, contact.address);
+  const companyEmail = firstFilled(company.email, contact.email);
+  const companyPhone = firstFilled(company.phone, contact.phone);
+  const contactLine = [companyAddress, [companyEmail, companyPhone].filter(Boolean).join(' | ')].filter(Boolean).join('\n');
+  const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(order.notes) || hasValue(company.footer_logo_url);
 
   return (
     <div className="voucher-preview">
       <header className="voucher-preview-header">
         <div>
-          <Text className="voucher-preview-kicker">Travel Voucher</Text>
-          <Title level={3}>{contact.company_name || 'inYice Travel Voucher'}</Title>
-          <Text type="secondary">{contact.address || 'Travel solutions for Umrah, Hajj, Ziarat and tours'}</Text>
+          <Title level={3}>{companyName}</Title>
+          {contactLine && <Text type="secondary">{contactLine}</Text>}
         </div>
+        {company.logo_url && (
+          <img className="voucher-preview-logo" src={company.logo_url} alt={`${companyName} logo`} />
+        )}
       </header>
 
-      <div className="voucher-reference-table voucher-reference-table-primary">
-        {primaryReferenceItems.map(([label, value]) => (
-          <div className="voucher-reference-cell" key={label}>
-            <Text type="secondary">{label}</Text>
-            <Text strong>{value || '-'}</Text>
-          </div>
-        ))}
-      </div>
+      {primaryReferenceItems.length > 0 && (
+        <div className="voucher-reference-table voucher-reference-table-primary">
+          {primaryReferenceItems.map(([label, value]) => (
+            <div className="voucher-reference-cell" key={label}>
+              <Text type="secondary">{label}</Text>
+              <Text strong>{value}</Text>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="voucher-reference-table voucher-reference-table-secondary">
-        {secondaryReferenceItems.map(([label, value]) => (
-          <div className="voucher-reference-cell" key={label}>
-            <Text type="secondary">{label}</Text>
-            <Text strong>{value || '-'}</Text>
-          </div>
-        ))}
-      </div>
+      {secondaryReferenceItems.length > 0 && (
+        <div className="voucher-reference-table voucher-reference-table-secondary">
+          {secondaryReferenceItems.map(([label, value]) => (
+            <div className="voucher-reference-cell" key={label}>
+              <Text type="secondary">{label}</Text>
+              <Text strong>{value}</Text>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="voucher-preview-contact">
-        <span>{contact.executive_name ? `Executive: ${contact.executive_name}` : 'Executive: N/A'}</span>
-        <span>{contact.email || '-'}</span>
-        <span>{contact.phone || '-'}</span>
-        {voucher.package_type && <Tag color="blue">{String(voucher.package_type).toUpperCase()}</Tag>}
-      </div>
+      {contact.executive_name && (
+        <div className="voucher-preview-contact">
+          <span>{`Executive: ${contact.executive_name}`}</span>
+        </div>
+      )}
 
-      <Section title="Passenger List">
+      {passengerRows.length > 0 && <Section title="Passenger List">
         <PreviewTable
           data={passengerRows}
           columns={[
-            { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '-' },
-            { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '-' },
-            { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '-' },
-            { title: 'Visa Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '-' },
-            { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '-' },
-            { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '-' },
+            { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '', alwaysVisible: true },
+            { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '' },
+            { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '' },
+            { title: 'Visa Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
+            { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
+            { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
           ]}
         />
-      </Section>
+      </Section>}
 
-      <Section title="Flight Details">
+      {flightRows.length > 0 && <Section title="Flight Details">
         <PreviewTable
           data={flightRows}
           columns={[
-            { title: 'Flight', dataIndex: 'flight_no', width: 95, render: (value) => value || '-' },
+            { title: 'Flight', dataIndex: 'flight_no', width: 95, render: (value) => value || '', alwaysVisible: true },
             { title: 'Date', dataIndex: 'date', width: 95, render: formatDate },
             { title: 'From', dataIndex: 'from', width: 115, render: formatAirport },
             { title: 'To', dataIndex: 'to', width: 115, render: formatAirport },
-            { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '-' },
-            { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '-' },
-            { title: 'Baggage', dataIndex: 'baggage', width: 80, render: (value) => value || '-' },
+            { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '' },
+            { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '' },
+            { title: 'Baggage', dataIndex: 'baggage', width: 80, render: (value) => value || '' },
           ]}
         />
-      </Section>
+      </Section>}
 
       {visaRows.length > 0 && (
         <Section title="Visa Details">
           <PreviewTable
             data={visaRows}
             columns={[
-              { title: 'Passenger', dataIndex: 'passenger_name', width: 145, render: (value) => value || '-' },
-              { title: 'Type', dataIndex: 'visa_type', width: 85, render: (value) => value || '-' },
-              { title: 'Validity', dataIndex: 'validity', width: 90, render: (value) => value || '-' },
-              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '-' },
-              { title: 'Publisher', dataIndex: 'visa_publisher', width: 125, render: (value) => value || '-' },
-              { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '-' },
+              { title: 'Passenger', dataIndex: 'passenger_name', width: 145, render: (value) => value || '', alwaysVisible: true },
+              { title: 'Type', dataIndex: 'visa_type', width: 85, render: (value) => value || '' },
+              { title: 'Validity', dataIndex: 'validity', width: 90, render: (value) => value || '' },
+              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
+              { title: 'Publisher', dataIndex: 'visa_publisher', width: 125, render: (value) => value || '' },
+              { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
             ]}
           />
         </Section>
@@ -229,12 +262,12 @@ export default function VoucherPreview({ order }) {
             data={hotelRows}
             columns={[
               { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
-              { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '-' },
-              { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '-' },
+              { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '', alwaysVisible: true },
+              { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
               { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
               { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
-              { title: 'Lead', dataIndex: 'lead_passenger', width: 125, render: (value) => value || '-' },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '-' },
+              { title: 'Lead', dataIndex: 'lead_passenger', width: 125, render: (value) => value || '' },
+              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
             ]}
           />
         </Section>
@@ -245,12 +278,12 @@ export default function VoucherPreview({ order }) {
           <PreviewTable
             data={transferRows}
             columns={[
-              { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '-' },
+              { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '', alwaysVisible: true },
               { title: 'From', dataIndex: 'from_city', width: 95, render: formatPlace },
               { title: 'To', dataIndex: 'to_city', width: 95, render: formatPlace },
-              { title: 'Vehicle', dataIndex: 'vehicle', width: 110, render: (value) => value || '-' },
-              { title: 'Contact', dataIndex: 'contact_person', width: 120, render: (value) => value || '-' },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '-' },
+              { title: 'Vehicle', dataIndex: 'vehicle', width: 110, render: (value) => value || '' },
+              { title: 'Contact', dataIndex: 'contact_person', width: 120, render: (value) => value || '' },
+              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
             ]}
           />
         </Section>
@@ -262,10 +295,10 @@ export default function VoucherPreview({ order }) {
             data={cityTourRows}
             columns={[
               { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
-              { title: 'Title', dataIndex: 'title', width: 145, render: (value) => value || '-' },
-              { title: 'Attractions', dataIndex: 'attractions', width: 190, render: (value) => value || '-' },
+              { title: 'Title', dataIndex: 'title', width: 145, render: (value) => value || '', alwaysVisible: true },
+              { title: 'Attractions', dataIndex: 'attractions', width: 190, render: (value) => value || '' },
               { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '-' },
+              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
             ]}
           />
         </Section>
@@ -276,23 +309,36 @@ export default function VoucherPreview({ order }) {
           <PreviewTable
             data={serviceRows}
             columns={[
-              { title: 'Description', dataIndex: 'description', render: (value) => value || '-' },
+              { title: 'Description', dataIndex: 'description', render: (value) => value || '', alwaysVisible: true },
             ]}
           />
         </Section>
       )}
 
-      <section className="voucher-preview-footer">
-        <div>
-          <Text className="voucher-preview-section-title">Emergency Contact</Text>
-          <p>{voucher.emergency_contact || '-'}</p>
-          {order.notes && <p><Text strong>Order Notes:</Text> {order.notes}</p>}
-        </div>
-        <div className="voucher-preview-total">
-          <Text type="secondary">Voucher Total</Text>
-          <Text strong>{order.currency_code || ''} {money(grandTotal || order.total_amount)}</Text>
-        </div>
-      </section>
+      {footerHasContent && (
+        <section className="voucher-preview-footer">
+          <div className="voucher-preview-footer-notes">
+            {voucher.emergency_contact && (
+              <div>
+                <Text className="voucher-preview-section-title">Emergency Contact(s)</Text>
+                <p>{voucher.emergency_contact}</p>
+              </div>
+            )}
+            {order.notes && (
+              <div>
+                <Text className="voucher-preview-section-title">Notes</Text>
+                <p>{order.notes}</p>
+              </div>
+            )}
+          </div>
+          {company.footer_logo_url && (
+            <div className="voucher-preview-footer-logo">
+              <Text className="voucher-preview-section-title">QR</Text>
+              <img src={company.footer_logo_url} alt="Voucher footer logo or QR" />
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

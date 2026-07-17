@@ -1,0 +1,206 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Button, Card, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { PlusOutlined, ReloadOutlined, TeamOutlined } from '@ant-design/icons';
+import { message } from '../services/feedback';
+
+const { Title, Paragraph, Text } = Typography;
+
+const authHeaders = (json = false) => {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+
+  return {
+    Accept: 'application/json',
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+export default function CompanyUsers() {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [limits, setLimits] = useState({ current: 0, max: 4, remaining: 0 });
+
+  const roleOptions = useMemo(
+    () => roles.map((role) => ({ value: role.code, label: role.name })),
+    [roles],
+  );
+
+  const canCreate = limits.remaining > 0;
+
+  const fetchCompanyUsers = async () => {
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/v1/company-users', {
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load company users');
+      }
+
+      setUsers(data.users || []);
+      setRoles(data.roles || []);
+      setLimits(data.limits || { current: 0, max: 4, remaining: 0 });
+    } catch (error) {
+      message.error(error.message || 'Unable to load company users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCompanyUsers();
+  }, []);
+
+  const handleCreate = async (values) => {
+    setSaving(true);
+
+    try {
+      const response = await fetch('/api/v1/company-users', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(values),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to create company user');
+      }
+
+      message.success(data.message || 'Company user created');
+      form.resetFields();
+      await fetchCompanyUsers();
+    } catch (error) {
+      message.error(error.message || 'Unable to create company user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const columns = [
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{name}</Text>
+          <Text type="secondary">{record.email}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Role',
+      dataIndex: 'role_name',
+      key: 'role',
+      render: (roleName, record) => <Tag color={record.role === 'owner' ? 'gold' : 'blue'}>{roleName || record.role}</Tag>,
+    },
+    {
+      title: 'Status',
+      dataIndex: 'is_active',
+      key: 'status',
+      render: (isActive) => <Tag color={isActive ? 'success' : 'default'}>{isActive ? 'Active' : 'Inactive'}</Tag>,
+    },
+  ];
+
+  return (
+    <div className="page-shell page-fade-up">
+      <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
+        <Space align="start" style={{ justifyContent: 'space-between', width: '100%' }}>
+          <div>
+            <Title level={2} style={{ margin: 0 }}>Company Users</Title>
+            <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+              Create up to three extra users for this company and assign their access role.
+            </Paragraph>
+          </div>
+          <Tag color={canCreate ? 'processing' : 'default'}>
+            {limits.remaining} of {Math.max(limits.max - 1, 0)} seats left
+          </Tag>
+        </Space>
+      </div>
+
+      <Card
+        className="border-beam-aurora"
+        title={(
+          <Space>
+            <TeamOutlined />
+            Users
+          </Space>
+        )}
+        extra={<Button icon={<ReloadOutlined />} onClick={fetchCompanyUsers} loading={loading} />}
+        style={{ marginBottom: 16 }}
+      >
+        <Table
+          rowKey="uid"
+          columns={columns}
+          dataSource={users}
+          loading={loading}
+          pagination={false}
+          scroll={{ x: true }}
+        />
+      </Card>
+
+      <Card className="border-beam-aurora" title="Create User">
+        <Form
+          form={form}
+          layout="vertical"
+          name="company-user-create"
+          initialValues={{ role: 'sales' }}
+          onFinish={handleCreate}
+          disabled={!canCreate}
+        >
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter the user name' }]}>
+            <Input placeholder="Full name" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Please enter the user email' },
+              { type: 'email', message: 'Please enter a valid email' },
+            ]}
+          >
+            <Input placeholder="user@example.com" />
+          </Form.Item>
+          <Form.Item name="role" label="Role" rules={[{ required: true, message: 'Please select a role' }]}>
+            <Select options={roleOptions} placeholder="Select role" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="Password"
+            rules={[{ required: true, min: 8, message: 'Use at least 8 characters' }]}
+          >
+            <Input.Password placeholder="Temporary password" />
+          </Form.Item>
+          <Form.Item
+            name="password_confirmation"
+            label="Confirm Password"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm the password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Repeat temporary password" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving} disabled={!canCreate}>
+            Create User
+          </Button>
+        </Form>
+      </Card>
+    </div>
+  );
+}

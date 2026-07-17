@@ -124,7 +124,7 @@ class InvoiceController extends Controller
         $invoice->lines->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
         $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
-        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address']);
+        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url']);
         return response()->json($invoice);
     }
 

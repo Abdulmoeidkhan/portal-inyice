@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\StatementController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\MasterDataController;
+use App\Http\Controllers\Api\CompanyUserController;
+use App\Http\Controllers\Api\CompanyProfileController;
+use App\Http\Controllers\Api\InternalPortalController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +31,27 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     // Auth user info
     Route::get('/user', function (Request $request) {
         return $request->user();
+    });
+
+    Route::prefix('company-users')->controller(CompanyUserController::class)->group(function () {
+        Route::get('/', 'index')->middleware('role:owner,admin')->name('companyUsers.list');
+        Route::post('/', 'store')->middleware(['role:owner,admin', 'throttle:sensitive-write'])->name('companyUsers.create');
+    });
+
+    Route::get('/company-profile', [CompanyProfileController::class, 'show'])->name('companyProfile.show');
+    Route::post('/company-profile', [CompanyProfileController::class, 'update'])
+        ->middleware(['role:owner', 'throttle:sensitive-write'])
+        ->name('companyProfile.update');
+
+    Route::prefix('internal')->controller(InternalPortalController::class)->middleware('system-role:super-admin,inyice-admin,support-executive')->group(function () {
+        Route::get('/companies', 'companies')->name('internal.companies');
+        Route::get('/companies/{uid}', 'company')->name('internal.companies.show');
+        Route::patch('/companies/{uid}/limits', 'updateCompanyLimits')->middleware('throttle:sensitive-write')->name('internal.companies.limits');
+        Route::get('/orders/{uid}', 'order')->name('internal.orders.show');
+        Route::get('/invoices/{uid}', 'invoice')->name('internal.invoices.show');
+        Route::get('/users', 'internalUsers')->name('internal.users');
+        Route::post('/users', 'createInternalUser')->middleware(['system-role:super-admin', 'throttle:sensitive-write'])->name('internal.users.create');
+        Route::post('/profile/password', 'updatePassword')->middleware('throttle:sensitive-write')->name('internal.profile.password');
     });
 
     // ========== INVOICES ==========

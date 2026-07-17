@@ -12,6 +12,7 @@ import {
   IdcardOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
+  UsergroupAddOutlined,
   LogoutOutlined,
   UserOutlined,
   SunOutlined,
@@ -34,6 +35,8 @@ import Login from './Login';
 import Register from './Register';
 import Dashboard from './Dashboard';
 import CompanyProfile from './CompanyProfile';
+import CompanyUsers from './CompanyUsers';
+import InternalPortal from './InternalPortal';
 import UserProfile from './UserProfile';
 import SalesFlow from './SalesFlow';
 import Payments from './Payments';
@@ -227,6 +230,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/customers" element={<CustomerList />} />
               <Route path="/vendors" element={<VendorList />} />
               <Route path="/profile/company" element={<CompanyProfile />} />
+              <Route path="/profile/company-users" element={<CompanyUsers />} />
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={<AgingReport />} />
               <Route path="/reports/revenue" element={<RevenueReport />} />
@@ -429,6 +433,11 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           label: <Link to="/profile/company">Company Profile</Link>,
           icon: <ApartmentOutlined />,
         },
+        {
+          key: '/profile/company-users',
+          label: <Link to="/profile/company-users">Company Users</Link>,
+          icon: <UsergroupAddOutlined />,
+        },
       ],
     },
     {
@@ -476,6 +485,29 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  const signedInUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+  if (signedInUser.is_system_user) {
+    return (
+      <Routes>
+        <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
+        <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
+        <Route
+          path="*"
+          element={(
+            <InternalPortal
+              onLogout={handleLogout}
+              themeMode={themeMode}
+              themeStyle={themeStyle}
+              onChangeThemeStyle={onChangeThemeStyle}
+              onToggleTheme={onToggleTheme}
+            />
+          )}
+        />
       </Routes>
     );
   }

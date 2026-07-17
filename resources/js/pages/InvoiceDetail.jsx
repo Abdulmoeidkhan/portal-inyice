@@ -47,8 +47,17 @@ export default function InvoiceDetail({ shared = false }) {
         {!shared && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
       </Space>
       <Card className="border-beam-aurora">
-        <Row justify="space-between" gutter={[24, 24]}>
-          <Col><Title level={2}>{invoice.company?.display_name || invoice.company?.legal_name || 'Invoice'}</Title><Paragraph>{invoice.company?.address}</Paragraph><Text>{invoice.company?.email}</Text></Col>
+        <Row justify="space-between" gutter={[24, 24]} align="top">
+          <Col flex="1 1 360px">
+            <Title level={2}>{invoice.company?.display_name || invoice.company?.legal_name || 'Invoice'}</Title>
+            <Paragraph>{invoice.company?.address}</Paragraph>
+            <Text>{[invoice.company?.email, invoice.company?.phone].filter(Boolean).join(' | ')}</Text>
+          </Col>
+          {invoice.company?.logo_url && (
+            <Col>
+              <img className="invoice-company-logo" src={invoice.company.logo_url} alt={`${invoice.company?.display_name || 'Company'} logo`} />
+            </Col>
+          )}
           <Col style={{ textAlign: 'right' }}><Title level={1}>INVOICE</Title><Title level={4}>{invoice.invoice_number}</Title><Tag>{String(invoice.status).replaceAll('_', ' ').toUpperCase()}</Tag></Col>
         </Row>
         <Divider />

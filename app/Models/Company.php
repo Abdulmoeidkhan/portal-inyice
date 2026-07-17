@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use App\Traits\TenantAware;
 
 class Company extends Model
@@ -23,11 +24,22 @@ class Company extends Model
         'country_code',
         'base_currency_code',
         'default_timezone',
+        'monthly_invoice_limit',
+        'user_limit',
+        'logo_path',
+        'footer_logo_path',
         'is_active',
+    ];
+
+    protected $appends = [
+        'logo_url',
+        'footer_logo_url',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'monthly_invoice_limit' => 'integer',
+        'user_limit' => 'integer',
     ];
 
     /**
@@ -44,5 +56,35 @@ class Company extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(Vendor::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null;
+    }
+
+    public function getFooterLogoUrlAttribute(): ?string
+    {
+        return $this->footer_logo_path ? Storage::disk('public')->url($this->footer_logo_path) : null;
     }
 }

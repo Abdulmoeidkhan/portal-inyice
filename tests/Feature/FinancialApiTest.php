@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Role;
@@ -53,6 +54,123 @@ class FinancialApiTest extends TestCase
         $void = $this->patchJson('/api/v1/invoices/' . $invoiceUid . '/void');
         $void->assertOk();
         $void->assertJsonPath('invoice.status', 'void');
+    }
+
+    public function test_company_cannot_create_more_than_fifty_invoices_per_month(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        for ($i = 1; $i <= 50; $i++) {
+            Invoice::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $ctx['tenant']->id,
+                'company_id' => $ctx['company']->id,
+                'order_id' => $ctx['order']->id,
+                'customer_id' => $ctx['customer']->id,
+                'invoice_number' => 'INV-LIMIT-' . str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+                'invoice_date' => now()->toDateString(),
+                'due_date' => now()->addDays(30)->toDateString(),
+                'currency_code' => 'PKR',
+                'subtotal' => 1000,
+                'tax_amount' => 0,
+                'total_amount' => 1000,
+                'outstanding_amount' => 1000,
+                'status' => 'issued',
+                'fx_rate_to_base' => 1,
+            ]);
+        }
+
+        $nextOrder = $ctx['order']->replicate();
+        $nextOrder->uid = (string) Str::ulid();
+        $nextOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $nextOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $nextOrder->save();
+
+        foreach ($ctx['order']->items as $item) {
+            $nextItem = $item->replicate();
+            $nextItem->uid = (string) Str::ulid();
+            $nextItem->order_id = $nextOrder->id;
+            $nextItem->save();
+        }
+
+        $response = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $nextOrder->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['invoice_limit']);
+    }
+
+    public function test_invoiced_order_edit_requires_revision_and_creates_replacement_invoice(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $originalInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $payload = [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'invoice',
+            'currency_code' => 'PKR',
+            'total_amount' => 1250,
+            'notes' => 'Edited after invoice',
+            'booking_reference' => 'REV123',
+            'voucher' => [
+                'booking_reference' => 'REV123',
+                'active_sections' => ['other_services'],
+                'other_services' => [[
+                    'description' => 'Revised support package',
+                    'sales' => 1250,
+                ]],
+            ],
+        ];
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('requires_invoice_revision', true)
+            ->assertJsonPath('invoice.invoice_number', $originalInvoice['invoice_number']);
+
+        $this->assertSame(1, Invoice::where('order_id', $ctx['order']->id)->count());
+
+        $response = $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, [
+            ...$payload,
+            'confirm_invoice_revision' => true,
+        ])->assertOk()
+            ->assertJsonPath('invoice_revised', true);
+
+        $replacementNumber = $response->json('invoice.invoice_number');
+
+        $this->assertNotSame($originalInvoice['invoice_number'], $replacementNumber);
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $originalInvoice['uid'],
+            'status' => 'void',
+            'total_amount' => 0,
+            'outstanding_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'invoice_number' => $replacementNumber,
+            'order_id' => $ctx['order']->id,
+            'status' => 'issued',
+            'total_amount' => 1250,
+            'outstanding_amount' => 1250,
+        ]);
+        $this->assertDatabaseHas('invoice_lines', [
+            'invoice_id' => Invoice::where('uid', $originalInvoice['uid'])->value('id'),
+            'unit_price' => 0,
+            'total_price' => 0,
+        ]);
+        $this->assertStringContainsString(
+            $replacementNumber,
+            Invoice::where('uid', $originalInvoice['uid'])->value('notes')
+        );
+
+        $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonCount(2, 'invoices')
+            ->assertJsonPath('invoices.0.invoice_number', $replacementNumber)
+            ->assertJsonPath('invoices.1.invoice_number', $originalInvoice['invoice_number'])
+            ->assertJsonPath('invoices.1.status', 'void');
     }
 
     public function test_payment_and_account_endpoints_work(): void

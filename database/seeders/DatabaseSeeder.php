@@ -59,5 +59,46 @@ class DatabaseSeeder extends Seeder
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
+
+        $internalTenant = Tenant::query()->firstOrCreate(
+            ['code' => 'INYICE'],
+            ['uid' => (string) Str::ulid(), 'name' => 'InYice Operations', 'is_active' => true]
+        );
+
+        $internalCompany = Company::query()->firstOrCreate(
+            ['tenant_id' => $internalTenant->id, 'display_name' => 'InYice Operations'],
+            [
+                'uid' => (string) Str::ulid(),
+                'legal_name' => 'InYice Operations',
+                'email' => 'support@inyice.local',
+                'base_currency_code' => 'PKR',
+                'default_timezone' => 'UTC',
+                'monthly_invoice_limit' => 50,
+                'user_limit' => 4,
+                'is_active' => true,
+            ]
+        );
+
+        $systemRoles = [];
+
+        foreach (Role::SYSTEM_ROLES as $roleDefaults) {
+            $systemRoles[$roleDefaults['code']] = Role::query()->firstOrCreate(
+                ['tenant_id' => null, 'code' => $roleDefaults['code']],
+                ['uid' => (string) Str::ulid(), 'name' => $roleDefaults['name'], 'is_system' => true]
+            );
+        }
+
+        User::query()->firstOrCreate([
+            'email' => 'superadmin@inyice.local',
+        ], [
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $internalTenant->id,
+            'company_id' => $internalCompany->id,
+            'role_id' => $systemRoles['super-admin']->id,
+            'name' => 'InYice Super Admin',
+            'password' => 'password123',
+            'email_verified_at' => now(),
+            'is_active' => true,
+        ]);
     }
 }

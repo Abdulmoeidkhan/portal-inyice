@@ -13,6 +13,12 @@ class Role extends Model
 
     public const SIGNUP_DEFAULT_ROLE = 'owner';
 
+    public const SYSTEM_ROLES = [
+        ['code' => 'super-admin', 'name' => 'Super Admin'],
+        ['code' => 'inyice-admin', 'name' => 'InYice Admin'],
+        ['code' => 'support-executive', 'name' => 'Support Executive'],
+    ];
+
     public const TENANT_DEFAULT_ROLES = [
         ['code' => 'owner', 'name' => 'Owner'],
         ['code' => 'admin', 'name' => 'Admin'],
