@@ -480,8 +480,6 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   if (!isAuthenticated) {
     return (
       <Routes>
-        <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
-        <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
