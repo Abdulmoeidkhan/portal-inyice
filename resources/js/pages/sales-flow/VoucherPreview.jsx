@@ -266,7 +266,6 @@ export default function VoucherPreview({ order }) {
               { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
               { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
               { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
-              { title: 'Lead', dataIndex: 'lead_passenger', width: 125, render: (value) => value || '' },
               { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
             ]}
           />

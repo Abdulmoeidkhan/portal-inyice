@@ -876,6 +876,15 @@ body {
   box-shadow: 0 14px 38px rgba(31, 61, 102, 0.14);
 }
 
+.voucher-preview .ant-typography,
+.voucher-preview .ant-table {
+  color: #102033;
+}
+
+.voucher-preview .ant-typography-secondary {
+  color: #52657c !important;
+}
+
 .voucher-preview-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 96px;
@@ -1003,24 +1012,43 @@ body {
 
 .voucher-preview-section .ant-table {
   color: #102033;
+  background: #ffffff;
+}
+
+.voucher-preview-section .ant-table-container,
+.voucher-preview-section .ant-table-content {
+  background: #ffffff;
 }
 
 .voucher-preview-section .ant-table-thead > tr > th {
   color: #102033;
   font-size: 11px;
   font-weight: 800;
-  background: #edf4fb;
+  border-bottom-color: rgba(15, 27, 45, 0.14);
+  background: #edf4fb !important;
 }
 
 .voucher-preview-section .ant-table-tbody > tr > td {
+  color: #102033;
   font-size: 11px;
   line-height: 1.28;
   vertical-align: top;
+  border-bottom-color: rgba(15, 27, 45, 0.1);
+  background: #ffffff !important;
+}
+
+.voucher-preview-section .ant-table-tbody > tr.ant-table-row:hover > td,
+.voucher-preview-section .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+  background: #f8fbff !important;
 }
 
 .voucher-preview-section .ant-table-cell {
   padding: 8px 10px !important;
   overflow-wrap: anywhere;
+}
+
+.voucher-preview-section .ant-table-cell::before {
+  background: rgba(15, 27, 45, 0.24) !important;
 }
 
 .voucher-preview-footer {
