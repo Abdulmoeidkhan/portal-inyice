@@ -84,6 +84,34 @@ class InternalPortalController extends Controller
         ]);
     }
 
+    public function updateCompanyStatus(Request $request, string $uid): JsonResponse
+    {
+        $company = Company::withoutGlobalScopes()
+            ->whereHas('tenant', fn ($tenant) => $tenant->where('code', '!=', 'INYICE'))
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $company->update([
+            'is_active' => $validated['is_active'],
+        ]);
+
+        if (!$company->is_active) {
+            User::withoutGlobalScopes()
+                ->where('company_id', $company->id)
+                ->each(fn (User $user) => $user->tokens()->delete());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $company->is_active ? 'Company unblocked successfully.' : 'Company blocked successfully.',
+            'company' => $this->serializeCompanyDetail($company->fresh(['tenant', 'users.role'])),
+        ]);
+    }
+
     public function internalUsers(): JsonResponse
     {
         $users = User::withoutGlobalScopes()
@@ -130,6 +158,62 @@ class InternalPortalController extends Controller
             'success' => true,
             'user' => $this->serializeInternalUser($user),
         ], 201);
+    }
+
+    public function updateUserStatus(Request $request, string $uid): JsonResponse
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $target = User::withoutGlobalScopes()
+            ->with('role:id,code,name,is_system')
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        if ($target->id === $request->user()->id && !$validated['is_active']) {
+            return response()->json([
+                'error' => 'You cannot block your own account.',
+            ], 422);
+        }
+
+        $target->forceFill([
+            'is_active' => $validated['is_active'],
+        ])->save();
+
+        if (!$target->is_active) {
+            $target->tokens()->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $target->is_active ? 'User unblocked successfully.' : 'User blocked successfully.',
+            'user' => $this->serializeUserForManagement($target->fresh('role:id,code,name,is_system')),
+        ]);
+    }
+
+    public function resetUserPassword(Request $request, string $uid): JsonResponse
+    {
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $target = User::withoutGlobalScopes()
+            ->with('role:id,code,name,is_system')
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $target->forceFill([
+            'password' => $validated['password'],
+        ])->save();
+
+        $target->tokens()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully.',
+            'user' => $this->serializeUserForManagement($target->fresh('role:id,code,name,is_system')),
+        ]);
     }
 
     public function updatePassword(Request $request): JsonResponse
@@ -221,15 +305,7 @@ class InternalPortalController extends Controller
             'default_timezone' => $company->default_timezone,
             'created_at' => optional($company->created_at)->toISOString(),
             'users' => $company->users
-                ->map(fn (User $user) => [
-                    'id' => $user->id,
-                    'uid' => $user->uid,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role?->name,
-                    'role_code' => $user->role?->code,
-                    'is_active' => (bool) $user->is_active,
-                ])
+                ->map(fn (User $user) => $this->serializeUserForManagement($user))
                 ->values(),
         ];
     }
@@ -262,13 +338,20 @@ class InternalPortalController extends Controller
 
     private function serializeInternalUser(User $user): array
     {
+        return $this->serializeUserForManagement($user);
+    }
+
+    private function serializeUserForManagement(User $user): array
+    {
         return [
             'id' => $user->id,
             'uid' => $user->uid,
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role?->code,
+            'role_code' => $user->role?->code,
             'role_name' => $user->role?->name,
+            'is_system_user' => (bool) $user->role?->is_system,
             'is_active' => (bool) $user->is_active,
             'created_at' => optional($user->created_at)->toISOString(),
         ];

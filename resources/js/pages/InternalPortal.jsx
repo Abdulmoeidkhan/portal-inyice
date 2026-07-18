@@ -9,6 +9,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Segmented,
   Space,
@@ -19,12 +20,15 @@ import {
 } from 'antd';
 import {
   BankOutlined,
+  CheckCircleOutlined,
+  LockOutlined,
   LogoutOutlined,
   MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
+  StopOutlined,
   SunOutlined,
   TeamOutlined,
   UserOutlined,
@@ -71,13 +75,17 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [savingLimits, setSavingLimits] = useState(false);
   const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [resetPasswordModal, setResetPasswordModal] = useState({ open: false, user: null });
   const [savingStaff, setSavingStaff] = useState(false);
   const [recordModal, setRecordModal] = useState({ open: false, type: '', data: null, loading: false });
   const [savingPassword, setSavingPassword] = useState(false);
+  const [savingResetPassword, setSavingResetPassword] = useState(false);
+  const [savingManagementAction, setSavingManagementAction] = useState('');
   const [search, setSearch] = useState('');
   const [limitForm] = Form.useForm();
   const [staffForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  const [resetPasswordForm] = Form.useForm();
 
   const isSuperAdmin = currentUser.role === 'super-admin';
 
@@ -220,6 +228,111 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     }
   };
 
+  const updateManagedUser = (updatedUser) => {
+    if (!updatedUser?.uid) return;
+
+    setStaff((previous) => previous.map((user) => (user.uid === updatedUser.uid ? { ...user, ...updatedUser } : user)));
+    setDetail((previous) => {
+      if (!previous?.users?.some((user) => user.uid === updatedUser.uid)) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        users: previous.users.map((user) => (user.uid === updatedUser.uid ? { ...user, ...updatedUser } : user)),
+      };
+    });
+  };
+
+  const openResetPassword = (user) => {
+    resetPasswordForm.resetFields();
+    setResetPasswordModal({ open: true, user });
+  };
+
+  const resetManagedUserPassword = async (values) => {
+    const user = resetPasswordModal.user;
+    if (!user?.uid) return;
+
+    setSavingResetPassword(true);
+
+    try {
+      const response = await fetch(`/api/v1/internal/users/${user.uid}/password`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(values),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to reset password');
+      }
+
+      updateManagedUser(data.user);
+      resetPasswordForm.resetFields();
+      setResetPasswordModal({ open: false, user: null });
+      message.success(data.message || 'Password reset');
+    } catch (error) {
+      message.error(error.message || 'Unable to reset password');
+    } finally {
+      setSavingResetPassword(false);
+    }
+  };
+
+  const toggleManagedUserStatus = async (user) => {
+    if (!user?.uid) return;
+
+    const actionKey = `user:${user.uid}`;
+    setSavingManagementAction(actionKey);
+
+    try {
+      const response = await fetch(`/api/v1/internal/users/${user.uid}/status`, {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify({ is_active: !user.is_active }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update user status');
+      }
+
+      updateManagedUser(data.user);
+      message.success(data.message || 'User status updated');
+    } catch (error) {
+      message.error(error.message || 'Unable to update user status');
+    } finally {
+      setSavingManagementAction('');
+    }
+  };
+
+  const toggleCompanyStatus = async (company) => {
+    if (!company?.uid) return;
+
+    const actionKey = `company:${company.uid}`;
+    setSavingManagementAction(actionKey);
+
+    try {
+      const response = await fetch(`/api/v1/internal/companies/${company.uid}/status`, {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify({ is_active: !company.is_active }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update company status');
+      }
+
+      setCompanies((previous) => previous.map((item) => (item.uid === data.company.uid ? { ...item, ...data.company } : item)));
+      setDetail((previous) => (previous?.uid === data.company.uid ? data.company : previous));
+      message.success(data.message || 'Company status updated');
+    } catch (error) {
+      message.error(error.message || 'Unable to update company status');
+    } finally {
+      setSavingManagementAction('');
+    }
+  };
+
   const openRecord = async (type, uid) => {
     setRecordModal({ open: true, type, data: null, loading: true });
 
@@ -264,6 +377,39 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     }
   };
 
+  const renderUserActions = (user) => {
+    if (!isSuperAdmin) {
+      return null;
+    }
+
+    const actionKey = `user:${user.uid}`;
+    const blockLabel = user.is_active ? 'Block' : 'Unblock';
+
+    return (
+      <Space size={6}>
+        <Button size="small" icon={<LockOutlined />} onClick={() => openResetPassword(user)}>
+          Reset
+        </Button>
+        <Popconfirm
+          title={`${blockLabel} user?`}
+          description={`${user.name || user.email} ${user.is_active ? 'will not be able to sign in.' : 'will be allowed to sign in again.'}`}
+          okText={blockLabel}
+          okType={user.is_active ? 'danger' : 'primary'}
+          onConfirm={() => toggleManagedUserStatus(user)}
+        >
+          <Button
+            size="small"
+            danger={user.is_active}
+            icon={user.is_active ? <StopOutlined /> : <CheckCircleOutlined />}
+            loading={savingManagementAction === actionKey}
+          >
+            {blockLabel}
+          </Button>
+        </Popconfirm>
+      </Space>
+    );
+  };
+
   const companyColumns = [
     {
       title: 'Company',
@@ -276,6 +422,12 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       ),
     },
     {
+      title: 'Status',
+      dataIndex: 'is_active',
+      width: 96,
+      render: (value) => <Tag color={value ? 'success' : 'default'}>{value ? 'Active' : 'Blocked'}</Tag>,
+    },
+    {
       title: 'Usage',
       key: 'usage',
       render: (_, company) => (
@@ -285,6 +437,38 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         </Space>
       ),
     },
+    ...(isSuperAdmin ? [{
+      title: '',
+      key: 'actions',
+      width: 104,
+      render: (_, company) => {
+        const blockLabel = company.is_active ? 'Block' : 'Unblock';
+        const actionKey = `company:${company.uid}`;
+
+        return (
+          <Popconfirm
+            title={`${blockLabel} company?`}
+            description={company.is_active ? 'All company users will be signed out and blocked from signing in.' : 'Company users with active accounts will be allowed to sign in again.'}
+            okText={blockLabel}
+            okType={company.is_active ? 'danger' : 'primary'}
+            onConfirm={(event) => {
+              event?.stopPropagation?.();
+              toggleCompanyStatus(company);
+            }}
+          >
+            <Button
+              size="small"
+              danger={company.is_active}
+              icon={company.is_active ? <StopOutlined /> : <CheckCircleOutlined />}
+              loading={savingManagementAction === actionKey}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {blockLabel}
+            </Button>
+          </Popconfirm>
+        );
+      },
+    }] : []),
   ];
 
   const recordColumns = {
@@ -322,6 +506,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     { title: 'Email', dataIndex: 'email' },
     { title: 'Role', dataIndex: 'role_name', render: (value) => <Tag color="blue">{value}</Tag> },
     { title: 'Status', dataIndex: 'is_active', render: (value) => <Tag color={value ? 'success' : 'default'}>{value ? 'Active' : 'Inactive'}</Tag> },
+    ...(isSuperAdmin ? [{ title: '', key: 'actions', width: 190, render: (_, user) => renderUserActions(user) }] : []),
   ];
 
   return (
@@ -424,7 +609,28 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                 </Card>
 
                 <Space direction="vertical" size={16} className="internal-detail-stack">
-                  <Card className="border-beam-aurora" loading={loadingDetail} title={detail?.display_name || selectedCompany?.display_name || 'Company Details'}>
+                  <Card
+                    className="border-beam-aurora"
+                    loading={loadingDetail}
+                    title={detail?.display_name || selectedCompany?.display_name || 'Company Details'}
+                    extra={isSuperAdmin && detail ? (
+                      <Popconfirm
+                        title={`${detail.is_active ? 'Block' : 'Unblock'} company?`}
+                        description={detail.is_active ? 'All company users will be signed out and blocked from signing in.' : 'Company users with active accounts will be allowed to sign in again.'}
+                        okText={detail.is_active ? 'Block' : 'Unblock'}
+                        okType={detail.is_active ? 'danger' : 'primary'}
+                        onConfirm={() => toggleCompanyStatus(detail)}
+                      >
+                        <Button
+                          danger={detail.is_active}
+                          icon={detail.is_active ? <StopOutlined /> : <CheckCircleOutlined />}
+                          loading={savingManagementAction === `company:${detail.uid}`}
+                        >
+                          {detail.is_active ? 'Block Company' : 'Unblock Company'}
+                        </Button>
+                      </Popconfirm>
+                    ) : null}
+                  >
                     {detail ? (
                       <>
                         <Descriptions
@@ -463,8 +669,9 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           columns={[
                             { title: 'Name', dataIndex: 'name' },
                             { title: 'Email', dataIndex: 'email' },
-                            { title: 'Role', dataIndex: 'role', render: (value) => <Tag>{value}</Tag> },
+                            { title: 'Role', dataIndex: 'role_name', render: (value) => <Tag>{value}</Tag> },
                             { title: 'Status', dataIndex: 'is_active', render: (value) => <Tag color={value ? 'success' : 'default'}>{value ? 'Active' : 'Inactive'}</Tag> },
+                            ...(isSuperAdmin ? [{ title: '', key: 'actions', width: 190, render: (_, user) => renderUserActions(user) }] : []),
                           ]}
                         />
                       </Card>
@@ -583,6 +790,39 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
             ]}
           >
             <Input.Password />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title={`Reset Password${resetPasswordModal.user ? `: ${resetPasswordModal.user.name || resetPasswordModal.user.email}` : ''}`}
+        open={resetPasswordModal.open}
+        onCancel={() => {
+          resetPasswordForm.resetFields();
+          setResetPasswordModal({ open: false, user: null });
+        }}
+        onOk={() => resetPasswordForm.submit()}
+        confirmLoading={savingResetPassword}
+        destroyOnClose
+      >
+        <Form form={resetPasswordForm} layout="vertical" preserve={false} onFinish={resetManagedUserPassword}>
+          <Form.Item name="password" label="New Password" rules={[{ required: true, min: 8, message: 'Use at least 8 characters' }]}>
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="password_confirmation"
+            label="Confirm New Password"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Confirm new password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) return Promise.resolve();
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password autoComplete="new-password" />
           </Form.Item>
         </Form>
       </Modal>

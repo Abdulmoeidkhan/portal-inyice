@@ -35,6 +35,12 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if (!$user->isSystemUser() && $user->company && !$user->company->is_active) {
+            return response()->json([
+                'error' => 'Your company account is inactive. Contact administrator.',
+            ], 403);
+        }
+
         $token = $user->createToken('web')->plainTextToken;
 
         return response()->json([

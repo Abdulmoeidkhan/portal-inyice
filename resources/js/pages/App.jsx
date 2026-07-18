@@ -492,22 +492,25 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   const signedInUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   if (signedInUser.is_system_user) {
+    const internalPortal = (
+      <InternalPortal
+        onLogout={handleLogout}
+        themeMode={themeMode}
+        themeStyle={themeStyle}
+        onChangeThemeStyle={onChangeThemeStyle}
+        onToggleTheme={onToggleTheme}
+      />
+    );
+
     return (
       <Routes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
-        <Route
-          path="*"
-          element={(
-            <InternalPortal
-              onLogout={handleLogout}
-              themeMode={themeMode}
-              themeStyle={themeStyle}
-              onChangeThemeStyle={onChangeThemeStyle}
-              onToggleTheme={onToggleTheme}
-            />
-          )}
-        />
+        <Route path="/login" element={<Navigate to="/internal" replace />} />
+        <Route path="/register" element={<Navigate to="/internal" replace />} />
+        <Route path="/" element={<Navigate to="/internal" replace />} />
+        <Route path="/internal/*" element={internalPortal} />
+        <Route path="*" element={<Navigate to="/internal" replace />} />
       </Routes>
     );
   }
@@ -516,6 +519,8 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
     <Routes>
       <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
       <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
+      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/register" element={<Navigate to="/" replace />} />
       <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} />} />
     </Routes>
   );

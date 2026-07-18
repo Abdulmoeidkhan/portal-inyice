@@ -39,10 +39,10 @@ export default function Login({ onLoginSuccess }) {
       localStorage.setItem('auth_token', data.token);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      onLoginSuccess?.();
+      onLoginSuccess?.(data.user);
 
       message.success('Welcome back!');
-      navigate('/');
+      navigate(data.user?.is_system_user ? '/internal' : '/', { replace: true });
     } catch (error) {
       message.error(error.message || 'Login failed');
     } finally {

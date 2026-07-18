@@ -21,8 +21,6 @@ Route::get('/registration/currencies', [RegistrationController::class, 'getCurre
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
-Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])->middleware('throttle:public-api');
-Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])->middleware('throttle:public-api');
 
 
 Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
@@ -32,6 +30,13 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])
+        ->middleware('throttle:public-api')
+        ->name('sharedInvoices.show');
+    Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
+        ->middleware('throttle:public-api')
+        ->name('sharedVouchers.show');
 
     Route::prefix('company-users')->controller(CompanyUserController::class)->group(function () {
         Route::get('/', 'index')->middleware('role:owner,admin')->name('companyUsers.list');
@@ -47,10 +52,13 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/companies', 'companies')->name('internal.companies');
         Route::get('/companies/{uid}', 'company')->name('internal.companies.show');
         Route::patch('/companies/{uid}/limits', 'updateCompanyLimits')->middleware('throttle:sensitive-write')->name('internal.companies.limits');
+        Route::patch('/companies/{uid}/status', 'updateCompanyStatus')->middleware(['system-role:super-admin', 'throttle:sensitive-write'])->name('internal.companies.status');
         Route::get('/orders/{uid}', 'order')->name('internal.orders.show');
         Route::get('/invoices/{uid}', 'invoice')->name('internal.invoices.show');
         Route::get('/users', 'internalUsers')->name('internal.users');
         Route::post('/users', 'createInternalUser')->middleware(['system-role:super-admin', 'throttle:sensitive-write'])->name('internal.users.create');
+        Route::patch('/users/{uid}/status', 'updateUserStatus')->middleware(['system-role:super-admin', 'throttle:sensitive-write'])->name('internal.users.status');
+        Route::post('/users/{uid}/password', 'resetUserPassword')->middleware(['system-role:super-admin', 'throttle:sensitive-write'])->name('internal.users.password');
         Route::post('/profile/password', 'updatePassword')->middleware('throttle:sensitive-write')->name('internal.profile.password');
     });
 
