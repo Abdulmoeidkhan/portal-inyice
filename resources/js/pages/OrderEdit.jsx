@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
@@ -33,7 +33,9 @@ const invoiceStatusColors = {
   paid: 'success',
   overdue: 'red',
   void: 'default',
+  refund_request: 'red',
 };
+const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'];
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
 
@@ -152,6 +154,24 @@ const authHeaders = (json = false) => {
   };
 };
 
+const currentUserCanViewCostProfit = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.role !== 'sales';
+  } catch {
+    return true;
+  }
+};
+
+const currentUserIsSales = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.role === 'sales';
+  } catch {
+    return false;
+  }
+};
+
 export default function OrderEdit() {
   const { uid } = useParams();
   const navigate = useNavigate();
@@ -162,6 +182,8 @@ export default function OrderEdit() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const canViewCostProfit = currentUserCanViewCostProfit();
+  const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -211,11 +233,16 @@ export default function OrderEdit() {
     },
     {
       title: '',
-      width: 88,
+      width: 180,
       render: (_, invoice) => (
-        <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
-          Open
-        </Button>
+        <Space>
+          <Button size="small" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
+            Invoice
+          </Button>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
+            Detailed
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -381,18 +408,17 @@ export default function OrderEdit() {
 
       if (response.status === 409 && data?.requires_invoice_revision) {
         Modal.confirm({
-          title: 'Create replacement invoice?',
+          title: 'Cancel invoice and create new order?',
           icon: <ExclamationCircleOutlined />,
           content: (
             <Space direction="vertical" size={8}>
               <span>
-                Invoice {data.invoice?.invoice_number || ''} will be canceled, its amount will become 0,
-                and a new invoice will be generated from these order changes.
+                Invoice {data.invoice?.invoice_number || ''} will be cancelled and its amount will become 0.
               </span>
-              <span>This keeps invoice history clean instead of editing an issued invoice directly.</span>
+              <span>A new order will be created from these changes so you can create the invoice manually.</span>
             </Space>
           ),
-          okText: 'Create Replacement',
+          okText: 'Create New Order',
           cancelText: 'Keep Current Invoice',
           okButtonProps: { danger: true },
           onOk: () => submitOrder(true),
@@ -401,8 +427,10 @@ export default function OrderEdit() {
       }
 
       if (!response.ok) throw new Error(data?.message || data?.error || 'Failed to update order');
-      if (data.invoice_revised && data.invoice?.invoice_number) {
-        message.success(`Replacement invoice ${data.invoice.invoice_number} created`);
+      if (data.new_order_created && data.order?.order_number) {
+        message.success(`New order ${data.order.order_number} created. You can create its invoice from Orders.`);
+      } else if (data.invoice?.invoice_number) {
+        message.success(`Invoice ${data.invoice.invoice_number} is ready`);
       } else {
         message.success('Order updated');
       }
@@ -442,7 +470,7 @@ export default function OrderEdit() {
               showIcon
               style={{ marginBottom: 16 }}
               message={`Invoice ${order.invoice.invoice_number} already exists`}
-              description="Saving changes will ask for confirmation, then cancel the current invoice and create a new replacement invoice."
+              description="Saving changes will ask for confirmation, then cancel the current invoice and create a new order for manual invoicing."
             />
           )}
           <Form form={form} layout="vertical">
@@ -452,17 +480,16 @@ export default function OrderEdit() {
               </Form.Item>
               <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 200 }}>
                 <Select
+                  disabled={!canChangeStatus}
                   options={[
                     { label: 'Quote', value: 'quote' },
                     { label: 'Order', value: 'order' },
-                    { label: 'Confirm', value: 'confirm' },
                     { label: 'Cancel', value: 'cancel' },
                     { label: 'Invoice', value: 'invoice' },
                     { label: 'Void', value: 'void' },
+                    { label: 'Refund Request', value: 'refund_request' },
                     { label: 'Refund', value: 'refund' },
                     { label: 'Partial Refund', value: 'partial_refund' },
-                    { label: 'Paid', value: 'paid' },
-                    { label: 'Partial Paid', value: 'partial_paid' },
                   ]}
                 />
               </Form.Item>
@@ -516,9 +543,10 @@ export default function OrderEdit() {
           removeRow={removeRow}
           onUseFlightPassengersForVisa={useFlightPassengersForVisa}
           onSetHotelLeadPassenger={setHotelLeadPassenger}
+          canViewCostProfit={canViewCostProfit}
         />
 
-        <VoucherSummaryCard voucher={voucher} />
+        <VoucherSummaryCard voucher={voucher} canViewCostProfit={canViewCostProfit} />
 
         <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
           <Space>

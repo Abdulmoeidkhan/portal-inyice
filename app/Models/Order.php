@@ -162,12 +162,12 @@ class Order extends Model
     public function canTransitionTo(string $newStatus): bool
     {
         $transitions = [
-            'quote' => ['order', 'confirm', 'cancel'],
-            'order' => ['confirm', 'cancel', 'invoice'],
-            'confirm' => ['invoice', 'cancel'],
+            'quote' => ['order', 'cancel', 'invoice'],
+            'order' => ['cancel', 'invoice'],
             'cancel' => [],
-            'invoice' => ['void', 'refund', 'partial_refund', 'paid', 'partial_paid'],
+            'invoice' => ['void', 'refund_request', 'refund', 'partial_refund', 'paid', 'partial_paid'],
             'void' => [],
+            'refund_request' => ['partial_refund', 'refund', 'cancel'],
             'refund' => [],
             'partial_refund' => ['refund'],
             'paid' => [],
@@ -324,7 +324,7 @@ class Order extends Model
             ->where('vendor_id', $vendorId)
             ->sum('amount');
 
-        if ($amount > 0) {
+        if ($amount != 0.0) {
             return (float) $amount;
         }
 
@@ -333,7 +333,7 @@ class Order extends Model
 
     private static function canUseVendorCost(int $vendorId, float $amount, int $tenantId, ?array $allowedVendorTenantIds): bool
     {
-        if ($vendorId <= 0 || $amount <= 0) {
+        if ($vendorId <= 0 || $amount == 0.0) {
             return false;
         }
 

@@ -45,6 +45,15 @@ const createVoucherWithProfileContact = () => {
   };
 };
 
+const currentUserCanViewCostProfit = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.role !== 'sales';
+  } catch {
+    return true;
+  }
+};
+
 export default function SalesFlow() {
   const [gdsForm] = Form.useForm();
   const [orderForm] = Form.useForm();
@@ -57,6 +66,7 @@ export default function SalesFlow() {
   const [loadingParse, setLoadingParse] = useState(false);
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const canViewCostProfit = currentUserCanViewCostProfit();
 
   const parsedHint = useMemo(() => {
     if (!parseResult) {
@@ -299,9 +309,10 @@ export default function SalesFlow() {
                   removeRow={removeRow}
                   onUseFlightPassengersForVisa={useFlightPassengersForVisa}
                   onSetHotelLeadPassenger={setHotelLeadPassenger}
+                  canViewCostProfit={canViewCostProfit}
                 />
 
-                <VoucherSummaryCard voucher={voucher} />
+                <VoucherSummaryCard voucher={voucher} canViewCostProfit={canViewCostProfit} />
 
                 <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
                   <Space>

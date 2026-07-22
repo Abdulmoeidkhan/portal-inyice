@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Role;
@@ -81,6 +82,36 @@ class AuthSecurityApiTest extends TestCase
         ]);
 
         $paymentAttempt->assertStatus(403);
+    }
+
+    public function test_sales_role_cannot_change_status_after_order_enters_invoice_section(): void
+    {
+        $ctx = $this->seedContext('sales');
+        $ctx['order']->update(['status' => 'invoice']);
+
+        Sanctum::actingAs($ctx['user']);
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'refund',
+            'currency_code' => 'PKR',
+            'total_amount' => 500,
+            'notes' => 'Attempt status change',
+        ])->assertStatus(403)
+            ->assertJsonPath('error', 'Sales staff cannot change order status after it enters the invoice section.');
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'invoice',
+            'currency_code' => 'PKR',
+            'total_amount' => 500,
+            'notes' => 'Allowed non-status update',
+        ])->assertOk()
+            ->assertJsonPath('order.status', 'invoice')
+            ->assertJsonPath('order.notes', 'Allowed non-status update')
+            ->assertJsonPath('invoice', null);
+
+        $this->assertSame(0, Invoice::count());
     }
 
     /**

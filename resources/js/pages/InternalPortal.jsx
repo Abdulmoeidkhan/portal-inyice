@@ -35,6 +35,7 @@ import {
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import VoucherPreview from './sales-flow/VoucherPreview';
+import CancelledReport from './CancelledReport';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -690,6 +691,16 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                   )}
                 </Space>
               </div>
+            ),
+          },
+          {
+            key: 'cancelled',
+            label: 'Cancelled Report',
+            icon: <StopOutlined />,
+            children: (
+              <Card className="border-beam-aurora">
+                <CancelledReport embedded />
+              </Card>
             ),
           },
           {

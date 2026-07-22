@@ -18,6 +18,7 @@ import {
   SunOutlined,
   MoonOutlined,
   MenuOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 
 // Components
@@ -45,6 +46,8 @@ import VendorList from './VendorList';
 import CustomerStatement from './CustomerStatement';
 import VendorStatement from './VendorStatement';
 import VendorPayments from './VendorPayments';
+import CancelledReport from './CancelledReport';
+import ReferenceSearch from './ReferenceSearch';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -101,6 +104,8 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
     .find((item) => item.key === location.pathname)?.key || '/';
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const canAccessReports = user?.role !== 'sales';
+  const canAccessCancelledReport = ['owner', 'admin'].includes(user?.role);
 
   const profileMenu = [
     {
@@ -222,6 +227,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/orders" element={<OrderList />} />
               <Route path="/orders/:uid/voucher" element={<VoucherDetail />} />
               <Route path="/orders/:uid/edit" element={<OrderEdit />} />
+              <Route path="/reference-search" element={<ReferenceSearch />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/customer-payments" element={<CounterpartyTransaction direction="payment" partyType="customer" />} />
@@ -232,13 +238,14 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="/profile/company" element={<CompanyProfile />} />
               <Route path="/profile/company-users" element={<CompanyUsers />} />
               <Route path="/profile/user" element={<UserProfile />} />
-              <Route path="/reports/aging" element={<AgingReport />} />
-              <Route path="/reports/revenue" element={<RevenueReport />} />
-              <Route path="/reports/profit" element={<ProfitReport />} />
-              <Route path="/reports/payments" element={<PaymentReport />} />
-              <Route path="/reports/receipts" element={<PaymentReport direction="receipt" />} />
-              <Route path="/statements/customers" element={<CustomerStatement />} />
-              <Route path="/statements/vendors" element={<VendorStatement />} />
+              <Route path="/reports/aging" element={canAccessReports ? <AgingReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/revenue" element={canAccessReports ? <RevenueReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/profit" element={canAccessReports ? <ProfitReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/payments" element={canAccessReports ? <PaymentReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/receipts" element={canAccessReports ? <PaymentReport direction="receipt" /> : <Navigate to="/" replace />} />
+              <Route path="/reports/cancelled" element={canAccessCancelledReport ? <CancelledReport /> : <Navigate to="/" replace />} />
+              <Route path="/statements/customers" element={canAccessReports ? <CustomerStatement /> : <Navigate to="/" replace />} />
+              <Route path="/statements/vendors" element={canAccessReports ? <VendorStatement /> : <Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
@@ -360,6 +367,10 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
     );
   }
 
+  const signedInUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const canAccessReports = signedInUser.role !== 'sales';
+  const canAccessCancelledReport = ['owner', 'admin'].includes(signedInUser.role);
+
   const menuItems = [
     {
       key: '/',
@@ -385,6 +396,11 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           key: '/invoices',
           label: <Link to="/invoices">Invoices</Link>,
           icon: <FileTextOutlined />,
+        },
+        {
+          key: '/reference-search',
+          label: <Link to="/reference-search">Reference Search</Link>,
+          icon: <SearchOutlined />,
         },
         {
           key: '/payments',
@@ -440,7 +456,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
         },
       ],
     },
-    {
+    ...(canAccessReports ? [{
       key: 'reports',
       label: 'Reports',
       icon: <BarChartOutlined />,
@@ -465,6 +481,10 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           key: '/reports/payments',
           label: <Link to="/reports/payments">Payment Report</Link>,
         },
+        ...(canAccessCancelledReport ? [{
+          key: '/reports/cancelled',
+          label: <Link to="/reports/cancelled">Cancelled Report</Link>,
+        }] : []),
         {
           key: '/statements/customers',
           label: <Link to="/statements/customers">Customer Statement</Link>,
@@ -474,7 +494,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
           label: <Link to="/statements/vendors">Vendor Statement</Link>,
         },
       ],
-    },
+    }] : []),
   ];
 
   if (!isAuthenticated) {
@@ -486,8 +506,6 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
       </Routes>
     );
   }
-
-  const signedInUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   if (signedInUser.is_system_user) {
     const internalPortal = (

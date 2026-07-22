@@ -56,6 +56,47 @@ class FinancialApiTest extends TestCase
         $void->assertJsonPath('invoice.status', 'void');
     }
 
+    public function test_invoice_delete_requires_password_and_invoice_number_then_cancels_invoice(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->patchJson('/api/v1/invoices/' . $invoice['uid'] . '/cancel', [
+            'password' => 'wrong-password',
+            'invoice_number' => $invoice['invoice_number'],
+        ])->assertStatus(403);
+
+        $this->patchJson('/api/v1/invoices/' . $invoice['uid'] . '/cancel', [
+            'password' => 'password123',
+            'invoice_number' => 'WRONG-INVOICE',
+        ])->assertStatus(422);
+
+        $this->patchJson('/api/v1/invoices/' . $invoice['uid'] . '/cancel', [
+            'password' => 'password123',
+            'invoice_number' => $invoice['invoice_number'],
+        ])->assertOk()
+            ->assertJsonPath('invoice.status', 'cancel');
+
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $invoice['uid'],
+            'status' => 'cancel',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $ctx['order']->id,
+            'status' => 'cancel',
+        ]);
+        $this->assertStringContainsString(
+            'Deleted from invoices tab',
+            Invoice::where('uid', $invoice['uid'])->value('notes')
+        );
+        $this->getJson('/api/v1/invoices')
+            ->assertOk()
+            ->assertJsonPath('total', 0);
+    }
+
     public function test_company_cannot_create_more_than_fifty_invoices_per_month(): void
     {
         $ctx = $this->seedTenantContext();
@@ -101,7 +142,7 @@ class FinancialApiTest extends TestCase
             ->assertJsonValidationErrors(['invoice_limit']);
     }
 
-    public function test_invoiced_order_edit_requires_revision_and_creates_replacement_invoice(): void
+    public function test_invoiced_order_edit_requires_confirmation_and_creates_new_order_for_manual_invoice(): void
     {
         $ctx = $this->seedTenantContext();
 
@@ -137,40 +178,156 @@ class FinancialApiTest extends TestCase
             ...$payload,
             'confirm_invoice_revision' => true,
         ])->assertOk()
-            ->assertJsonPath('invoice_revised', true);
+            ->assertJsonPath('new_order_created', true)
+            ->assertJsonPath('invoice_revised', false)
+            ->assertJsonPath('invoice', null)
+            ->assertJsonPath('voided_invoice.invoice_number', $originalInvoice['invoice_number']);
 
-        $replacementNumber = $response->json('invoice.invoice_number');
+        $newOrderUid = $response->json('order.uid');
+        $newOrderId = $response->json('order.id');
+        $newOrderNumber = $response->json('order.order_number');
 
-        $this->assertNotSame($originalInvoice['invoice_number'], $replacementNumber);
+        $this->assertNotSame($ctx['order']->uid, $newOrderUid);
+        $this->assertNotSame($ctx['order']->order_number, $newOrderNumber);
         $this->assertDatabaseHas('invoices', [
             'uid' => $originalInvoice['uid'],
-            'status' => 'void',
+            'status' => 'cancel',
             'total_amount' => 0,
             'outstanding_amount' => 0,
         ]);
-        $this->assertDatabaseHas('invoices', [
-            'invoice_number' => $replacementNumber,
-            'order_id' => $ctx['order']->id,
-            'status' => 'issued',
-            'total_amount' => 1250,
-            'outstanding_amount' => 1250,
+        $this->assertDatabaseHas('orders', [
+            'uid' => $ctx['order']->uid,
+            'status' => 'cancel',
         ]);
+        $this->assertDatabaseHas('orders', [
+            'uid' => $newOrderUid,
+            'status' => 'order',
+            'total_amount' => 1250,
+        ]);
+        $this->assertSame(1, Invoice::count());
         $this->assertDatabaseHas('invoice_lines', [
             'invoice_id' => Invoice::where('uid', $originalInvoice['uid'])->value('id'),
             'unit_price' => 0,
             'total_price' => 0,
         ]);
-        $this->assertStringContainsString(
-            $replacementNumber,
-            Invoice::where('uid', $originalInvoice['uid'])->value('notes')
-        );
+        $cancelledNotes = Invoice::where('uid', $originalInvoice['uid'])->value('notes');
+        $this->assertStringContainsString($newOrderNumber, $cancelledNotes);
+        $this->assertStringContainsString('Revenue breakup:', $cancelledNotes);
+        $this->assertStringContainsString('Costing breakup:', $cancelledNotes);
 
-        $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+        $this->getJson('/api/v1/invoices')
             ->assertOk()
-            ->assertJsonCount(2, 'invoices')
-            ->assertJsonPath('invoices.0.invoice_number', $replacementNumber)
-            ->assertJsonPath('invoices.1.invoice_number', $originalInvoice['invoice_number'])
-            ->assertJsonPath('invoices.1.status', 'void');
+            ->assertJsonPath('total', 0);
+
+        $this->getJson('/api/v1/reports/cancelled?from_date=2020-01-01&to_date=2030-12-31')
+            ->assertOk()
+            ->assertJsonPath('summary.total_records', 1)
+            ->assertJsonPath('data.0.invoice_number', $originalInvoice['invoice_number']);
+
+        $this->getJson('/api/v1/orders/' . $newOrderUid)
+            ->assertOk()
+            ->assertJsonPath('invoice', null)
+            ->assertJsonPath('status', 'order');
+
+        $manualInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $newOrderId,
+        ])->assertCreated()->json('invoice');
+
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $manualInvoice['uid'],
+            'order_id' => $newOrderId,
+            'status' => 'issued',
+            'total_amount' => 1250,
+            'outstanding_amount' => 1250,
+        ]);
+    }
+
+    public function test_invoiced_order_can_create_negative_refund_request_referencing_original_order(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $response = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('original_order_uid', $ctx['order']->uid)
+            ->assertJsonPath('order.status', 'refund_request')
+            ->assertJsonPath('order.total_amount', '-1000.0000')
+            ->assertJsonPath('order.booking_reference', $ctx['order']->order_number);
+
+        $refundOrderId = $response->json('order.id');
+        $refundOrderUid = $response->json('order.uid');
+
+        $this->assertNotSame($ctx['order']->uid, $refundOrderUid);
+        $this->assertDatabaseHas('orders', [
+            'id' => $ctx['order']->id,
+            'status' => 'invoice',
+            'total_amount' => 1000,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $refundOrderId,
+            'status' => 'refund_request',
+            'booking_reference' => $ctx['order']->order_number,
+            'total_amount' => -1000,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $refundOrderId,
+            'description' => 'Flight Ticket',
+            'unit_price' => -1000,
+            'total_price' => -1000,
+        ]);
+
+        $refundOrder = Order::findOrFail($refundOrderId);
+        $this->assertSame($ctx['order']->uid, $refundOrder->meta['refund_of_order_uid']);
+        $this->assertSame($ctx['order']->order_number, $refundOrder->meta['refund_of_order_number']);
+
+        $orders = $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $refundOrderId, 'status' => 'refund_request'])
+            ->json('data');
+        $this->assertFalse(collect($orders)->contains(fn (array $order) => (int) $order['id'] === (int) $ctx['order']->id));
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'refund',
+                'reference' => $refundOrder->order_number,
+                'refunds' => 1000,
+            ]);
+
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'vendor_refund',
+                'reference' => $refundOrder->order_number,
+                'vendor_refunds' => 1000,
+            ])
+            ->assertJsonPath('summary.outstanding_balance', 0);
+
+        $this->patchJson('/api/v1/orders/' . $refundOrder->uid, [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'refund',
+            'currency_code' => 'PKR',
+            'total_amount' => -1000,
+            'notes' => 'Refund completed',
+        ])->assertOk()
+            ->assertJsonPath('order.status', 'refund');
+
+        $completedRefundRows = $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->json('data');
+        $this->assertFalse(collect($completedRefundRows)->contains(fn (array $order) => (int) $order['id'] === (int) $refundOrderId));
+
+        $this->getJson('/api/v1/invoices?status=refund')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => 'refund-order-' . $refundOrderId,
+                'status' => 'refund',
+                'is_refund_order' => true,
+            ]);
     }
 
     public function test_payment_and_account_endpoints_work(): void
@@ -424,6 +581,64 @@ class FinancialApiTest extends TestCase
         ])->assertOk()->assertJsonPath('payment.amount', '300.0000');
         $this->deleteJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertOk();
         $this->assertDatabaseMissing('payments', ['uid' => $vendorPayment['uid']]);
+    }
+
+    public function test_voucher_share_link_is_publicly_readable(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $share = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/share')
+            ->assertOk()
+            ->assertJsonStructure(['share_url', 'share_token'])
+            ->json();
+
+        auth()->guard('sanctum')->forgetUser();
+        auth()->forgetGuards();
+
+        $this->getJson('/api/v1/shared-vouchers/' . $share['share_token'])
+            ->assertOk()
+            ->assertJsonPath('uid', $ctx['order']->uid)
+            ->assertJsonPath('order_number', $ctx['order']->order_number);
+    }
+
+    public function test_reference_search_finds_orders_invoices_and_voucher_metadata(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $ctx['order']->update([
+            'booking_reference' => 'REFPNR1',
+            'voucher_no' => 'FOLDER-779',
+            'meta' => [
+                'passengers' => [
+                    ['name' => 'Search Passenger', 'phone' => '03001234567', 'email' => 'search@example.com', 'postal_code' => '54010', 'ticket_no' => 'TICKET-778899'],
+                ],
+                'flights' => [
+                    ['gds_pnr' => 'REFPNR1', 'pnr' => 'AIRREF1', 'to' => 'JED', 'date' => '2026-08-01'],
+                ],
+                'pricing' => [
+                    ['pax_name' => 'Search Passenger', 'flight_ticket_no' => 'TICKET-778899'],
+                ],
+            ],
+        ]);
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->getJson('/api/v1/reference-search?pnr=REFPNR1')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Order', 'reference' => $ctx['order']->order_number]);
+
+        $this->getJson('/api/v1/reference-search?invoice_no=' . urlencode($invoice['invoice_number']))
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
+
+        $this->getJson('/api/v1/reference-search?ticket_no=TICKET-778899')
+            ->assertOk()
+            ->assertJsonFragment(['reference' => $ctx['order']->order_number]);
+
+        $this->getJson('/api/v1/reference-search?q=' . urlencode($ctx['customer']->name))
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Customer', 'reference' => $ctx['customer']->name]);
     }
 
     public function test_reports_and_statements_endpoints_work(): void
@@ -709,11 +924,23 @@ class FinancialApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('total', 1)
             ->assertJsonPath('data.0.id', $orderId);
+        $this->getJson('/api/v1/orders?status=order')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $orderId]);
+        $this->getJson('/api/v1/orders?status=cancel')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $orderId]);
         $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
             ->assertOk()
             ->assertJsonMissing(['id' => $orderId]);
 
         $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $orderId])->assertCreated();
+        $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $orderId]);
+        $this->getJson('/api/v1/orders?status=invoice')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $orderId]);
         $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
             ->assertOk()
             ->assertJsonFragment(['id' => $orderId, 'net_amount' => 770]);
@@ -734,6 +961,13 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/payments/vendor/' . $secondVendor->id . '/payables')
             ->assertOk()
             ->assertJsonPath('outstanding_total', 430);
+
+        Order::findOrFail($orderId)->vendorCosts()->delete();
+        $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.revenue', 1595)
+            ->assertJsonPath('data.0.cost', 1200)
+            ->assertJsonPath('data.0.profit', 395);
     }
 
     private function seedTenantContext(): array

@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Dropdown, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { DownOutlined, EyeOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { Button, Card, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toFixed(2);
+const canEditInvoiceOrder = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return ['admin', 'owner', 'accounts'].includes(user.role);
+  } catch {
+    return false;
+  }
+};
 
 export default function InvoiceList() {
   const navigate = useNavigate();
@@ -17,8 +25,12 @@ export default function InvoiceList() {
   const [refundInvoice, setRefundInvoice] = useState(null);
   const [refundAmount, setRefundAmount] = useState(0);
   const [refundReason, setRefundReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
+  const [deleteInvoice, setDeleteInvoice] = useState(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteInvoiceNumber, setDeleteInvoiceNumber] = useState('');
+  const [actionLoadingKey, setActionLoadingKey] = useState('');
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const canEditInvoices = canEditInvoiceOrder();
 
   const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
     setLoading(true);
@@ -80,35 +92,69 @@ export default function InvoiceList() {
       paid: 'success',
       overdue: 'error',
       void: 'default',
+      cancel: 'default',
+      refund: 'error',
+      partial_refund: 'warning',
     };
 
     return colors[status] || 'default';
   };
 
-  const request = async (endpoint, method = 'POST', body) => {
-    setActionLoading(true);
+  const request = async (endpoint, method = 'POST', body, loadingKey = 'action') => {
+    setActionLoadingKey(loadingKey);
     try {
       const response = await fetch(endpoint, { method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Action failed');
       return data;
-    } catch (error) { message.error(error.message); return null; } finally { setActionLoading(false); }
+    } catch (error) { message.error(error.message); return null; } finally { setActionLoadingKey(''); }
   };
 
   const refund = async (invoice, amount) => {
-    const data = await request('/api/v1/payments/customer/refund', 'POST', { invoice_uid: invoice.uid, amount, reason: refundReason || undefined });
+    const data = await request('/api/v1/payments/customer/refund', 'POST', { invoice_uid: invoice.uid, amount, reason: refundReason || undefined }, `${invoice.uid}:refund`);
     if (data) { message.success('Refund recorded'); setRefundInvoice(null); setRefundReason(''); fetchInvoices(); }
   };
 
   const voidInvoice = async (invoice) => {
-    const data = await request(`/api/v1/invoices/${invoice.uid}/void`, 'PATCH');
+    const data = await request(`/api/v1/invoices/${invoice.uid}/void`, 'PATCH', undefined, `${invoice.uid}:void`);
     if (data) { message.success('Invoice voided'); fetchInvoices(); }
   };
 
   const shareInvoice = async (invoice) => {
-    const data = await request(`/api/v1/invoices/${invoice.uid}/share`);
+    const data = await request(`/api/v1/invoices/${invoice.uid}/share`, 'POST', undefined, `${invoice.uid}:share`);
     if (data && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(data.share_url); message.success('Shareable invoice link copied'); }
     else if (data) window.prompt('Copy this shareable invoice link:', data.share_url);
+  };
+
+  const createRefundRequest = async (invoice) => {
+    const data = await request(`/api/v1/orders/${invoice.order.uid}/refund-request`, 'POST', undefined, `${invoice.uid}:refund-request`);
+    if (data) {
+      message.success(`Refund request ${data.order.order_number} created`);
+      fetchInvoices();
+    }
+  };
+
+  const openDeleteInvoice = (invoice) => {
+    setDeleteInvoice(invoice);
+    setDeletePassword('');
+    setDeleteInvoiceNumber('');
+  };
+
+  const cancelInvoice = async () => {
+    if (!deleteInvoice) return;
+
+    const data = await request(`/api/v1/invoices/${deleteInvoice.uid}/cancel`, 'PATCH', {
+      password: deletePassword,
+      invoice_number: deleteInvoiceNumber,
+    }, `${deleteInvoice.uid}:delete`);
+
+    if (data) {
+      message.success('Invoice deleted');
+      setDeleteInvoice(null);
+      setDeletePassword('');
+      setDeleteInvoiceNumber('');
+      fetchInvoices();
+    }
   };
 
   const columns = [
@@ -172,15 +218,34 @@ export default function InvoiceList() {
       fixed: 'right',
       render: (_, invoice) => (
         <Space>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>Open</Button>
-          <Dropdown menu={{ items: [
+          {invoice.is_refund_order ? (
+            <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>Open Order</Button>
+          ) : (
+            <>
+              <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>Invoice</Button>
+              <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>Detailed</Button>
+            </>
+          )}
+          {invoice.order?.uid && (
+            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>Voucher</Button>
+          )}
+          {!invoice.is_refund_order && <Dropdown menu={{ items: [
             { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void', onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
+            { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
             { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
             { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
             { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
+            ...(canEditInvoices ? [
+              { type: 'divider' },
+              { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => navigate(`/orders/${invoice.order.uid}/edit`) },
+              { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
+            ] : []),
             { type: 'divider' },
             { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
-          ] }}><Button size="small" loading={actionLoading}>Actions <DownOutlined /></Button></Dropdown>
+          ] }}><Button size="small" loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>Actions <DownOutlined /></Button></Dropdown>}
+          {invoice.is_refund_order && canEditInvoices && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>Edit</Button>
+          )}
         </Space>
       ),
     },
@@ -219,6 +284,8 @@ export default function InvoiceList() {
               { label: 'Paid', value: 'paid' },
               { label: 'Overdue', value: 'overdue' },
               { label: 'Void', value: 'void' },
+              { label: 'Partial Refund', value: 'partial_refund' },
+              { label: 'Refund', value: 'refund' },
             ]}
           />
         </Space>
@@ -238,12 +305,39 @@ export default function InvoiceList() {
           />
         </Spin>
       </Card>
-      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoading} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
+      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoadingKey === `${refundInvoice?.uid}:refund`} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
         <Typography.Paragraph>Refundable: {refundInvoice?.currency_code} {money(Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))}</Typography.Paragraph>
         <Typography.Text strong>Amount</Typography.Text>
         <InputNumber style={{ width: '100%', marginBottom: 12 }} min={0.01} max={Math.max(0, Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))} precision={2} value={refundAmount} onChange={(value) => setRefundAmount(Number(value || 0))} />
         <Typography.Text strong>Reason</Typography.Text>
         <Input.TextArea maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
+      </Modal>
+      <Modal
+        title={`Delete invoice · ${deleteInvoice?.invoice_number || ''}`}
+        open={!!deleteInvoice}
+        onCancel={() => setDeleteInvoice(null)}
+        onOk={cancelInvoice}
+        okText="Delete"
+        confirmLoading={actionLoadingKey === `${deleteInvoice?.uid}:delete`}
+        okButtonProps={{
+          danger: true,
+          disabled: !deletePassword || deleteInvoiceNumber !== deleteInvoice?.invoice_number,
+        }}
+      >
+        <Typography.Paragraph type="secondary">
+          This will mark the invoice as cancelled and remove it from the invoices table.
+        </Typography.Paragraph>
+        <Typography.Text strong>Invoice Number</Typography.Text>
+        <Input
+          style={{ marginBottom: 12 }}
+          value={deleteInvoiceNumber}
+          onChange={(event) => setDeleteInvoiceNumber(event.target.value)}
+        />
+        <Typography.Text strong>Password</Typography.Text>
+        <Input.Password
+          value={deletePassword}
+          onChange={(event) => setDeletePassword(event.target.value)}
+        />
       </Modal>
     </div>
   );

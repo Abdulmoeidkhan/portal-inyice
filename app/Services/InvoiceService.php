@@ -22,7 +22,7 @@ class InvoiceService
             $existingInvoice = Invoice::where('tenant_id', $order->tenant_id)
                 ->where('company_id', $order->company_id)
                 ->where('order_id', $order->id)
-                ->where('status', '!=', 'void')
+                ->whereNotIn('status', ['void', 'cancel'])
                 ->latest('id')
                 ->first();
 
@@ -46,7 +46,7 @@ class InvoiceService
             $order->loadMissing(['company', 'items']);
             $previousInvoice = Invoice::whereKey($previousInvoice->id)->lockForUpdate()->firstOrFail();
 
-            if ($previousInvoice->status === 'void') {
+            if (in_array($previousInvoice->status, ['void', 'cancel'], true)) {
                 return $this->createFreshInvoice($order)->fresh(['lines']);
             }
 
@@ -66,7 +66,7 @@ class InvoiceService
                 'total_amount' => 0,
                 'outstanding_amount' => 0,
                 'advance_balance' => 0,
-                'status' => 'void',
+                'status' => 'cancel',
                 'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $revisionNote : $revisionNote,
             ]);
 

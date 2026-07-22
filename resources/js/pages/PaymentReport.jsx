@@ -5,6 +5,7 @@ import { message } from '../services/feedback';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
 const firstOfMonth = () => { const date = new Date(); date.setDate(1); return dateString(date); };
 const money = (value) => Number(value || 0).toFixed(2);
 const label = (value) => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -41,13 +42,13 @@ export default function PaymentReport({ direction = 'payment' }) {
   const exportCsv = () => {
     if (!report?.data?.length) return;
     const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const rows = [['Date', 'Document', 'Counterparty type', 'Counterparty', 'Method', 'Reference', 'Description', 'Currency', 'Amount', 'Created by'], ...report.data.map((row) => [row.date, row.document_number, row.counterparty_type, row.counterparty_name, row.payment_method, row.reference_number, row.description, row.currency_code, row.amount, row.created_by])];
+    const rows = [['Date', 'Document', 'Counterparty type', 'Counterparty', 'Method', 'Reference', 'Description', 'Currency', 'Amount', 'Created by'], ...report.data.map((row) => [dateOnly(row.date), row.document_number, row.counterparty_type, row.counterparty_name, row.payment_method, row.reference_number, row.description, row.currency_code, row.amount, row.created_by])];
     const blob = new Blob([rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${direction}-report-${filters.from_date}-to-${filters.to_date}.csv`; anchor.click(); URL.revokeObjectURL(url);
   };
 
   const columns = [
-    { title: 'Date', dataIndex: 'date', width: 115 }, { title: `${isReceipt ? 'Receipt' : 'Payment'} #`, dataIndex: 'document_number', width: 165 },
+    { title: 'Date', dataIndex: 'date', width: 115, render: dateOnly }, { title: `${isReceipt ? 'Receipt' : 'Payment'} #`, dataIndex: 'document_number', width: 165 },
     { title: 'Type', dataIndex: 'counterparty_type', width: 110, render: (value) => <Tag color={value === 'customer' ? 'blue' : 'purple'}>{label(value)}</Tag> },
     { title: 'Customer / vendor', dataIndex: 'counterparty_name', width: 190 }, { title: 'Method', dataIndex: 'payment_method', width: 135, render: (value) => <Tag>{label(value)}</Tag> },
     { title: 'Reference', dataIndex: 'reference_number', width: 145, render: (value) => value || '—' }, { title: 'Description', dataIndex: 'description', width: 220, ellipsis: true, render: (value) => value || '—' },

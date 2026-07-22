@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\MasterDataController;
 use App\Http\Controllers\Api\CompanyUserController;
 use App\Http\Controllers\Api\CompanyProfileController;
 use App\Http\Controllers\Api\InternalPortalController;
+use App\Http\Controllers\Api\ReferenceSearchController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,12 @@ Route::get('/registration/currencies', [RegistrationController::class, 'getCurre
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
+Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])
+    ->middleware('throttle:public-api')
+    ->name('sharedInvoices.show');
+Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
+    ->middleware('throttle:public-api')
+    ->name('sharedVouchers.show');
 
 
 Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
@@ -30,13 +37,6 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-
-    Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])
-        ->middleware('throttle:public-api')
-        ->name('sharedInvoices.show');
-    Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
-        ->middleware('throttle:public-api')
-        ->name('sharedVouchers.show');
 
     Route::prefix('company-users')->controller(CompanyUserController::class)->group(function () {
         Route::get('/', 'index')->middleware('role:owner,admin')->name('companyUsers.list');
@@ -71,6 +71,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/{uid}', 'show')->name('invoices.show');
         Route::patch('/{uid}/mark-sent', 'markAsSent')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.markAsSent');
         Route::patch('/{uid}/void', 'void')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.void');
+        Route::patch('/{uid}/cancel', 'cancel')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.cancel');
         Route::get('/{uid}/aging-status', 'agingStatus')->name('invoices.agingStatus');
     });
 
@@ -79,8 +80,9 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/', 'index')->name('orders.list');
         Route::post('/{uid}/share', 'share')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share');
         Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share.revoke');
+        Route::post('/{uid}/refund-request', 'createRefundRequest')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.refundRequest');
         Route::get('/{uid}', 'show')->name('orders.show');
-        Route::patch('/{uid}', 'update')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.update');
+        Route::patch('/{uid}', 'update')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.update');
         Route::delete('/{uid}', 'destroy')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.destroy');
         Route::post('/parse-gds', 'parseGds')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.parseGds');
         Route::post('/create-from-voucher', 'createFromVoucher')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.createFromVoucher');
@@ -94,6 +96,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::post('/vendors', 'storeVendor')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('vendors.create');
         Route::get('/staff', 'staff')->name('staff.list');
     });
+
+    Route::get('/reference-search', [ReferenceSearchController::class, 'index'])->name('referenceSearch.index');
 
     // ========== PAYMENTS ==========
     Route::prefix('payments')->controller(PaymentController::class)->group(function () {
@@ -143,17 +147,21 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
 
     // ========== REPORTS ==========
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
+        Route::get('/dashboard-upcoming', 'dashboardUpcoming')->name('reports.dashboardUpcoming');
+        Route::get('/cancelled', 'cancelledReport')->name('reports.cancelled');
+    });
+
+    Route::prefix('reports')->controller(ReportController::class)->middleware('role:admin,accounts')->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
         Route::get('/profit', 'profitReport')->name('reports.profit');
         Route::get('/payments', 'paymentReport')->name('reports.payments');
         Route::get('/receipts', 'receiptReport')->name('reports.receipts');
         Route::get('/customer-summary', 'customerSummaryReport')->name('reports.customerSummary');
-        Route::get('/dashboard-upcoming', 'dashboardUpcoming')->name('reports.dashboardUpcoming');
     });
 
     // ========== STATEMENTS ==========
-    Route::prefix('statements')->controller(StatementController::class)->group(function () {
+    Route::prefix('statements')->controller(StatementController::class)->middleware('role:admin,accounts')->group(function () {
         Route::get('/customer/{customerId}', 'customerStatement')->name('statements.customer');
         Route::get('/vendor/{vendorId}', 'vendorStatement')->name('statements.vendor');
     });

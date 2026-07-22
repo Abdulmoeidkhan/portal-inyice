@@ -6,6 +6,7 @@ import { message } from '../services/feedback';
 const { Title, Paragraph, Text } = Typography;
 
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
 const firstOfMonth = () => {
   const date = new Date();
   date.setDate(1);
@@ -109,25 +110,25 @@ export default function ProfitReport() {
 
     const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
     const rows = [
-      [`${groupLabel}`, 'Currency', 'Orders', 'Revenue', 'Cost', 'Profit', 'Margin'],
+      [`${groupLabel}`, 'Currency', 'Orders', 'Cost', 'Profit', 'Revenue', 'Margin'],
       ...report.data.map((row) => [
         row.group_name,
         row.currency_code,
         row.order_count,
-        row.revenue,
         row.cost,
         row.profit,
+        row.revenue,
         row.profit_margin,
       ]),
       [],
-      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Revenue', 'Cost', 'Profit', 'Margin'],
+      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Cost', 'Profit', 'Revenue', 'Margin'],
       ...(report.details || []).map((row) => [
-        row.date,
-        row.creation_date,
-        row.invoice_date,
-        row.departure_date,
-        row.checkin_date,
-        row.service_date,
+        dateOnly(row.date),
+        dateOnly(row.creation_date),
+        dateOnly(row.invoice_date),
+        dateOnly(row.departure_date),
+        dateOnly(row.checkin_date),
+        dateOnly(row.service_date),
         row.order_number,
         row.voucher_no,
         row.booking_reference,
@@ -136,9 +137,9 @@ export default function ProfitReport() {
         row.staff_name,
         row.status,
         row.currency_code,
-        row.revenue,
         row.cost,
         row.profit,
+        row.revenue,
         row.profit_margin,
       ]),
     ];
@@ -156,7 +157,6 @@ export default function ProfitReport() {
     { title: groupLabel, dataIndex: 'group_name', width: 240 },
     { title: 'Currency', dataIndex: 'currency_code', width: 100, render: (value) => <Tag>{value}</Tag> },
     { title: 'Orders', dataIndex: 'order_count', width: 100, align: 'center' },
-    { title: 'Revenue', dataIndex: 'revenue', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     { title: 'Cost', dataIndex: 'cost', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     {
       title: 'Profit',
@@ -165,16 +165,17 @@ export default function ProfitReport() {
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
+    { title: 'Revenue', dataIndex: 'revenue', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     { title: 'Margin', dataIndex: 'profit_margin', width: 110, align: 'right', render: margin },
   ];
 
   const detailColumns = [
-    { title: 'Date', dataIndex: 'date', width: 115 },
-    { title: 'Creation Date', dataIndex: 'creation_date', width: 125, render: (value) => value || '-' },
-    { title: 'Invoice Date', dataIndex: 'invoice_date', width: 120, render: (value) => value || '-' },
-    { title: 'Departure Date', dataIndex: 'departure_date', width: 145, render: (value) => value || '-' },
-    { title: 'Check-in Date', dataIndex: 'checkin_date', width: 135, render: (value) => value || '-' },
-    { title: 'Service Date', dataIndex: 'service_date', width: 160, render: (value) => value || '-' },
+    { title: 'Date', dataIndex: 'date', width: 115, render: dateOnly },
+    { title: 'Creation Date', dataIndex: 'creation_date', width: 125, render: dateOnly },
+    { title: 'Invoice Date', dataIndex: 'invoice_date', width: 120, render: dateOnly },
+    { title: 'Departure Date', dataIndex: 'departure_date', width: 145, render: dateOnly },
+    { title: 'Check-in Date', dataIndex: 'checkin_date', width: 135, render: dateOnly },
+    { title: 'Service Date', dataIndex: 'service_date', width: 160, render: dateOnly },
     { title: 'Order #', dataIndex: 'order_number', width: 150 },
     { title: 'Voucher', dataIndex: 'voucher_no', width: 135, render: (value) => value || '-' },
     { title: 'PNR', dataIndex: 'booking_reference', width: 120, render: (value) => value || '-' },
@@ -182,16 +183,15 @@ export default function ProfitReport() {
     { title: 'Vendor', dataIndex: 'vendor_name', width: 180, render: (value) => value || '-' },
     { title: 'Staff', dataIndex: 'staff_name', width: 160, render: (value) => value || '-' },
     { title: 'Status', dataIndex: 'status', width: 125, render: (value) => <Tag>{label(value)}</Tag> },
-    { title: 'Revenue', dataIndex: 'revenue', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     { title: 'Cost', dataIndex: 'cost', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     {
       title: 'Profit',
       dataIndex: 'profit',
-      fixed: 'right',
       width: 135,
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
+    { title: 'Revenue', dataIndex: 'revenue', fixed: 'right', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
   ];
 
   return (

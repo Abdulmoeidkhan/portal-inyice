@@ -116,6 +116,26 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const dateOnlyMs = (value) => {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+};
+
+const calculateNights = (checkIn, checkOut) => {
+  const start = dateOnlyMs(checkIn);
+  const end = dateOnlyMs(checkOut);
+
+  if (start === null || end === null || end <= start) {
+    return '';
+  }
+
+  return String(Math.round((end - start) / (24 * 60 * 60 * 1000)));
+};
+
 const moneyValue = (value) => {
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
@@ -146,6 +166,7 @@ export default function VoucherRowsSections({
   removeRow,
   onUseFlightPassengersForVisa,
   onSetHotelLeadPassenger,
+  canViewCostProfit = true,
 }) {
   const vendorOptions = vendors.map((vendor) => ({
     value: vendor.id,
@@ -175,6 +196,10 @@ export default function VoucherRowsSections({
     const sales = toNumber(nextRow.flight_sales);
 
     setRowField('pricing', idx, field, numericValue);
+
+    if (!canViewCostProfit) {
+      return;
+    }
 
     if (field === 'flight_cost') {
       if (cost !== null && profit !== null) {
@@ -206,6 +231,13 @@ export default function VoucherRowsSections({
     const sales = toNumber(nextRow.sales);
 
     setRowField(section, idx, field, numericValue);
+
+    if (!canViewCostProfit) {
+      if (field === 'sales') {
+        setRowField(section, idx, 'amount', moneyValue(sales || 0));
+      }
+      return;
+    }
 
     if (field === 'cost') {
       if (cost !== null && profit !== null) {
@@ -250,7 +282,14 @@ export default function VoucherRowsSections({
     </Col>
   );
 
-  const serviceMoneyInputs = (section, idx, row) => serviceMoneyFields.map(([label, field, inputProps]) => (
+  const visibleServiceMoneyFields = canViewCostProfit
+    ? serviceMoneyFields
+    : serviceMoneyFields.filter(([, field]) => field === 'sales');
+  const visibleFlightPricingFields = canViewCostProfit
+    ? flightPricingFields
+    : flightPricingFields.filter(([, field]) => !['flight_cost', 'flight_profit'].includes(field));
+
+  const serviceMoneyInputs = (section, idx, row) => visibleServiceMoneyFields.map(([label, field, inputProps]) => (
     <Col xs={24} sm={12} md={8} lg={4} xl={6} key={field}>
       <Text>{label}</Text>
       <InputNumber
@@ -362,7 +401,7 @@ export default function VoucherRowsSections({
                   />
                 </Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Passenger</Text><Input value={row.pax_name || voucher.passengers[idx]?.name || ''} onChange={(e) => setRowField('pricing', idx, 'pax_name', e.target.value)} /></Col>
-                {flightPricingFields.map(([label, field, inputProps]) => (
+                {visibleFlightPricingFields.map(([label, field, inputProps]) => (
                   <Col xs={24} sm={12} md={8} lg={4} xl={4} key={field}>
                     <Text>{label}</Text>
                     <InputNumber
@@ -483,6 +522,7 @@ export default function VoucherRowsSections({
               </Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Check In</Text><Input type="date" value={row.check_in} onChange={(e) => setRowField('hotels', idx, 'check_in', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Check Out</Text><Input type="date" value={row.check_out} onChange={(e) => setRowField('hotels', idx, 'check_out', e.target.value)} /></Col>
+              <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Nights</Text><Input value={calculateNights(row.check_in, row.check_out)} readOnly /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={8}><Text>Hotel Name</Text><Input value={row.hotel_name} onChange={(e) => setRowField('hotels', idx, 'hotel_name', e.target.value)} /></Col>
               {serviceVendorSelect('hotels', idx, row, 'Hotel Vendor')}
               {serviceMoneyInputs('hotels', idx, row)}

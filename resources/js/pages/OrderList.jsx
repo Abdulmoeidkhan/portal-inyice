@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Form, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined } from '@ant-design/icons';
+import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -26,10 +26,10 @@ const getStatusColor = (status) => {
   const colors = {
     quote: 'default',
     order: 'processing',
-    confirm: 'success',
     cancel: 'error',
     invoice: 'purple',
     void: 'default',
+    refund_request: 'error',
     refund: 'error',
     partial_refund: 'warning',
     paid: 'success',
@@ -40,6 +40,22 @@ const getStatusColor = (status) => {
 };
 
 const formatStatus = (status) => String(status || 'order').replace(/_/g, ' ').toUpperCase();
+const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'];
+const statusFilterOptions = [
+  { label: 'Quote', value: 'quote' },
+  { label: 'Order', value: 'order' },
+  { label: 'Cancel', value: 'cancel' },
+  { label: 'Refund Request', value: 'refund_request' },
+];
+
+const currentUserIsSales = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.role === 'sales';
+  } catch {
+    return false;
+  }
+};
 
 const countRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => rowHasValue(row, keys)).length : 0);
 
@@ -77,7 +93,11 @@ export default function OrderList() {
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [invoicingOrderId, setInvoicingOrderId] = useState(null);
+  const [refundRequestOrderId, setRefundRequestOrderId] = useState(null);
+  const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
+  const isSalesUser = currentUserIsSales();
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -100,7 +120,7 @@ export default function OrderList() {
     }
   };
 
-  const fetchOrders = async (page = pagination.current, search = searchTerm) => {
+  const fetchOrders = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -110,6 +130,10 @@ export default function OrderList() {
 
       if (search) {
         params.set('search', search);
+      }
+
+      if (status) {
+        params.set('status', status);
       }
 
       const response = await fetch(`/api/v1/orders?${params}`, {
@@ -157,7 +181,13 @@ export default function OrderList() {
   const handleSearch = (value) => {
     const search = value.trim();
     setSearchTerm(search);
-    fetchOrders(1, search);
+    fetchOrders(1, search, statusFilter);
+  };
+
+  const handleStatusFilter = (value) => {
+    const status = value || '';
+    setStatusFilter(status);
+    fetchOrders(1, searchTerm, status);
   };
 
   const createInvoice = async (order) => {
@@ -180,6 +210,28 @@ export default function OrderList() {
       message.error(error.message || 'Failed to create invoice');
     } finally {
       setInvoicingOrderId(null);
+    }
+  };
+
+  const createRefundRequest = async (order) => {
+    setRefundRequestOrderId(order.id);
+    try {
+      const response = await fetch(`/api/v1/orders/${order.uid}/refund-request`, {
+        method: 'POST',
+        headers: authHeaders(true),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to create refund request');
+      }
+
+      message.success(`Refund request ${data.order.order_number} created`);
+      fetchOrders(pagination.current, searchTerm, statusFilter);
+    } catch (error) {
+      message.error(error.message || 'Failed to create refund request');
+    } finally {
+      setRefundRequestOrderId(null);
     }
   };
 
@@ -321,7 +373,10 @@ export default function OrderList() {
       dataIndex: 'total_amount',
       key: 'total_amount',
       align: 'right',
-      render: (amount, record) => `${record.currency_code || ''} ${Number(amount || 0).toFixed(2)}`,
+      render: (amount, record) => {
+        const value = Number(amount || 0);
+        return <Text type={value < 0 ? 'danger' : undefined}>{record.currency_code || ''} {value.toFixed(2)}</Text>;
+      },
     },
     {
       title: 'Items',
@@ -341,6 +396,7 @@ export default function OrderList() {
       title: 'Actions',
       key: 'actions',
       width: 250,
+      fixed:'right',
       render: (_, record) => (
         <Space>
           {record.status === 'invoice' && !record.invoice && (
@@ -354,6 +410,17 @@ export default function OrderList() {
               Create Invoice
             </Button>
           )}
+          {invoiceSectionStatuses.includes(record.status) && record.invoice && (
+            <Button
+              danger
+              size="small"
+              icon={<RollbackOutlined />}
+              loading={refundRequestOrderId === record.id}
+              onClick={() => createRefundRequest(record)}
+            >
+              Refund Request
+            </Button>
+          )}
           <Button
             size="small"
             icon={<EyeOutlined />}
@@ -361,13 +428,15 @@ export default function OrderList() {
           >
             Voucher
           </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => openEditDrawer(record)}
-          >
-            Edit
-          </Button>
+          {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEditDrawer(record)}
+            >
+              Edit
+            </Button>
+          )}
           <Popconfirm
             title="Delete order?"
             description="This removes the order if no invoice exists for it."
@@ -403,6 +472,15 @@ export default function OrderList() {
             onSearch={handleSearch}
             style={{ width: 420 }}
           />
+          <Select
+            className="responsive-control"
+            allowClear
+            placeholder="Filter by status"
+            value={statusFilter || undefined}
+            options={statusFilterOptions}
+            onChange={handleStatusFilter}
+            style={{ width: 220 }}
+          />
         </div>
         <Spin spinning={loading}>
           <Table
@@ -414,7 +492,7 @@ export default function OrderList() {
               current: pagination.current,
               pageSize: pagination.pageSize,
               total: pagination.total,
-              onChange: (page) => fetchOrders(page),
+              onChange: (page) => fetchOrders(page, searchTerm, statusFilter),
             }}
           />
         </Spin>
@@ -437,7 +515,9 @@ export default function OrderList() {
                   <Tag color={getStatusColor(selectedOrder.status)}>{formatStatus(selectedOrder.status)}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="Total">
-                  {selectedOrder.currency_code || ''} {Number(selectedOrder.total_amount || 0).toFixed(2)}
+                  <Text type={Number(selectedOrder.total_amount || 0) < 0 ? 'danger' : undefined}>
+                    {selectedOrder.currency_code || ''} {Number(selectedOrder.total_amount || 0).toFixed(2)}
+                  </Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="Notes">{selectedOrder.notes || '-'}</Descriptions.Item>
               </Descriptions>
@@ -492,13 +572,13 @@ export default function OrderList() {
                 </Form.Item>
                 <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 180 }}>
                   <Select
+                    disabled={!canChangeEditingStatus}
                     options={[
                       {
                         label: 'Order Section',
                         options: [
                           { label: 'Quote', value: 'quote' },
                           { label: 'Order', value: 'order' },
-                          { label: 'Confirm', value: 'confirm' },
                           { label: 'Cancel', value: 'cancel' },
                         ],
                       },
@@ -507,15 +587,9 @@ export default function OrderList() {
                         options: [
                           { label: 'Invoice', value: 'invoice' },
                           { label: 'Void', value: 'void' },
+                          { label: 'Refund Request', value: 'refund_request' },
                           { label: 'Refund', value: 'refund' },
                           { label: 'Partial Refund', value: 'partial_refund' },
-                        ],
-                      },
-                      {
-                        label: 'Payment Section',
-                        options: [
-                          { label: 'Paid', value: 'paid' },
-                          { label: 'Partial Paid', value: 'partial_paid' },
                         ],
                       },
                     ]}

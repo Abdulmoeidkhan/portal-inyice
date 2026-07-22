@@ -4,6 +4,8 @@ import { message } from '../services/feedback';
 import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
 
+const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
+
 export default function RevenueReport() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,7 @@ export default function RevenueReport() {
       title: 'Period',
       dataIndex: 'period',
       key: 'period',
+      render: dateOnly,
     },
     {
       title: 'Total Revenue',

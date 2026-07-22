@@ -28,7 +28,7 @@ class Invoice extends Model
         'total_amount',
         'outstanding_amount',
         'advance_balance',
-        'status', // 'draft', 'issued', 'sent', 'partial_paid', 'paid', 'overdue', 'void'
+        'status', // 'draft', 'issued', 'sent', 'partial_paid', 'paid', 'overdue', 'void', 'cancel'
         'fx_rate_to_base', // Exchange rate used (base currency)
         'notes',
     ];

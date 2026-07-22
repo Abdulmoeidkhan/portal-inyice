@@ -3,7 +3,14 @@ import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, T
 import { PrinterOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
+const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
+const money = (value) => Number(value || 0).toFixed(2);
+const statementTotals = (rows = []) => ({
+  debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),
+  credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),
+  balance: Number(rows.at(-1)?.balance || 0),
+});
 
 export default function CustomerStatement() {
   const [customers, setCustomers] = useState([]);
@@ -47,20 +54,25 @@ export default function CustomerStatement() {
 
   const columns = [
     { title: 'Invoice', dataIndex: 'invoice_number', key: 'invoice_number' },
-    { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date' },
-    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date' },
-    { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
-    { title: 'Paid', key: 'paid', align: 'right', render: (_, row) => (Number(row.amount || 0) - Number(row.outstanding || 0)).toFixed(2) },
-    { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date', render: dateOnly },
+    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: dateOnly },
+    { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: money },
+    { title: 'Paid', key: 'paid', align: 'right', render: (_, row) => money(Number(row.amount || 0) - Number(row.outstanding || 0)) },
+    { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: money },
     { title: 'Status', dataIndex: 'status', render: (value) => <Tag>{String(value || '').toUpperCase()}</Tag> },
   ];
   const transactionColumns = [
-    { title: 'Date', dataIndex: 'date' }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).toUpperCase()}</Tag> },
+    { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description' },
-    { title: 'Debit', dataIndex: 'debit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
-    { title: 'Credit', dataIndex: 'credit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Sales', dataIndex: 'sales', align: 'right', render: money },
+    { title: 'Refunds', dataIndex: 'refunds', align: 'right', render: money },
+    { title: 'Receipts', dataIndex: 'customer_receipts', align: 'right', render: money },
+    { title: 'Payments', dataIndex: 'customer_payments', align: 'right', render: money },
+    { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
+    { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
+  const totals = statementTotals(statement?.transactions || []);
 
   return (
     <div className="page-shell page-fade-up">
@@ -104,7 +116,21 @@ export default function CustomerStatement() {
               <Table scroll={{ x: 'max-content' }} columns={columns} dataSource={statement.customer_currency_invoices} rowKey="invoice_uid" pagination={false} />
             </Card>
             <Card className="border-beam-aurora" title="Receipts and Payments" style={{ marginTop: 16 }}>
-              <Table scroll={{ x: 'max-content' }} columns={transactionColumns} dataSource={statement.transactions} rowKey="id" pagination={false} />
+              <Table
+                scroll={{ x: 'max-content' }}
+                columns={transactionColumns}
+                dataSource={statement.transactions}
+                rowKey="id"
+                pagination={false}
+                summary={() => (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={8}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                  </Table.Summary.Row>
+                )}
+              />
             </Card>
           </>
         )}

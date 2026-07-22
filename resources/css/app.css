@@ -1102,6 +1102,17 @@ body {
   background: #ffffff;
 }
 
+.invoice-document {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: 18px;
+}
+
+.invoice-document > .ant-card {
+  margin-inline: auto;
+}
+
 .company-profile-assets {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1373,6 +1384,10 @@ body {
     min-height: calc(100vh - 84px);
   }
 
+  .invoice-document {
+    padding-inline: 6px;
+  }
+
   .elevated-card {
     padding: 16px;
     border-radius: 14px;
@@ -1599,7 +1614,15 @@ body {
   }
 }
 @media print {
-  @page { margin: 8mm; }
+  @page { margin: 14mm 12mm; }
+
+  html,
+  body,
+  #root {
+    width: auto !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+  }
 
   .app-sider,
   .app-header,
@@ -1610,16 +1633,85 @@ body {
   }
 
   .app-content,
-  .invoice-document,
-  .invoice-document .ant-card-body,
   .voucher-detail-page {
     margin: 0 !important;
     padding: 0 !important;
   }
 
+  .invoice-document {
+    max-width: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    color: #111827 !important;
+    background: #ffffff !important;
+  }
+
   .invoice-document .ant-card {
     border: 0 !important;
     box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  .invoice-document .ant-card-body {
+    padding: 10mm !important;
+  }
+
+  .invoice-document .ant-row {
+    break-inside: avoid;
+  }
+
+  .invoice-document .ant-table,
+  .invoice-document .ant-descriptions {
+    page-break-inside: auto;
+  }
+
+  .invoice-document .ant-table-thead > tr > th,
+  .invoice-document .ant-table-tbody > tr > td {
+    padding: 7px 8px !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+  }
+
+  .invoice-document .ant-table-thead > tr > th {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+    font-weight: 700 !important;
+  }
+
+  .invoice-document .ant-typography,
+  .invoice-document .ant-descriptions-item-label,
+  .invoice-document .ant-descriptions-item-content,
+  .invoice-document .ant-table-cell {
+    color: #111827 !important;
+  }
+
+  .invoice-document h1.ant-typography,
+  .invoice-document .ant-typography h1 {
+    font-size: 26px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .invoice-document h2.ant-typography,
+  .invoice-document .ant-typography h2 {
+    font-size: 20px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .invoice-document h4.ant-typography,
+  .invoice-document .ant-typography h4 {
+    font-size: 14px !important;
+    margin: 10px 0 8px !important;
+  }
+
+  .invoice-company-logo {
+    max-width: 95px !important;
+    max-height: 70px !important;
+    object-fit: contain !important;
+  }
+
+  .invoice-document .ant-divider {
+    margin: 12px 0 !important;
+    border-color: #d1d5db !important;
   }
 
   .voucher-preview {

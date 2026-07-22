@@ -3,7 +3,14 @@ import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, T
 import { PrinterOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
+const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
+const money = (value) => Number(value || 0).toFixed(2);
+const statementTotals = (rows = []) => ({
+  debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),
+  credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),
+  balance: Number(rows.at(-1)?.balance || 0),
+});
 
 export default function VendorStatement() {
   const [vendors, setVendors] = useState([]);
@@ -45,14 +52,19 @@ export default function VendorStatement() {
   };
 
   const columns = [
-    { title: 'Date', dataIndex: 'date', key: 'date' },
-    { title: 'Type', dataIndex: 'type', render: (value) => <Tag color={value === 'payment' ? 'green' : 'orange'}>{value.toUpperCase()}</Tag> },
+    { title: 'Date', dataIndex: 'date', key: 'date', render: dateOnly },
+    { title: 'Type', dataIndex: 'type', render: (value) => <Tag color={String(value).includes('payment') ? 'green' : 'orange'}>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference', key: 'reference' },
     { title: 'Narration', dataIndex: 'description', key: 'description' },
-    { title: 'Payable', dataIndex: 'debit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
-    { title: 'Paid', dataIndex: 'credit', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (value) => Number(value || 0).toFixed(2) },
+    { title: 'Payables', dataIndex: 'vendor_payables', align: 'right', render: money },
+    { title: 'Refunds', dataIndex: 'vendor_refunds', align: 'right', render: money },
+    { title: 'Payments', dataIndex: 'vendor_payments', align: 'right', render: money },
+    { title: 'Receipts', dataIndex: 'vendor_receipts', align: 'right', render: money },
+    { title: 'Payable', dataIndex: 'debit', align: 'right', render: money },
+    { title: 'Paid', dataIndex: 'credit', align: 'right', render: money },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
+  const totals = statementTotals(statement?.transactions || []);
 
   return (
     <div className="page-shell page-fade-up">
@@ -82,7 +94,21 @@ export default function VendorStatement() {
               </Row>
             </Card>
             <Card className="border-beam-aurora" title="Vendor Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
-              <Table scroll={{ x: 'max-content' }} columns={columns} dataSource={statement.transactions} rowKey="id" pagination={false} />
+              <Table
+                scroll={{ x: 'max-content' }}
+                columns={columns}
+                dataSource={statement.transactions}
+                rowKey="id"
+                pagination={false}
+                summary={() => (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={8}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                  </Table.Summary.Row>
+                )}
+              />
             </Card>
           </>
         )}

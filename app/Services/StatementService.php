@@ -87,16 +87,26 @@ class StatementService
 
         $cashTransactions = collect();
         foreach ($invoices as $invoice) {
-            $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'description' => 'Customer invoice', 'debit' => (float) $invoice->total_amount, 'credit' => 0, 'sort_order' => 1]);
+            $amount = (float) $invoice->total_amount;
+            $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'description' => 'Customer invoice', 'sales' => $amount, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => $amount, 'credit' => 0, 'sort_order' => 1]);
         }
+        Order::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->where('company_id', $companyId)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where('total_amount', '<', 0)
+            ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))->get()
+            ->each(function (Order $order) use ($cashTransactions): void {
+                $amount = abs((float) $order->total_amount);
+                $cashTransactions->push(['id' => 'refund-order-' . $order->id, 'date' => $order->created_at->toDateString(), 'type' => 'refund', 'reference' => $order->order_number, 'description' => $order->notes ?: 'Customer refund request', 'sales' => 0, 'refunds' => $amount, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => 0, 'credit' => $amount, 'sort_order' => 2]);
+            });
         Receipt::where('tenant_id', $tenantId)->where('customer_id', $customerId)
             ->where('company_id', $companyId)
             ->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get()
-            ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from customer', 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 2]));
+            ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => (float) $receipt->amount, 'customer_payments' => 0, 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 3]));
         Payment::where('tenant_id', $tenantId)->where('customer_id', $customerId)
             ->where('company_id', $companyId)
             ->when($fromDate, fn ($q) => $q->where('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('payment_date', '<=', $toDate))->get()
-            ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'description' => $payment->description ?: 'Payment to customer', 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 3]));
+            ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'description' => $payment->description ?: 'Payment to customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => (float) $payment->amount, 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 4]));
         $runningCustomerBalance = 0;
         $cashTransactions = $cashTransactions->sortBy([['date', 'asc'], ['sort_order', 'asc']])->values()->map(function ($row) use (&$runningCustomerBalance) {
             $runningCustomerBalance += $row['debit'] - $row['credit']; $row['balance'] = $runningCustomerBalance; unset($row['sort_order']); return $row;
@@ -150,11 +160,14 @@ class StatementService
 
         $eligibleOrders = Order::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereHas('invoice', fn ($invoice) => $invoice->where('status', '!=', 'void'))
+            ->where(function ($query): void {
+                $query->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
+                    ->orWhereIn('status', ['refund_request', 'partial_refund', 'refund']);
+            })
             ->with('invoice:id,order_id,invoice_date')
             ->orderBy('created_at')
             ->get()
-            ->filter(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId) > 0);
+            ->filter(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId) != 0.0);
         $paymentsQuery = Payment::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->where('vendor_id', $vendorId);
@@ -181,14 +194,20 @@ class StatementService
 
         $transactions = collect();
         foreach ($orders as $order) {
+            $payable = $this->vendorPayableAmount($order, $vendorId);
+            $isRefund = $payable < 0;
             $transactions->push([
                 'id' => 'order-' . $order->id,
                 'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
-                'type' => 'payable',
+                'type' => $isRefund ? 'vendor_refund' : 'payable',
                 'reference' => $order->order_number,
-                'description' => $order->notes ?: 'Vendor cost for order',
-                'debit' => $this->vendorPayableAmount($order, $vendorId),
-                'credit' => 0,
+                'description' => $order->notes ?: ($isRefund ? 'Vendor refund for order' : 'Vendor cost for order'),
+                'vendor_payables' => $isRefund ? 0 : $payable,
+                'vendor_refunds' => $isRefund ? abs($payable) : 0,
+                'vendor_payments' => 0,
+                'vendor_receipts' => 0,
+                'debit' => $isRefund ? 0 : $payable,
+                'credit' => $isRefund ? abs($payable) : 0,
                 'sort_order' => 1,
             ]);
         }
@@ -199,6 +218,10 @@ class StatementService
                 'type' => 'payment',
                 'reference' => $payment->payment_number,
                 'description' => $payment->description ?: 'Payment to vendor',
+                'vendor_payables' => 0,
+                'vendor_refunds' => 0,
+                'vendor_payments' => (float) $payment->amount,
+                'vendor_receipts' => 0,
                 'debit' => 0,
                 'credit' => (float) $payment->amount,
                 'sort_order' => 2,
@@ -208,6 +231,7 @@ class StatementService
             $transactions->push([
                 'id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt',
                 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from vendor',
+                'vendor_payables' => 0, 'vendor_refunds' => 0, 'vendor_payments' => 0, 'vendor_receipts' => (float) $receipt->amount,
                 'debit' => (float) $receipt->amount, 'credit' => 0, 'sort_order' => 3,
             ]);
         }

@@ -82,7 +82,6 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
                     options: [
                       { value: 'quote', label: 'Quote' },
                       { value: 'order', label: 'Order' },
-                      { value: 'confirm', label: 'Confirm' },
                       { value: 'cancel', label: 'Cancel' },
                     ],
                   },

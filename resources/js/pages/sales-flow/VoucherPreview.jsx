@@ -7,8 +7,72 @@ const { Text, Title } = Typography;
 
 const firstFilled = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '') || '';
 const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
+const dayMs = 24 * 60 * 60 * 1000;
 
 const cleanRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => keys.some((key) => firstFilled(row?.[key]))) : []);
+
+const dateOnlyMs = (value) => {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+};
+
+const calculateNights = (checkIn, checkOut) => {
+  const start = dateOnlyMs(checkIn);
+  const end = dateOnlyMs(checkOut);
+
+  if (start === null || end === null || end <= start) {
+    return '';
+  }
+
+  return String(Math.round((end - start) / dayMs));
+};
+
+const calculatePackageDays = (voucher) => {
+  const dates = [];
+  const addDate = (value) => {
+    const parsed = dateOnlyMs(value);
+    if (parsed !== null) {
+      dates.push(parsed);
+    }
+  };
+
+  (voucher.flights || []).forEach((row) => addDate(row.date));
+  (voucher.hotels || []).forEach((row) => {
+    addDate(row.check_in);
+    addDate(row.check_out);
+  });
+  (voucher.city_tours || []).forEach((row) => addDate(row.date));
+
+  if (!dates.length) {
+    return '';
+  }
+
+  const start = Math.min(...dates);
+  const end = Math.max(...dates);
+
+  return String(Math.max(1, Math.round((end - start) / dayMs) + 1));
+};
+
+const buildPassengerRows = (passengers, visaRows) => {
+  const maxRows = Math.max(passengers?.length || 0, visaRows.length);
+
+  return Array.from({ length: maxRows }, (_, index) => {
+    const passenger = passengers?.[index] || {};
+    const visa = visaRows[index] || {};
+
+    return {
+      ...passenger,
+      name: firstFilled(passenger.name, visa.passenger_name),
+      visa_no: firstFilled(passenger.visa_no, visa.visa_no),
+      visa_publisher: firstFilled(passenger.visa_publisher, visa.visa_publisher),
+      notes: firstFilled(passenger.notes, visa.notes),
+    };
+  }).filter((row) => ['name', 'passport_no', 'ticket_no', 'visa_publisher', 'visa_no', 'notes'].some((key) => firstFilled(row?.[key])));
+};
 
 const formatDate = (value) => {
   const raw = String(value || '').trim();
@@ -134,13 +198,15 @@ export default function VoucherPreview({ order }) {
   const summaryRows = buildVoucherSummaryRows(voucher);
   const grandTotal = summaryRows.reduce((sum, row) => sum + row.total, 0);
 
-  const passengerRows = cleanRows(voucher.passengers, ['name', 'passport_no', 'ticket_no', 'visa_publisher', 'visa_no', 'notes']);
   const flightRows = cleanRows(voucher.flights, ['gds_pnr', 'pnr', 'flight_no', 'from', 'to', 'date', 'departure', 'arrival']);
   const visaRows = cleanRows(voucher.visa, ['passenger_name', 'visa_type', 'validity', 'visa_no', 'visa_publisher', 'notes']);
-  const hotelRows = cleanRows(voucher.hotels, ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes']);
+  const passengerRows = buildPassengerRows(voucher.passengers, visaRows);
+  const hotelRows = cleanRows(voucher.hotels, ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes'])
+    .map((row) => ({ ...row, nights: calculateNights(row.check_in, row.check_out) }));
   const transferRows = cleanRows(voucher.transfers, ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes']);
   const cityTourRows = cleanRows(voucher.city_tours, ['city', 'title', 'attractions', 'date', 'notes']);
   const serviceRows = cleanRows(voucher.other_services, ['description']);
+  const packageDays = calculatePackageDays(voucher);
   const bookingRef = uniqueJoined(voucher.booking_reference, flightRows.map((row) => row.gds_pnr));
   const airlineRef = uniqueJoined(flightRows.map((row) => row.pnr));
   const hcnRef = uniqueJoined(hotelRows.map((row) => row.hcn));
@@ -156,6 +222,7 @@ export default function VoucherPreview({ order }) {
     ['Issue Date', formatDate(voucher.issue_date)],
     ['Travel', voucher.package_type],
     ['Pax', passengerRows.length || voucher.pricing?.length || ''],
+    ['Days', packageDays],
   ].filter(([, value]) => hasValue(value));
   const secondaryReferenceItems = [
     ['Lead Passenger', leadPassenger],
@@ -218,8 +285,8 @@ export default function VoucherPreview({ order }) {
             { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '', alwaysVisible: true },
             { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '' },
             { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '' },
-            { title: 'Visa Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
             { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
+            { title: 'Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
             { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
           ]}
         />
@@ -240,22 +307,6 @@ export default function VoucherPreview({ order }) {
         />
       </Section>}
 
-      {visaRows.length > 0 && (
-        <Section title="Visa Details">
-          <PreviewTable
-            data={visaRows}
-            columns={[
-              { title: 'Passenger', dataIndex: 'passenger_name', width: 145, render: (value) => value || '', alwaysVisible: true },
-              { title: 'Type', dataIndex: 'visa_type', width: 85, render: (value) => value || '' },
-              { title: 'Validity', dataIndex: 'validity', width: 90, render: (value) => value || '' },
-              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
-              { title: 'Publisher', dataIndex: 'visa_publisher', width: 125, render: (value) => value || '' },
-              { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
-            ]}
-          />
-        </Section>
-      )}
-
       {hotelRows.length > 0 && (
         <Section title="Accommodation Details">
           <PreviewTable
@@ -263,9 +314,11 @@ export default function VoucherPreview({ order }) {
             columns={[
               { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
               { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '', alwaysVisible: true },
+              { title: 'HCN', dataIndex: 'hcn', width: 90, render: (value) => value || '' },
               { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
               { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
               { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
+              { title: 'Nights', dataIndex: 'nights', width: 70, align: 'center', render: (value) => value || '' },
               { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
             ]}
           />

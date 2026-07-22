@@ -60,6 +60,33 @@ class ReportController extends Controller
         ));
     }
 
+    public function cancelledReport(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $isAllowedAgencyUser = $user?->hasAnyRole(['owner', 'admin']) === true;
+        $isAllowedSystemUser = $user?->isSystemUser() === true
+            && $user->hasAnyRole(['super-admin', 'inyice-admin', 'support-executive']);
+
+        if (!$isAllowedAgencyUser && !$isAllowedSystemUser) {
+            return response()->json(['error' => 'Insufficient permissions for this report'], 403);
+        }
+
+        $validated = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        return response()->json($this->reportService->cancelledInvoiceReport(
+            $isAllowedSystemUser ? null : (int) $user->tenant_id,
+            $isAllowedSystemUser ? null : (int) $user->company_id,
+            $validated['from_date'],
+            $validated['to_date'],
+            isset($validated['search']) ? trim($validated['search']) : null,
+            $isAllowedSystemUser,
+        ));
+    }
+
     /**
      * Get invoice aging report
      */

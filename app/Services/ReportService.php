@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\OrderVendorCost;
 use App\Models\Payment;
 use App\Models\Receipt;
 use Carbon\Carbon;
@@ -74,6 +75,66 @@ class ReportService
                 'customer_records' => $records->where('counterparty_type', 'customer')->count(),
                 'vendor_records' => $records->where('counterparty_type', 'vendor')->count(),
                 'by_currency' => $byCurrency->all(),
+            ],
+        ];
+    }
+
+    public function cancelledInvoiceReport(
+        ?int $tenantId,
+        ?int $companyId,
+        string $fromDate,
+        string $toDate,
+        ?string $search = null,
+        bool $allTenants = false
+    ): array {
+        $query = ($allTenants ? Invoice::withoutGlobalScopes() : Invoice::query())
+            ->where('status', 'cancel')
+            ->whereBetween('invoice_date', [$fromDate, $toDate])
+            ->with([
+                'tenant:id,name,code',
+                'company:id,tenant_id,display_name,legal_name',
+                'customer:id,name',
+                'order:id,order_number,booking_reference',
+            ])
+            ->when(!$allTenants, fn ($q) => $q->where('tenant_id', $tenantId)->where('company_id', $companyId))
+            ->when($search, function ($q, $search) {
+                $q->where(function ($nested) use ($search) {
+                    $nested->where('invoice_number', 'like', "%{$search}%")
+                        ->orWhere('notes', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('company', fn ($company) => $company->where('display_name', 'like', "%{$search}%")->orWhere('legal_name', 'like', "%{$search}%"))
+                        ->orWhereHas('order', fn ($order) => $order->where('order_number', 'like', "%{$search}%")->orWhere('booking_reference', 'like', "%{$search}%"));
+                });
+            });
+
+        $records = $query->orderByDesc('invoice_date')->orderByDesc('id')->get()->map(fn (Invoice $invoice) => [
+            'uid' => $invoice->uid,
+            'invoice_number' => $invoice->invoice_number,
+            'invoice_date' => $invoice->invoice_date?->toDateString(),
+            'due_date' => $invoice->due_date?->toDateString(),
+            'tenant_name' => $invoice->tenant?->name,
+            'company_name' => $invoice->company?->display_name ?: $invoice->company?->legal_name,
+            'customer_name' => $invoice->customer?->name,
+            'order_number' => $invoice->order?->order_number,
+            'booking_reference' => $invoice->order?->booking_reference,
+            'currency_code' => $invoice->currency_code,
+            'total_amount' => (float) $invoice->total_amount,
+            'outstanding_amount' => (float) $invoice->outstanding_amount,
+            'notes' => $invoice->notes,
+        ]);
+
+        return [
+            'report_date' => now()->toDateString(),
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'scope' => $allTenants ? 'all_companies' : 'current_company',
+            'data' => $records->all(),
+            'summary' => [
+                'total_records' => $records->count(),
+                'by_currency' => $records->groupBy('currency_code')->map(fn (Collection $rows, string $currency) => [
+                    'currency_code' => $currency,
+                    'amount' => round((float) $rows->sum('total_amount'), 4),
+                    'count' => $rows->count(),
+                ])->values()->all(),
             ],
         ];
     }
@@ -493,12 +554,23 @@ class ReportService
         $orders = Order::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereHas('invoice', function ($invoice) use ($fromDate, $toDate, $dateBy) {
-                $invoice->where('status', '!=', 'void');
+            ->where(function ($query) use ($fromDate, $toDate, $dateBy): void {
+                $query->whereHas('invoice', function ($invoice) use ($fromDate, $toDate, $dateBy) {
+                    $invoice->whereNotIn('status', ['void', 'cancel']);
 
-                if ($dateBy === 'invoice') {
-                    $invoice->whereBetween('invoice_date', [$fromDate, $toDate]);
-                }
+                    if ($dateBy === 'invoice') {
+                        $invoice->whereBetween('invoice_date', [$fromDate, $toDate]);
+                    }
+                })->orWhere(function ($refundQuery) use ($fromDate, $toDate, $dateBy): void {
+                    $refundQuery->whereIn('status', ['refund_request', 'partial_refund', 'refund']);
+
+                    if ($dateBy === 'invoice') {
+                        $refundQuery->whereBetween('created_at', [
+                            Carbon::parse($fromDate)->startOfDay(),
+                            Carbon::parse($toDate)->endOfDay(),
+                        ]);
+                    }
+                });
             })
             ->when($dateBy === 'creation', fn ($query) => $query->whereBetween('created_at', [
                 Carbon::parse($fromDate)->startOfDay(),
@@ -548,6 +620,9 @@ class ReportService
         foreach ($orders as $order) {
             $revenue = (float) $order->total_amount;
             $cost = (float) $order->vendorCosts->sum('amount');
+            if ($cost == 0.0) {
+                $cost = $this->voucherCostTotal($order);
+            }
             $currency = $order->currency_code;
             $date = $order->invoice?->invoice_date?->toDateString() ?? $order->issue_date?->toDateString() ?? $order->created_at->toDateString();
 
@@ -557,6 +632,7 @@ class ReportService
                         continue;
                     }
 
+                    $fallbackCost = $this->voucherCostTotal($order);
                     $detailRows->push($this->profitRow(
                         $order,
                         'vendor',
@@ -565,7 +641,7 @@ class ReportService
                         $date,
                         $currency,
                         $revenue,
-                        0.0
+                        $fallbackCost
                     ));
                     continue;
                 }
@@ -577,7 +653,7 @@ class ReportService
                 $costByVendor = $costRowsForReport->groupBy('vendor_id');
                 foreach ($costByVendor as $vendorId => $costRows) {
                     $vendorCost = (float) $costRows->sum('amount');
-                    $allocatedRevenue = $cost > 0 ? $revenue * ($vendorCost / $cost) : 0.0;
+                    $allocatedRevenue = $cost != 0.0 ? $revenue * (abs($vendorCost) / abs($cost)) : 0.0;
                     $detailRows->push($this->profitRow(
                         $order,
                         'vendor',
@@ -756,6 +832,22 @@ class ReportService
             'profit' => round($revenue - $cost, 4),
             'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
         ];
+    }
+
+    private function voucherCostTotal(Order $order): float
+    {
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $total = collect($meta['pricing'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->sum(fn (array $row) => OrderVendorCost::toAmount($row['flight_cost'] ?? null));
+
+        foreach (array_keys(OrderVendorCost::SERVICE_SECTIONS) as $section) {
+            $total += collect($meta[$section] ?? [])
+                ->filter(fn ($row) => is_array($row))
+                ->sum(fn (array $row) => OrderVendorCost::amountFromServiceRow($row));
+        }
+
+        return (float) $total;
     }
 
     private function voucherDates(Order $order, string $section, string $field): string

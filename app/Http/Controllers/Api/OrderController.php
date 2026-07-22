@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderVendorCost;
 use App\Services\GdsParserService;
 use App\Services\InvoiceService;
 use App\Services\OrderNumberService;
@@ -37,6 +38,35 @@ class OrderController extends Controller
         'city_tours',
         'visa',
         'other_services',
+    ];
+
+    private const PRICING_COST_PROFIT_FIELDS = [
+        'flight_cost',
+        'flight_profit',
+        'hotel_cost',
+        'hotel_profit',
+        'visa_cost',
+        'visa_profit',
+        'transfer_cost',
+        'transfer_profit',
+        'city_tour_ziarat_cost',
+        'city_tour_ziarat_profit',
+        'other_service_cost',
+        'other_service_profit',
+    ];
+
+    private const SERVICE_COST_PROFIT_FIELDS = [
+        'cost',
+        'profit',
+    ];
+
+    private const INVOICE_SECTION_STATUSES = [
+        'invoice',
+        'void',
+        'refund',
+        'partial_refund',
+        'paid',
+        'partial_paid',
     ];
 
     public function __construct(
@@ -101,7 +131,7 @@ class OrderController extends Controller
             'company_id' => 'nullable|integer|exists:companies,id',
             'customer_id' => 'required|integer|exists:customers,id',
             'currency_code' => 'nullable|string|size:3',
-            'status' => 'nullable|in:quote,order,confirm,cancel,invoice,void,refund,partial_refund,paid,partial_paid',
+            'status' => 'nullable|in:quote,order,cancel,invoice,void,refund_request,refund,partial_refund',
             'notes' => 'nullable|string',
             'voucher' => 'required|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
@@ -144,25 +174,25 @@ class OrderController extends Controller
             'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.pricing.*.vendor_name' => 'nullable|string|max:255',
             'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
-            'voucher.pricing.*.flight_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_cost' => 'nullable|numeric',
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
-            'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.hotel_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_sales' => 'nullable|numeric',
+            'voucher.pricing.*.hotel_cost' => 'nullable|numeric',
             'voucher.pricing.*.hotel_profit' => 'nullable|numeric',
-            'voucher.pricing.*.hotel_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.visa_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.hotel_sales' => 'nullable|numeric',
+            'voucher.pricing.*.visa_cost' => 'nullable|numeric',
             'voucher.pricing.*.visa_profit' => 'nullable|numeric',
-            'voucher.pricing.*.visa_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.transfer_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.visa_sales' => 'nullable|numeric',
+            'voucher.pricing.*.transfer_cost' => 'nullable|numeric',
             'voucher.pricing.*.transfer_profit' => 'nullable|numeric',
-            'voucher.pricing.*.transfer_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.city_tour_ziarat_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.transfer_sales' => 'nullable|numeric',
+            'voucher.pricing.*.city_tour_ziarat_cost' => 'nullable|numeric',
             'voucher.pricing.*.city_tour_ziarat_profit' => 'nullable|numeric',
-            'voucher.pricing.*.city_tour_ziarat_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.other_service_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.city_tour_ziarat_sales' => 'nullable|numeric',
+            'voucher.pricing.*.other_service_cost' => 'nullable|numeric',
             'voucher.pricing.*.other_service_profit' => 'nullable|numeric',
-            'voucher.pricing.*.other_service_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.total' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.other_service_sales' => 'nullable|numeric',
+            'voucher.pricing.*.total' => 'nullable|numeric',
             'voucher.hotels' => 'nullable|array',
             'voucher.hotels.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.hotels.*.vendor_name' => 'nullable|string|max:255',
@@ -174,10 +204,10 @@ class OrderController extends Controller
             'voucher.hotels.*.check_out' => 'nullable|date_format:Y-m-d',
             'voucher.hotels.*.lead_passenger' => 'nullable|string|max:255',
             'voucher.hotels.*.notes' => 'nullable|string',
-            'voucher.hotels.*.cost' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.cost' => 'nullable|numeric',
             'voucher.hotels.*.profit' => 'nullable|numeric',
-            'voucher.hotels.*.sales' => 'nullable|numeric|min:0',
-            'voucher.hotels.*.amount' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.sales' => 'nullable|numeric',
+            'voucher.hotels.*.amount' => 'nullable|numeric',
             'voucher.transfers' => 'nullable|array',
             'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.transfers.*.vendor_name' => 'nullable|string|max:255',
@@ -188,10 +218,10 @@ class OrderController extends Controller
             'voucher.transfers.*.vehicle' => 'nullable|string|max:255',
             'voucher.transfers.*.contact_person' => 'nullable|string|max:255',
             'voucher.transfers.*.notes' => 'nullable|string',
-            'voucher.transfers.*.cost' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.cost' => 'nullable|numeric',
             'voucher.transfers.*.profit' => 'nullable|numeric',
-            'voucher.transfers.*.sales' => 'nullable|numeric|min:0',
-            'voucher.transfers.*.amount' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.sales' => 'nullable|numeric',
+            'voucher.transfers.*.amount' => 'nullable|numeric',
             'voucher.city_tours' => 'nullable|array',
             'voucher.city_tours.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.city_tours.*.vendor_name' => 'nullable|string|max:255',
@@ -200,10 +230,10 @@ class OrderController extends Controller
             'voucher.city_tours.*.attractions' => 'nullable|string',
             'voucher.city_tours.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.city_tours.*.notes' => 'nullable|string',
-            'voucher.city_tours.*.cost' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.cost' => 'nullable|numeric',
             'voucher.city_tours.*.profit' => 'nullable|numeric',
-            'voucher.city_tours.*.sales' => 'nullable|numeric|min:0',
-            'voucher.city_tours.*.amount' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.sales' => 'nullable|numeric',
+            'voucher.city_tours.*.amount' => 'nullable|numeric',
             'voucher.visa' => 'nullable|array',
             'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
@@ -213,18 +243,18 @@ class OrderController extends Controller
             'voucher.visa.*.visa_publisher' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
             'voucher.visa.*.notes' => 'nullable|string',
-            'voucher.visa.*.cost' => 'nullable|numeric|min:0',
+            'voucher.visa.*.cost' => 'nullable|numeric',
             'voucher.visa.*.profit' => 'nullable|numeric',
-            'voucher.visa.*.sales' => 'nullable|numeric|min:0',
-            'voucher.visa.*.amount' => 'nullable|numeric|min:0',
+            'voucher.visa.*.sales' => 'nullable|numeric',
+            'voucher.visa.*.amount' => 'nullable|numeric',
             'voucher.other_services' => 'nullable|array',
             'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
-            'voucher.other_services.*.cost' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
-            'voucher.other_services.*.sales' => 'nullable|numeric|min:0',
-            'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.sales' => 'nullable|numeric',
+            'voucher.other_services.*.amount' => 'nullable|numeric',
         ]);
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
@@ -232,7 +262,7 @@ class OrderController extends Controller
             ->where('company_id', $companyId)
             ->findOrFail((int) $validated['customer_id']);
 
-        $voucher = $validated['voucher'];
+        $voucher = $this->voucherForUserWrite($validated['voucher'], null, $user);
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
 
         $profileContact = array_filter([
@@ -305,7 +335,7 @@ class OrderController extends Controller
 
         return response()->json([
             'success' => true,
-            'order' => $order->load('items'),
+            'order' => $this->orderForUser($order->load('items'), $user),
         ], 201);
     }
 
@@ -314,10 +344,22 @@ class OrderController extends Controller
         $user = $request->user();
 
         $search = trim((string) $request->query('search', ''));
+        $status = $request->query('status');
 
         $orders = Order::where('tenant_id', $user->tenant_id)
             ->where('company_id', $user->company_id)
             ->with(['customer:id,name', 'items:id,order_id,description,total_price', 'invoice:id,order_id,uid,invoice_number,status,outstanding_amount'])
+            ->when(!is_string($status) || $status === '', function ($query) {
+                $query->whereNotIn('status', self::INVOICE_SECTION_STATUSES);
+            })
+            ->when(is_string($status) && $status !== '', function ($query) use ($status) {
+                if (in_array($status, self::INVOICE_SECTION_STATUSES, true)) {
+                    $query->whereRaw('1 = 0');
+                    return;
+                }
+
+                $query->where('status', $status);
+            })
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery->where('order_number', 'like', "%{$search}%")
@@ -336,6 +378,10 @@ class OrderController extends Controller
             ->orderByDesc('id')
             ->paginate((int) $request->query('per_page', 20));
 
+        if ($this->isSalesStaff($user)) {
+            $orders->getCollection()->transform(fn (Order $order) => $this->orderForUser($order, $user));
+        }
+
         return response()->json($orders);
     }
 
@@ -347,7 +393,7 @@ class OrderController extends Controller
             ->with(['customer', 'vendor', 'items', 'gdsParsedRecord', 'company', 'invoices.lines'])
             ->firstOrFail();
 
-        return response()->json($order);
+        return response()->json($this->orderForUser($order, $request->user()));
     }
 
     public function share(string $uid, Request $request): JsonResponse
@@ -424,9 +470,9 @@ class OrderController extends Controller
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',
             'booking_reference' => 'nullable|string|max:50',
-            'status' => 'required|in:quote,order,confirm,cancel,invoice,void,refund,partial_refund,paid,partial_paid',
+            'status' => 'required|in:quote,order,cancel,invoice,void,refund_request,refund,partial_refund',
             'currency_code' => 'required|string|size:3|exists:currencies,code',
-            'total_amount' => 'nullable|numeric|min:0',
+            'total_amount' => 'nullable|numeric',
             'notes' => 'nullable|string',
             'confirm_invoice_revision' => 'nullable|boolean',
             'voucher' => 'nullable|array',
@@ -470,25 +516,25 @@ class OrderController extends Controller
             'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.pricing.*.vendor_name' => 'nullable|string|max:255',
             'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
-            'voucher.pricing.*.flight_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_cost' => 'nullable|numeric',
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
-            'voucher.pricing.*.flight_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.hotel_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.flight_sales' => 'nullable|numeric',
+            'voucher.pricing.*.hotel_cost' => 'nullable|numeric',
             'voucher.pricing.*.hotel_profit' => 'nullable|numeric',
-            'voucher.pricing.*.hotel_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.visa_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.hotel_sales' => 'nullable|numeric',
+            'voucher.pricing.*.visa_cost' => 'nullable|numeric',
             'voucher.pricing.*.visa_profit' => 'nullable|numeric',
-            'voucher.pricing.*.visa_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.transfer_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.visa_sales' => 'nullable|numeric',
+            'voucher.pricing.*.transfer_cost' => 'nullable|numeric',
             'voucher.pricing.*.transfer_profit' => 'nullable|numeric',
-            'voucher.pricing.*.transfer_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.city_tour_ziarat_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.transfer_sales' => 'nullable|numeric',
+            'voucher.pricing.*.city_tour_ziarat_cost' => 'nullable|numeric',
             'voucher.pricing.*.city_tour_ziarat_profit' => 'nullable|numeric',
-            'voucher.pricing.*.city_tour_ziarat_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.other_service_cost' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.city_tour_ziarat_sales' => 'nullable|numeric',
+            'voucher.pricing.*.other_service_cost' => 'nullable|numeric',
             'voucher.pricing.*.other_service_profit' => 'nullable|numeric',
-            'voucher.pricing.*.other_service_sales' => 'nullable|numeric|min:0',
-            'voucher.pricing.*.total' => 'nullable|numeric|min:0',
+            'voucher.pricing.*.other_service_sales' => 'nullable|numeric',
+            'voucher.pricing.*.total' => 'nullable|numeric',
             'voucher.hotels' => 'nullable|array',
             'voucher.hotels.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.hotels.*.vendor_name' => 'nullable|string|max:255',
@@ -500,10 +546,10 @@ class OrderController extends Controller
             'voucher.hotels.*.check_out' => 'nullable|date_format:Y-m-d',
             'voucher.hotels.*.lead_passenger' => 'nullable|string|max:255',
             'voucher.hotels.*.notes' => 'nullable|string',
-            'voucher.hotels.*.cost' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.cost' => 'nullable|numeric',
             'voucher.hotels.*.profit' => 'nullable|numeric',
-            'voucher.hotels.*.sales' => 'nullable|numeric|min:0',
-            'voucher.hotels.*.amount' => 'nullable|numeric|min:0',
+            'voucher.hotels.*.sales' => 'nullable|numeric',
+            'voucher.hotels.*.amount' => 'nullable|numeric',
             'voucher.transfers' => 'nullable|array',
             'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.transfers.*.vendor_name' => 'nullable|string|max:255',
@@ -514,10 +560,10 @@ class OrderController extends Controller
             'voucher.transfers.*.vehicle' => 'nullable|string|max:255',
             'voucher.transfers.*.contact_person' => 'nullable|string|max:255',
             'voucher.transfers.*.notes' => 'nullable|string',
-            'voucher.transfers.*.cost' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.cost' => 'nullable|numeric',
             'voucher.transfers.*.profit' => 'nullable|numeric',
-            'voucher.transfers.*.sales' => 'nullable|numeric|min:0',
-            'voucher.transfers.*.amount' => 'nullable|numeric|min:0',
+            'voucher.transfers.*.sales' => 'nullable|numeric',
+            'voucher.transfers.*.amount' => 'nullable|numeric',
             'voucher.city_tours' => 'nullable|array',
             'voucher.city_tours.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.city_tours.*.vendor_name' => 'nullable|string|max:255',
@@ -526,10 +572,10 @@ class OrderController extends Controller
             'voucher.city_tours.*.attractions' => 'nullable|string',
             'voucher.city_tours.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.city_tours.*.notes' => 'nullable|string',
-            'voucher.city_tours.*.cost' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.cost' => 'nullable|numeric',
             'voucher.city_tours.*.profit' => 'nullable|numeric',
-            'voucher.city_tours.*.sales' => 'nullable|numeric|min:0',
-            'voucher.city_tours.*.amount' => 'nullable|numeric|min:0',
+            'voucher.city_tours.*.sales' => 'nullable|numeric',
+            'voucher.city_tours.*.amount' => 'nullable|numeric',
             'voucher.visa' => 'nullable|array',
             'voucher.visa.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.visa.*.passenger_name' => 'nullable|string|max:255',
@@ -539,42 +585,58 @@ class OrderController extends Controller
             'voucher.visa.*.visa_publisher' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
             'voucher.visa.*.notes' => 'nullable|string',
-            'voucher.visa.*.cost' => 'nullable|numeric|min:0',
+            'voucher.visa.*.cost' => 'nullable|numeric',
             'voucher.visa.*.profit' => 'nullable|numeric',
-            'voucher.visa.*.sales' => 'nullable|numeric|min:0',
-            'voucher.visa.*.amount' => 'nullable|numeric|min:0',
+            'voucher.visa.*.sales' => 'nullable|numeric',
+            'voucher.visa.*.amount' => 'nullable|numeric',
             'voucher.other_services' => 'nullable|array',
             'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
-            'voucher.other_services.*.cost' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
-            'voucher.other_services.*.sales' => 'nullable|numeric|min:0',
-            'voucher.other_services.*.amount' => 'nullable|numeric|min:0',
+            'voucher.other_services.*.sales' => 'nullable|numeric',
+            'voucher.other_services.*.amount' => 'nullable|numeric',
         ]);
 
         $customer = Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->findOrFail((int) $validated['customer_id']);
+
+        if (
+            $this->isSalesStaff($user)
+            && $this->isInvoiceSectionStatus((string) $order->status)
+            && $validated['status'] !== $order->status
+        ) {
+            return response()->json([
+                'error' => 'Sales staff cannot change order status after it enters the invoice section.',
+            ], 403);
+        }
+
         $activeInvoice = Invoice::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->where('order_id', $order->id)
-            ->where('status', '!=', 'void')
+            ->whereNotIn('status', ['void', 'cancel'])
             ->latest('id')
             ->first();
+        $previousStatus = (string) $order->status;
 
         if ($activeInvoice && !$request->boolean('confirm_invoice_revision')) {
             return response()->json([
-                'error' => 'This order already has an invoice. Saving changes will cancel the current invoice and create a replacement invoice.',
+                'error' => 'This order already has an invoice. Saving changes will cancel the current invoice and create a new order that can be invoiced manually.',
                 'requires_invoice_revision' => true,
                 'invoice' => $activeInvoice->only(['uid', 'invoice_number', 'status', 'total_amount', 'outstanding_amount']),
             ], 409);
         }
 
-        $replacementInvoice = null;
+        $createdOrder = null;
+        $createdInvoice = null;
+        $voidedInvoice = null;
 
-        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $activeInvoice, &$replacementInvoice): void {
-            $voucher = $validated['voucher'] ?? null;
+        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $companyId, $activeInvoice, $previousStatus, &$createdOrder, &$createdInvoice, &$voidedInvoice): void {
+            $voucher = isset($validated['voucher'])
+                ? $this->voucherForUserWrite($validated['voucher'], $order->meta ?? [], $user)
+                : null;
             $totalAmount = $validated['total_amount'] ?? $order->total_amount;
             $meta = $order->meta ?? [];
 
@@ -611,6 +673,55 @@ class OrderController extends Controller
                 ]);
             }
 
+            if ($activeInvoice) {
+                $createdOrder = Order::create([
+                    'tenant_id' => $tenantId,
+                    'uid' => (string) Str::ulid(),
+                    'company_id' => $companyId,
+                    'customer_id' => $customer->id,
+                    'vendor_id' => $order->vendor_id,
+                    'created_by_user_id' => (int) $user->id,
+                    'updated_by_user_id' => (int) $user->id,
+                    'order_number' => $this->orderNumberService->generateOrderNumber($companyId, $tenantId),
+                    'voucher_no' => $voucher['voucher_no'] ?? $order->voucher_no,
+                    'issue_date' => $voucher['issue_date'] ?? $order->issue_date,
+                    'package_type' => $voucher['package_type'] ?? $order->package_type,
+                    'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
+                    'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
+                    'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? $order->booking_reference,
+                    'status' => 'order',
+                    'currency_code' => strtoupper($validated['currency_code']),
+                    'total_amount' => 0,
+                    'notes' => $validated['notes'] ?? null,
+                    'gds_source' => $voucher['gds_source'] ?? $order->gds_source,
+                    'gds_parsed_record_id' => $voucher['gds_parsed_record_id'] ?? $order->gds_parsed_record_id,
+                    'meta' => $meta,
+                ]);
+
+                if ($voucher && $this->hasVoucherItemContent($voucher)) {
+                    $items = $this->buildVoucherOrderItems($voucher, $createdOrder->id, $tenantId);
+
+                    if (!empty($items)) {
+                        OrderItem::insert($items);
+                    }
+                } else {
+                    $this->copyOrderItems($order, $createdOrder);
+                }
+
+                $createdOrder->syncVendorCostsFromVoucher($voucher ?: $meta);
+                $createdOrder->update([
+                    'total_amount' => OrderItem::where('order_id', $createdOrder->id)->sum('total_price') ?: $totalAmount,
+                ]);
+
+                $voidedInvoice = $this->voidInvoiceForEditedOrder($activeInvoice, $createdOrder);
+                $order->update([
+                    'status' => 'cancel',
+                    'updated_by_user_id' => (int) $user->id,
+                ]);
+
+                return;
+            }
+
             $order->update([
                 'customer_id' => $customer->id,
                 'voucher_no' => $voucher['voucher_no'] ?? $order->voucher_no,
@@ -629,19 +740,105 @@ class OrderController extends Controller
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
-            if ($activeInvoice) {
-                $replacementInvoice = $this->invoiceService->reviseFromOrder($order->fresh(['items', 'company']), $activeInvoice);
-            } elseif ($validated['status'] === 'invoice') {
-                $replacementInvoice = $this->invoiceService->createFromOrder($order->fresh());
+            if ($validated['status'] === 'invoice' && !$this->isInvoiceSectionStatus($previousStatus)) {
+                $createdInvoice = $this->invoiceService->createFromOrder($order->fresh());
             }
+        });
+
+        $responseOrder = $createdOrder
+            ? $createdOrder->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice'])
+            : $order->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']);
+
+        return response()->json([
+            'success' => true,
+            'order' => $this->orderForUser($responseOrder, $user),
+            'invoice' => $createdInvoice,
+            'voided_invoice' => $voidedInvoice,
+            'new_order_created' => (bool) ($activeInvoice && $createdOrder),
+            'invoice_revised' => false,
+            'original_order_uid' => $activeInvoice ? $order->uid : null,
+        ]);
+    }
+
+    public function createRefundRequest(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
+
+        $sourceOrder = Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('uid', $uid)
+            ->with(['items', 'invoice', 'vendorCosts.vendor'])
+            ->firstOrFail();
+
+        if ((string) $sourceOrder->status === 'refund_request') {
+            return response()->json([
+                'error' => 'This order is already a refund request.',
+            ], 422);
+        }
+
+        $activeInvoice = Invoice::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('order_id', $sourceOrder->id)
+            ->whereNotIn('status', ['void', 'cancel'])
+            ->latest('id')
+            ->first();
+
+        if (!$activeInvoice && !$this->isInvoiceSectionStatus((string) $sourceOrder->status)) {
+            return response()->json([
+                'error' => 'Create a refund request after the order has moved to the invoice section.',
+            ], 422);
+        }
+
+        $refundOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
+            $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
+            $refundMeta = $this->negativeRefundVoucher($sourceMeta);
+            $refundMeta['refund_of_order_id'] = $sourceOrder->id;
+            $refundMeta['refund_of_order_uid'] = $sourceOrder->uid;
+            $refundMeta['refund_of_order_number'] = $sourceOrder->order_number;
+            $refundMeta['refund_request_created_at'] = now()->toIso8601String();
+
+            $refundOrder = Order::create([
+                'tenant_id' => $tenantId,
+                'uid' => (string) Str::ulid(),
+                'company_id' => $companyId,
+                'customer_id' => $sourceOrder->customer_id,
+                'vendor_id' => $sourceOrder->vendor_id,
+                'created_by_user_id' => (int) $user->id,
+                'updated_by_user_id' => (int) $user->id,
+                'order_number' => $this->orderNumberService->generateOrderNumber($companyId, $tenantId),
+                'voucher_no' => $sourceOrder->voucher_no,
+                'issue_date' => now()->toDateString(),
+                'package_type' => $sourceOrder->package_type,
+                'active_sections' => $sourceOrder->active_sections,
+                'emergency_contact' => $sourceOrder->emergency_contact,
+                'booking_reference' => $sourceOrder->order_number,
+                'status' => 'refund_request',
+                'currency_code' => $sourceOrder->currency_code,
+                'total_amount' => 0,
+                'notes' => trim('Refund request for actual order ' . $sourceOrder->order_number . "\n" . (string) $sourceOrder->notes),
+                'gds_source' => $sourceOrder->gds_source,
+                'gds_parsed_record_id' => $sourceOrder->gds_parsed_record_id,
+                'meta' => $refundMeta,
+            ]);
+
+            $this->copyRefundOrderItems($sourceOrder, $refundOrder);
+            $refundOrder->syncVendorCostsFromVoucher($refundMeta);
+            $refundOrder->update([
+                'total_amount' => OrderItem::where('order_id', $refundOrder->id)->sum('total_price') ?: -abs((float) $sourceOrder->total_amount),
+            ]);
+
+            return $refundOrder;
         });
 
         return response()->json([
             'success' => true,
-            'order' => $order->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']),
-            'invoice' => $replacementInvoice,
-            'invoice_revised' => (bool) ($activeInvoice && $replacementInvoice),
-        ]);
+            'message' => 'Refund request order created.',
+            'order' => $this->orderForUser($refundOrder->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']), $user),
+            'original_order_uid' => $sourceOrder->uid,
+            'original_order_number' => $sourceOrder->order_number,
+        ], 201);
     }
 
     public function destroy(string $uid, Request $request): JsonResponse
@@ -663,6 +860,213 @@ class OrderController extends Controller
             'success' => true,
             'message' => 'Order deleted successfully',
         ]);
+    }
+
+    private function copyOrderItems(Order $sourceOrder, Order $targetOrder): void
+    {
+        $sourceOrder->loadMissing('items');
+
+        $items = $sourceOrder->items->map(fn (OrderItem $item) => [
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $targetOrder->tenant_id,
+            'order_id' => $targetOrder->id,
+            'description' => $item->description,
+            'quantity' => $item->quantity,
+            'unit_price' => $item->unit_price,
+            'total_price' => $item->total_price,
+            'gds_data' => is_array($item->gds_data) ? json_encode($item->gds_data, JSON_UNESCAPED_UNICODE) : $item->gds_data,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($items !== []) {
+            OrderItem::insert($items);
+        }
+    }
+
+    private function copyRefundOrderItems(Order $sourceOrder, Order $targetOrder): void
+    {
+        $sourceOrder->loadMissing('items');
+
+        $items = $sourceOrder->items->map(fn (OrderItem $item) => [
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $targetOrder->tenant_id,
+            'order_id' => $targetOrder->id,
+            'description' => $item->description,
+            'quantity' => $item->quantity,
+            'unit_price' => -abs((float) $item->unit_price),
+            'total_price' => -abs((float) $item->total_price),
+            'gds_data' => is_array($item->gds_data) ? json_encode($item->gds_data, JSON_UNESCAPED_UNICODE) : $item->gds_data,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($items !== []) {
+            OrderItem::insert($items);
+        }
+    }
+
+    private function negativeRefundVoucher(array $payload): array
+    {
+        $negativeFields = [
+            'amount',
+            'cost',
+            'profit',
+            'sales',
+            'total',
+            'flight_cost',
+            'flight_profit',
+            'flight_sales',
+            'flight_fare',
+            'hotel_cost',
+            'hotel_profit',
+            'hotel_sales',
+            'visa_cost',
+            'visa_profit',
+            'visa_sales',
+            'transfer_cost',
+            'transfer_profit',
+            'transfer_sales',
+            'city_tour_ziarat_cost',
+            'city_tour_ziarat_profit',
+            'city_tour_ziarat_sales',
+            'other_service_cost',
+            'other_service_profit',
+            'other_service_sales',
+        ];
+
+        return $this->negativeRefundVoucherRecursive($payload, array_flip($negativeFields));
+    }
+
+    private function negativeRefundVoucherRecursive(array $payload, array $negativeFields): array
+    {
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $payload[$key] = $this->negativeRefundVoucherRecursive($value, $negativeFields);
+                continue;
+            }
+
+            if (isset($negativeFields[$key]) && is_numeric($value)) {
+                $payload[$key] = -abs((float) $value);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function voidInvoiceForEditedOrder(Invoice $invoice, Order $newOrder): Invoice
+    {
+        $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+        $timestamp = now()->format('Y-m-d H:i:s');
+        $voidNote = $this->cancelledInvoiceNote($invoice, $newOrder, $timestamp);
+        $existingNotes = trim((string) $invoice->notes);
+
+        $invoice->lines()->update([
+            'unit_price' => 0,
+            'total_price' => 0,
+        ]);
+
+        $invoice->update([
+            'subtotal' => 0,
+            'tax_amount' => 0,
+            'total_amount' => 0,
+            'outstanding_amount' => 0,
+            'advance_balance' => 0,
+            'status' => 'cancel',
+            'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $voidNote : $voidNote,
+        ]);
+
+        return $invoice->fresh(['lines']);
+    }
+
+    private function cancelledInvoiceNote(Invoice $invoice, Order $newOrder, string $timestamp): string
+    {
+        $invoice->loadMissing(['lines', 'order.vendorCosts.vendor']);
+        $order = $invoice->order;
+        $currency = $invoice->currency_code ?: $order?->currency_code ?: '';
+        $money = fn (mixed $value): string => trim($currency . ' ' . number_format((float) $value, 2, '.', ''));
+        $lines = [
+            "Canceled on {$timestamp} because order {$order?->order_number} was edited. New order: {$newOrder->order_number}.",
+            'Revenue breakup:',
+            '- Invoice total: ' . $money($invoice->total_amount),
+            '- Outstanding: ' . $money($invoice->outstanding_amount),
+        ];
+
+        foreach ($invoice->lines as $line) {
+            $lines[] = sprintf(
+                '- %s | Qty %s | Unit %s | Total %s',
+                trim((string) $line->description),
+                (string) $line->quantity,
+                $money($line->unit_price),
+                $money($line->total_price)
+            );
+        }
+
+        $costRows = $order ? $this->costBreakupRows($order, $money) : [];
+        $lines[] = 'Costing breakup:';
+
+        if ($costRows === []) {
+            $lines[] = '- No cost rows recorded';
+        } else {
+            array_push($lines, ...$costRows);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function costBreakupRows(Order $order, callable $money): array
+    {
+        $order->loadMissing(['vendorCosts.vendor']);
+
+        if ($order->vendorCosts->isNotEmpty()) {
+            return $order->vendorCosts
+                ->map(fn (OrderVendorCost $row) => sprintf(
+                    '- %s | %s | %s',
+                    $row->vendor?->name ?: 'Unassigned vendor',
+                    str_replace('_', ' ', $row->service_type),
+                    $money($row->amount)
+                ))
+                ->values()
+                ->all();
+        }
+
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $rows = [];
+
+        foreach (($meta['pricing'] ?? []) as $pricing) {
+            if (!is_array($pricing)) {
+                continue;
+            }
+
+            $amount = OrderVendorCost::toAmount($pricing['flight_cost'] ?? null);
+            if ($amount != 0.0) {
+                $rows[] = sprintf(
+                    '- %s | flight | %s',
+                    trim((string) ($pricing['vendor_name'] ?? $pricing['pax_name'] ?? 'Flight vendor')),
+                    $money($amount)
+                );
+            }
+        }
+
+        foreach (OrderVendorCost::SERVICE_SECTIONS as $section => $serviceType) {
+            foreach (($meta[$section] ?? []) as $serviceRow) {
+                if (!is_array($serviceRow)) {
+                    continue;
+                }
+
+                $amount = OrderVendorCost::amountFromServiceRow($serviceRow);
+                if ($amount != 0.0) {
+                    $rows[] = sprintf(
+                        '- %s | %s | %s',
+                        trim((string) ($serviceRow['vendor_name'] ?? $serviceRow['visa_vendor'] ?? ucfirst(str_replace('_', ' ', $serviceType)))),
+                        str_replace('_', ' ', $serviceType),
+                        $money($amount)
+                    );
+                }
+            }
+        }
+
+        return $rows;
     }
 
     private function buildVoucherOrderItems(array $voucher, int $orderId, int $tenantId): array
@@ -718,7 +1122,7 @@ class OrderController extends Controller
 
                 foreach ($componentMap as $key => $component) {
                     $amount = $this->toAmount($pricingRow[$key] ?? $pricingRow[$component['legacy']] ?? null);
-                    if ($amount <= 0) {
+                    if ($amount == 0.0) {
                         continue;
                     }
 
@@ -736,7 +1140,7 @@ class OrderController extends Controller
                     array_keys($componentMap),
                     $componentMap
                 ));
-                if ($manualTotal > 0 && $componentTotal <= 0) {
+                if ($manualTotal != 0.0 && $componentTotal == 0.0) {
                     $pushItem('Package Total - ' . $pax, $manualTotal, ['type' => 'pricing_total', 'row' => $pricingRow]);
                 }
             }
@@ -869,6 +1273,143 @@ class OrderController extends Controller
         $request->merge(['voucher' => $voucher]);
     }
 
+    private function orderForUser(Order $order, $user): Order
+    {
+        if (!$this->isSalesStaff($user)) {
+            return $order;
+        }
+
+        $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
+        if ($order->relationLoaded('items')) {
+            $order->items->each(function (OrderItem $item): void {
+                if (is_array($item->gds_data)) {
+                    $item->setAttribute('gds_data', $this->stripCostProfitKeysRecursive($item->gds_data));
+                }
+            });
+        }
+
+        return $order;
+    }
+
+    private function voucherForUserWrite(array $voucher, ?array $existingMeta, $user): array
+    {
+        if (!$this->isSalesStaff($user)) {
+            return $voucher;
+        }
+
+        $voucher = $this->stripVoucherCostProfit($voucher);
+
+        if (!$existingMeta) {
+            return $voucher;
+        }
+
+        return $this->preserveExistingCostProfit($voucher, $existingMeta);
+    }
+
+    private function stripVoucherCostProfit(array $voucher): array
+    {
+        foreach (($voucher['pricing'] ?? []) as $index => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            foreach (self::PRICING_COST_PROFIT_FIELDS as $field) {
+                unset($row[$field]);
+            }
+
+            $voucher['pricing'][$index] = $row;
+        }
+
+        foreach (['hotels', 'transfers', 'city_tours', 'visa', 'other_services'] as $section) {
+            foreach (($voucher[$section] ?? []) as $index => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                foreach (self::SERVICE_COST_PROFIT_FIELDS as $field) {
+                    unset($row[$field]);
+                }
+
+                $voucher[$section][$index] = $row;
+            }
+        }
+
+        return $voucher;
+    }
+
+    private function preserveExistingCostProfit(array $voucher, array $existingMeta): array
+    {
+        foreach (($voucher['pricing'] ?? []) as $index => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $existingRow = $existingMeta['pricing'][$index] ?? [];
+            if (!is_array($existingRow)) {
+                continue;
+            }
+
+            foreach (self::PRICING_COST_PROFIT_FIELDS as $field) {
+                if (array_key_exists($field, $existingRow)) {
+                    $row[$field] = $existingRow[$field];
+                }
+            }
+
+            $voucher['pricing'][$index] = $row;
+        }
+
+        foreach (['hotels', 'transfers', 'city_tours', 'visa', 'other_services'] as $section) {
+            foreach (($voucher[$section] ?? []) as $index => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $existingRow = $existingMeta[$section][$index] ?? [];
+                if (!is_array($existingRow)) {
+                    continue;
+                }
+
+                foreach (self::SERVICE_COST_PROFIT_FIELDS as $field) {
+                    if (array_key_exists($field, $existingRow)) {
+                        $row[$field] = $existingRow[$field];
+                    }
+                }
+
+                $voucher[$section][$index] = $row;
+            }
+        }
+
+        return $voucher;
+    }
+
+    private function stripCostProfitKeysRecursive(array $payload): array
+    {
+        $blockedFields = array_flip([...self::PRICING_COST_PROFIT_FIELDS, ...self::SERVICE_COST_PROFIT_FIELDS]);
+
+        foreach ($payload as $key => $value) {
+            if (isset($blockedFields[$key])) {
+                unset($payload[$key]);
+                continue;
+            }
+
+            if (is_array($value)) {
+                $payload[$key] = $this->stripCostProfitKeysRecursive($value);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function isSalesStaff($user): bool
+    {
+        return $user?->hasRole('sales') === true;
+    }
+
+    private function isInvoiceSectionStatus(string $status): bool
+    {
+        return in_array($status, self::INVOICE_SECTION_STATUSES, true);
+    }
+
     private function hasVoucherItemContent(array $voucher): bool
     {
         $activeSections = $voucher['active_sections'] ?? [];
@@ -883,8 +1424,8 @@ class OrderController extends Controller
 
             foreach (($voucher['pricing'] ?? []) as $pricingRow) {
                 if (
-                    $this->toAmount($pricingRow['flight_sales'] ?? $pricingRow['flight_fare'] ?? null) > 0 ||
-                    $this->toAmount($pricingRow['total'] ?? null) > 0
+                    $this->toAmount($pricingRow['flight_sales'] ?? $pricingRow['flight_fare'] ?? null) != 0.0 ||
+                    $this->toAmount($pricingRow['total'] ?? null) != 0.0
                 ) {
                     return true;
                 }
