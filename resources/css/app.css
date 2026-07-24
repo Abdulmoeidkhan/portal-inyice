@@ -1093,24 +1093,169 @@ body {
 }
 
 .invoice-company-logo {
-  width: 94px;
-  height: 94px;
+  width: 104px;
+  height: 78px;
   object-fit: contain;
-  padding: 8px;
-  border: 1px solid var(--app-border);
-  border-radius: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
 }
 
 .invoice-document {
   width: 100%;
-  max-width: 1120px;
+  max-width: 980px;
   margin: 0 auto;
   padding-inline: 18px;
 }
 
 .invoice-document > .ant-card {
   margin-inline: auto;
+}
+
+.invoice-paper .ant-card-body {
+  padding: 44px 48px;
+  background: #ffffff;
+  color: #111827;
+}
+
+.invoice-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 50px;
+}
+
+.invoice-brand {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.invoice-brand h2.ant-typography {
+  margin: 0 0 8px;
+  color: #111827;
+}
+
+.invoice-heading {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+
+.invoice-heading h1.ant-typography {
+  margin: 0;
+  color: #050505;
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.invoice-heading h4.ant-typography {
+  margin: 0;
+  color: #111827;
+}
+
+.invoice-balance-label {
+  margin-top: 14px;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.invoice-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+  gap: 28px;
+  align-items: end;
+  margin-bottom: 26px;
+}
+
+.invoice-party {
+  margin-top: 7px;
+}
+
+.invoice-dates {
+  display: grid;
+  gap: 10px;
+}
+
+.invoice-dates > div,
+.invoice-totals > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.invoice-lines-table {
+  margin-top: 12px;
+}
+
+.invoice-lines-table .ant-table {
+  border-radius: 0;
+}
+
+.invoice-lines-table .ant-table-thead > tr > th {
+  background: #383a36 !important;
+  color: #ffffff !important;
+  border-color: #383a36 !important;
+  font-weight: 600;
+}
+
+.invoice-lines-table .ant-table-tbody > tr > td {
+  vertical-align: top;
+}
+
+.invoice-mini-section {
+  margin-bottom: 24px;
+}
+
+.invoice-totals {
+  display: grid;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.invoice-total-row {
+  padding-top: 8px;
+}
+
+.invoice-paid-row span:last-child {
+  color: #e11d48;
+}
+
+.invoice-balance-row {
+  margin-top: 2px;
+  padding: 12px 14px;
+  background: #f4f4f4;
+}
+
+.invoice-receipts,
+.invoice-notes {
+  margin-top: 44px;
+}
+
+@media (max-width: 720px) {
+  .invoice-paper .ant-card-body {
+    padding: 28px 20px;
+  }
+
+  .invoice-header,
+  .invoice-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-heading {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .invoice-brand {
+    flex-direction: column;
+  }
 }
 
 .company-profile-assets {
@@ -1653,11 +1798,28 @@ body {
   }
 
   .invoice-document .ant-card-body {
-    padding: 10mm !important;
+    padding: 0 !important;
   }
 
-  .invoice-document .ant-row {
+  .invoice-header,
+  .invoice-meta-grid,
+  .invoice-document .ant-row,
+  .invoice-receipts,
+  .invoice-notes {
     break-inside: avoid;
+  }
+
+  .invoice-header {
+    margin-bottom: 38px !important;
+  }
+
+  .invoice-heading h1.ant-typography {
+    font-size: 34px !important;
+  }
+
+  .invoice-meta-grid {
+    grid-template-columns: minmax(0, 1fr) 290px !important;
+    margin-bottom: 20px !important;
   }
 
   .invoice-document .ant-table,
@@ -1667,14 +1829,14 @@ body {
 
   .invoice-document .ant-table-thead > tr > th,
   .invoice-document .ant-table-tbody > tr > td {
-    padding: 7px 8px !important;
-    font-size: 11px !important;
+    padding: 8px 9px !important;
+    font-size: 11.5px !important;
     line-height: 1.35 !important;
   }
 
   .invoice-document .ant-table-thead > tr > th {
-    background: #f3f4f6 !important;
-    color: #111827 !important;
+    background: #383a36 !important;
+    color: #ffffff !important;
     font-weight: 700 !important;
   }
 
@@ -1704,14 +1866,25 @@ body {
   }
 
   .invoice-company-logo {
-    max-width: 95px !important;
-    max-height: 70px !important;
+    width: 92px !important;
+    height: 68px !important;
     object-fit: contain !important;
   }
 
   .invoice-document .ant-divider {
     margin: 12px 0 !important;
     border-color: #d1d5db !important;
+  }
+
+  .invoice-receipts,
+  .invoice-notes {
+    margin-top: 26px !important;
+  }
+
+  .invoice-balance-row {
+    background: #f4f4f4 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .voucher-preview {

@@ -70,6 +70,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('invoices.share.revoke');
         Route::get('/{uid}', 'show')->name('invoices.show');
         Route::patch('/{uid}/mark-sent', 'markAsSent')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.markAsSent');
+        Route::patch('/{uid}/discount', 'discount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discount');
         Route::patch('/{uid}/void', 'void')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.void');
         Route::patch('/{uid}/cancel', 'cancel')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.cancel');
         Route::get('/{uid}/aging-status', 'agingStatus')->name('invoices.agingStatus');

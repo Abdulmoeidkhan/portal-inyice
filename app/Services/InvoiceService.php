@@ -173,6 +173,57 @@ class InvoiceService
         return max(0, (float)$invoice->total_amount - $totalSettled);
     }
 
+    public function applyDiscount(Invoice $invoice, float $amount, ?string $reason = null): Invoice
+    {
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Discount amount must be greater than zero.']);
+        }
+
+        return DB::transaction(function () use ($invoice, $amount, $reason): Invoice {
+            $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+
+            if (in_array($invoice->status, ['paid', 'void', 'cancel'], true)) {
+                throw ValidationException::withMessages(['invoice' => 'Discounts can only be added to open invoices.']);
+            }
+
+            if ($amount > (float) $invoice->outstanding_amount) {
+                throw ValidationException::withMessages(['amount' => 'Discount cannot exceed the current outstanding balance.']);
+            }
+
+            InvoiceLine::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $invoice->tenant_id,
+                'invoice_id' => $invoice->id,
+                'description' => trim('Discount' . ($reason ? ': ' . $reason : '')),
+                'quantity' => 1,
+                'unit_price' => -$amount,
+                'total_price' => -$amount,
+            ]);
+
+            $invoice->load('lines');
+            $subtotal = $invoice->lines
+                ->filter(fn (InvoiceLine $line) => (float) $line->total_price > 0)
+                ->sum(fn (InvoiceLine $line) => (float) $line->total_price);
+            $discount = abs($invoice->lines
+                ->filter(fn (InvoiceLine $line) => (float) $line->total_price < 0)
+                ->sum(fn (InvoiceLine $line) => (float) $line->total_price));
+            $total = max(0, $subtotal + (float) $invoice->tax_amount - $discount);
+            $received = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_received');
+            $refunded = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_refunded');
+            $outstanding = max(0, $total - $received + $refunded);
+            $status = $outstanding <= 0 ? 'paid' : ($received > $refunded ? 'partial_paid' : $invoice->status);
+
+            $invoice->update([
+                'subtotal' => $subtotal,
+                'total_amount' => $total,
+                'outstanding_amount' => $outstanding,
+                'status' => $status,
+            ]);
+
+            return $invoice->fresh(['lines', 'settlements.referenceDocument']);
+        });
+    }
+
     /**
      * Calculate advance balance
      */

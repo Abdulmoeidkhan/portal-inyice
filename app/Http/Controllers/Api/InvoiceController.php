@@ -147,7 +147,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
-            ->with(['lines', 'customer', 'order', 'company', 'settlements'])
+            ->with(['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->firstOrFail();
 
         return response()->json($invoice);
@@ -179,14 +179,48 @@ class InvoiceController extends Controller
     public function shared(string $token): JsonResponse
     {
         $invoice = Invoice::where('share_token', $token)
-            ->with(['lines', 'customer', 'order', 'company'])
+            ->with(['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->firstOrFail();
         $invoice->makeHidden(['share_token', 'tenant_id', 'company_id', 'customer_id', 'order_id', 'fx_rate_to_base', 'created_at', 'updated_at']);
         $invoice->lines->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
+        $invoice->settlements->each(function ($settlement): void {
+            $settlement->setVisible(['id', 'amount_received', 'amount_refunded', 'amount_to_advance', 'settlement_date', 'settlement_type', 'reference_document', 'notes']);
+            $settlement->referenceDocument?->setVisible([
+                'receipt_number',
+                'receipt_date',
+                'payment_number',
+                'payment_date',
+                'amount',
+                'currency_code',
+                'payment_method',
+                'reference_number',
+                'description',
+            ]);
+        });
         $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
         $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url']);
         return response()->json($invoice);
+    }
+
+    public function discount(string $uid, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $updated = $this->invoiceService->applyDiscount($invoice, (float) $validated['amount'], $validated['reason'] ?? null);
+
+        return response()->json([
+            'success' => true,
+            'invoice' => $updated,
+        ]);
     }
 
     /**

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Descriptions, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 
@@ -12,6 +12,9 @@ const toNumber = (value) => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const isDiscountLine = (line) => toNumber(line?.total_price) < 0 || /^discount\b/i.test(String(line?.description || '').trim());
+const formatDate = (value) => String(value || '').slice(0, 10) || '-';
+const documentForSettlement = (settlement) => settlement.reference_document || settlement.referenceDocument || null;
 const uniqueNames = (values) => {
   const seen = new Set();
 
@@ -73,7 +76,7 @@ const breakupForLine = (line) => {
   return 'Service';
 };
 
-const buildDetailedLineRows = (invoice) => toArray(invoice.lines).map((line, index) => ({
+const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line)).map((line, index) => ({
   ...line,
   id: line.id || `line-${index}`,
   service_name: serviceNameForLine(line),
@@ -97,7 +100,7 @@ const buildPassengerRows = (invoice) => {
 
 const buildServiceRows = (invoice) => {
   const meta = invoice.order?.meta || {};
-  const lines = toArray(invoice.lines);
+  const lines = toArray(invoice.lines).filter((line) => !isDiscountLine(line));
 
   return serviceDefinitions
     .map((service) => {
@@ -159,6 +162,25 @@ export default function InvoiceDetail({ shared = false }) {
   const passengerRows = buildPassengerRows(invoice);
   const serviceRows = buildServiceRows(invoice);
   const detailedRows = buildDetailedLineRows(invoice);
+  const discountTotal = Math.abs(toArray(invoice.lines).filter(isDiscountLine).reduce((sum, line) => sum + toNumber(line.total_price), 0));
+  const settlementRows = toArray(invoice.settlements).filter((settlement) => (
+    toNumber(settlement.amount_received) > 0 || toNumber(settlement.amount_refunded) > 0 || toNumber(settlement.amount_to_advance) > 0
+  ));
+  const paymentMade = settlementRows.reduce((sum, settlement) => sum + toNumber(settlement.amount_received), 0);
+  const refunded = settlementRows.reduce((sum, settlement) => sum + toNumber(settlement.amount_refunded), 0);
+  const hasReceiptRows = settlementRows.length > 0;
+  const companyName = invoice.company?.display_name || invoice.company?.legal_name || 'Company';
+  const companyContact = [
+    invoice.company?.address,
+    invoice.company?.phone,
+    invoice.company?.email,
+  ].filter(Boolean);
+  const billTo = [
+    invoice.customer?.name,
+    invoice.customer?.phone,
+    invoice.customer?.email,
+    invoice.customer?.address,
+  ].filter(Boolean);
 
   return (
     <div className="page-shell page-fade-up invoice-document">
@@ -168,42 +190,54 @@ export default function InvoiceDetail({ shared = false }) {
         <Button icon={<DownloadOutlined />} onClick={() => window.print()}>Download PDF</Button>
         {!shared && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
       </Space>
-      <Card className="border-beam-aurora">
-        <Row justify="space-between" gutter={[24, 24]} align="top">
-          <Col flex="1 1 360px">
-            <Title level={2}>{invoice.company?.display_name || invoice.company?.legal_name || 'Invoice'}</Title>
-            <Paragraph>{invoice.company?.address}</Paragraph>
-            <Text>{[invoice.company?.email, invoice.company?.phone].filter(Boolean).join(' | ')}</Text>
-          </Col>
-          {invoice.company?.logo_url && (
-            <Col>
-              <img className="invoice-company-logo" src={invoice.company.logo_url} alt={`${invoice.company?.display_name || 'Company'} logo`} />
-            </Col>
-          )}
-          <Col style={{ textAlign: 'right' }}><Title level={1}>INVOICE</Title><Title level={4}>{invoice.invoice_number}</Title><Tag>{String(invoice.status).replaceAll('_', ' ').toUpperCase()}</Tag></Col>
-        </Row>
-        <Divider />
-        <Descriptions column={{ xs: 1, sm: 2, md: 4 }}>
-          <Descriptions.Item label="Bill to">{invoice.customer?.name}</Descriptions.Item>
-          <Descriptions.Item label="Invoice date">{String(invoice.invoice_date || '').slice(0, 10)}</Descriptions.Item>
-          <Descriptions.Item label="Due date">{String(invoice.due_date || '').slice(0, 10)}</Descriptions.Item>
-          <Descriptions.Item label="Order">{invoice.order?.order_number || '—'}</Descriptions.Item>
-        </Descriptions>
+      <Card className="invoice-paper">
+        <div className="invoice-header">
+          <div className="invoice-brand">
+            {invoice.company?.logo_url && (
+              <img className="invoice-company-logo" src={invoice.company.logo_url} alt={`${companyName} logo`} />
+            )}
+            <div>
+              <Title level={2}>{companyName}</Title>
+              {companyContact.map((item) => <Text key={item}>{item}<br /></Text>)}
+            </div>
+          </div>
+          <div className="invoice-heading">
+            <Title level={1}>INVOICE</Title>
+            <Text strong># {invoice.invoice_number}</Text>
+            <Text className="invoice-balance-label">Balance Due</Text>
+            <Title level={4}>{invoice.currency_code} {money(invoice.outstanding_amount)}</Title>
+            <Tag>{String(invoice.status).replaceAll('_', ' ').toUpperCase()}</Tag>
+          </div>
+        </div>
+        <div className="invoice-meta-grid">
+          <div>
+            <Text type="secondary">Bill To</Text>
+            <div className="invoice-party">
+              {billTo.length ? billTo.map((item, index) => <Text key={`${item}-${index}`} strong={index === 0}>{item}<br /></Text>) : <Text>-</Text>}
+            </div>
+          </div>
+          <div className="invoice-dates">
+            <div><Text>Invoice Date :</Text><Text>{formatDate(invoice.invoice_date)}</Text></div>
+            <div><Text>Terms :</Text><Text>Due on Receipt</Text></div>
+            <div><Text>Due Date :</Text><Text>{formatDate(invoice.due_date)}</Text></div>
+            {invoice.order?.order_number && <div><Text>Order :</Text><Text>{invoice.order.order_number}</Text></div>}
+          </div>
+        </div>
         {detailed ? (
-          <Table rowKey="id" pagination={false} dataSource={detailedRows} style={{ marginTop: 24 }} columns={[
-            { title: 'Service', dataIndex: 'service_name' },
-            { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right' },
-            { title: 'Unit Price', dataIndex: 'unit_price', width: 150, align: 'right', render: (value) => `${invoice.currency_code} ${money(value)}` },
-            { title: 'Total', dataIndex: 'total_price', width: 160, align: 'right', render: (value) => <Text strong>{invoice.currency_code} {money(value)}</Text> },
-            { title: 'Breakup', dataIndex: 'breakup' },
+          <Table className="invoice-lines-table" rowKey="id" pagination={false} dataSource={detailedRows} columns={[
+            { title: '#', width: 54, render: (_, __, index) => index + 1 },
+            { title: 'Item & Description', dataIndex: 'description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
+            { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+            { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
+            { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
           ]} />
         ) : (
           <>
             {passengerRows.length > 0 && (
-              <>
-                <Divider />
+              <div className="invoice-mini-section">
                 <Title level={4}>Passenger</Title>
                 <Table
+                  className="invoice-lines-table"
                   rowKey="id"
                   pagination={false}
                   dataSource={passengerRows}
@@ -211,23 +245,47 @@ export default function InvoiceDetail({ shared = false }) {
                     { title: 'Passenger', dataIndex: 'name', render: (value) => value || '-' },
                   ]}
                 />
-              </>
+              </div>
             )}
-            <Divider />
-            <Title level={4}>Services</Title>
-            <Table rowKey="key" pagination={false} dataSource={serviceRows} columns={[
-              { title: 'Services', dataIndex: 'service' },
-              { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right' },
+            <Table className="invoice-lines-table" rowKey="key" pagination={false} dataSource={serviceRows} columns={[
+              { title: '#', width: 54, render: (_, __, index) => index + 1 },
+              { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
+              { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+              { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
+              { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
             ]} />
           </>
         )}
-        <Row justify="end" style={{ marginTop: 24 }}><Col xs={24} md={10} lg={7}><Descriptions column={1} bordered size="small">
-          <Descriptions.Item label="Subtotal">{invoice.currency_code} {money(invoice.subtotal)}</Descriptions.Item>
-          <Descriptions.Item label="Tax">{invoice.currency_code} {money(invoice.tax_amount)}</Descriptions.Item>
-          <Descriptions.Item label="Invoice total"><Text strong>{invoice.currency_code} {money(invoice.total_amount)}</Text></Descriptions.Item>
-          <Descriptions.Item label="Outstanding"><Text strong>{invoice.currency_code} {money(invoice.outstanding_amount)}</Text></Descriptions.Item>
-        </Descriptions></Col></Row>
-        {invoice.notes && <><Divider /><Text strong>Notes</Text><Paragraph>{invoice.notes}</Paragraph></>}
+        <Divider />
+        <Row justify="end"><Col xs={24} md={11} lg={8}>
+          <div className="invoice-totals">
+            <div><Text>Sub Total</Text><Text>{money(invoice.subtotal)}</Text></div>
+            {discountTotal > 0 && <div><Text>Discount</Text><Text>(-) {money(discountTotal)}</Text></div>}
+            {toNumber(invoice.tax_amount) > 0 && <div><Text>Tax</Text><Text>{money(invoice.tax_amount)}</Text></div>}
+            <div className="invoice-total-row"><Text strong>Total</Text><Text strong>{invoice.currency_code} {money(invoice.total_amount)}</Text></div>
+            {paymentMade > 0 && <div className="invoice-paid-row"><Text>Payment Made</Text><Text>(-) {money(paymentMade)}</Text></div>}
+            {refunded > 0 && <div><Text>Refunded</Text><Text>{money(refunded)}</Text></div>}
+            <div className="invoice-balance-row"><Text strong>Balance Due</Text><Text strong>{invoice.currency_code} {money(invoice.outstanding_amount)}</Text></div>
+          </div>
+        </Col></Row>
+        {hasReceiptRows && (
+          <div className="invoice-receipts">
+            <Title level={4}>Receipts & Payments</Title>
+            <Table rowKey="id" pagination={false} dataSource={settlementRows} columns={[
+              { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
+              { title: 'Receipt / Reference', render: (_, row) => {
+                const document = documentForSettlement(row);
+                return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
+              } },
+              { title: 'Method', width: 130, render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
+              { title: 'Amount', width: 140, align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
+            ]} />
+          </div>
+        )}
+        <div className="invoice-notes">
+          <Text strong>Notes</Text>
+          <Paragraph>{invoice.notes || 'Thanks for your business.'}</Paragraph>
+        </div>
       </Card>
     </div>
   );

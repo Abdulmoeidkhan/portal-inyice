@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use App\Traits\TenantAware;
 
 class InvoiceSettlement extends Model
@@ -41,5 +42,10 @@ class InvoiceSettlement extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function referenceDocument(): MorphTo
+    {
+        return $this->morphTo(__FUNCTION__, 'reference_document_type', 'reference_document_id');
     }
 }
