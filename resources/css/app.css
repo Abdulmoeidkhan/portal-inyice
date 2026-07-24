@@ -1119,6 +1119,30 @@ body {
   color: #111827;
 }
 
+.invoice-paper,
+.invoice-paper .ant-card-body,
+.invoice-paper .ant-table,
+.invoice-paper .ant-table-container,
+.invoice-paper .ant-table-tbody > tr > td {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.invoice-paper .ant-typography,
+.invoice-paper h1.ant-typography,
+.invoice-paper h2.ant-typography,
+.invoice-paper h3.ant-typography,
+.invoice-paper h4.ant-typography,
+.invoice-paper h5.ant-typography,
+.invoice-paper .ant-table-tbody .ant-table-cell {
+  color: #111827 !important;
+}
+
+.invoice-paper .ant-typography-secondary,
+.invoice-paper .invoice-balance-label {
+  color: #4b5563 !important;
+}
+
 .invoice-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1203,6 +1227,13 @@ body {
   color: #ffffff !important;
   border-color: #383a36 !important;
   font-weight: 600;
+}
+
+.invoice-paper .invoice-lines-table .ant-table-thead > tr > th,
+.invoice-lines-table .ant-table-thead > tr > th .ant-table-cell,
+.invoice-lines-table .ant-table-thead > tr > th *,
+.invoice-paper .invoice-lines-table .ant-table-thead > tr > th .ant-typography {
+  color: #ffffff !important;
 }
 
 .invoice-lines-table .ant-table-tbody > tr > td {
@@ -1843,8 +1874,14 @@ body {
   .invoice-document .ant-typography,
   .invoice-document .ant-descriptions-item-label,
   .invoice-document .ant-descriptions-item-content,
-  .invoice-document .ant-table-cell {
+  .invoice-document .ant-table-tbody .ant-table-cell {
     color: #111827 !important;
+  }
+
+  .invoice-document .ant-table-thead > tr > th,
+  .invoice-document .ant-table-thead > tr > th .ant-table-cell,
+  .invoice-document .ant-table-thead > tr > th * {
+    color: #ffffff !important;
   }
 
   .invoice-document h1.ant-typography,

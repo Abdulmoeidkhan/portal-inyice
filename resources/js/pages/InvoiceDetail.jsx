@@ -251,8 +251,7 @@ export default function InvoiceDetail({ shared = false }) {
               { title: '#', width: 54, render: (_, __, index) => index + 1 },
               { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
               { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
-              { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
-              { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
+              { title: 'Total', dataIndex: 'total_price', width: 150, align: 'right', render: (value) => money(value) },
             ]} />
           </>
         )}
