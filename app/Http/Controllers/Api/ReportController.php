@@ -166,10 +166,13 @@ class ReportController extends Controller
             'days' => 'nullable|integer|min:1|max:90',
         ]);
 
+        $user = $request->user();
+
         return response()->json($this->reportService->dashboardUpcoming(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $user->tenant_id,
+            (int) $user->company_id,
             (int) ($validated['days'] ?? 30),
+            $user->hasAnyRole(['admin', 'accounts']),
         ));
     }
 }

@@ -32,6 +32,7 @@ return new class extends Migration
             $table->index('customer_id');
             $table->index('vendor_id');
             $table->index('receipt_date');
+            $table->index(['tenant_id', 'company_id', 'receipt_date', 'id'], 'receipts_tenant_company_date_id_index');
             $table->unique(['tenant_id', 'uid']);
             $table->unique(['company_id', 'receipt_number']);
 

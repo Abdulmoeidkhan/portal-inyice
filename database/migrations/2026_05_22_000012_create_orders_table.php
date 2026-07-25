@@ -53,6 +53,8 @@ return new class extends Migration
             $table->index(['tenant_id', 'issue_date'], 'orders_tenant_issue_date_index');
             $table->index(['tenant_id', 'package_type'], 'orders_tenant_package_type_index');
             $table->index(['tenant_id', 'gds_source'], 'orders_tenant_gds_source_index');
+            $table->index(['tenant_id', 'company_id', 'status', 'id'], 'orders_tenant_company_status_id_index');
+            $table->index(['tenant_id', 'company_id', 'updated_at', 'id'], 'orders_tenant_company_updated_id_index');
             $table->unique(['tenant_id', 'uid']);
             $table->unique(['company_id', 'order_number']);
 

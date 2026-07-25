@@ -448,7 +448,7 @@ class ReportService
         ];
     }
 
-    public function dashboardUpcoming(int $tenantId, int $companyId, int $days = 30): array
+    public function dashboardUpcoming(int $tenantId, int $companyId, int $days = 30, bool $includeFinance = false): array
     {
         $days = max(1, min($days, 90));
         $from = now()->startOfDay();
@@ -524,7 +524,7 @@ class ReportService
             ])
             ->values();
 
-        return [
+        $dashboard = [
             'report_date' => now()->toDateString(),
             'company_id' => $companyId,
             'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'days' => $days],
@@ -538,6 +538,121 @@ class ReportService
             'checkins' => $byType->get('checkin', collect())->values()->all(),
             'checkouts' => $byType->get('checkout', collect())->values()->all(),
             'notifications' => $notifications->all(),
+        ];
+
+        if ($includeFinance) {
+            $dashboard['finance'] = $this->dashboardFinance($tenantId, $companyId);
+        }
+
+        return $dashboard;
+    }
+
+    private function dashboardFinance(int $tenantId, int $companyId): array
+    {
+        $from = now()->startOfMonth()->toDateString();
+        $to = now()->endOfMonth()->toDateString();
+        $cashflowFrom = now()->subDays(9)->toDateString();
+        $cashflowTo = now()->toDateString();
+
+        $invoice = Invoice::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereBetween('invoice_date', [$from, $to])
+            ->whereNotIn('status', ['void', 'cancel'])
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as invoiced')
+            ->selectRaw('COALESCE(SUM(total_amount - outstanding_amount), 0) as collected')
+            ->selectRaw('COALESCE(SUM(outstanding_amount), 0) as outstanding')
+            ->first();
+
+        $cashIn = Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereBetween('receipt_date', [$from, $to])
+            ->sum('amount');
+
+        $cashOut = Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereBetween('payment_date', [$from, $to])
+            ->sum('amount');
+
+        $costQuery = OrderVendorCost::query()
+            ->join('orders', 'orders.id', '=', 'order_vendor_costs.order_id')
+            ->join('invoices', 'invoices.order_id', '=', 'orders.id')
+            ->where('order_vendor_costs.tenant_id', $tenantId)
+            ->where('orders.company_id', $companyId)
+            ->whereBetween('invoices.invoice_date', [$from, $to])
+            ->whereNotIn('invoices.status', ['void', 'cancel'])
+            ->whereNotIn('orders.status', ['cancel', 'void']);
+
+        $cost = (clone $costQuery)->sum('order_vendor_costs.amount');
+        $expenses = (clone $costQuery)
+            ->selectRaw("COALESCE(NULLIF(order_vendor_costs.service_type, ''), 'Other') as type")
+            ->selectRaw('COALESCE(SUM(order_vendor_costs.amount), 0) as value')
+            ->groupBy('order_vendor_costs.service_type')
+            ->orderByDesc('value')
+            ->limit(5)
+            ->get()
+            ->map(fn ($row) => [
+                'type' => ucwords(str_replace('_', ' ', $row->type ?: 'Other')),
+                'value' => round((float) $row->value, 2),
+            ])
+            ->values();
+
+        $receiptsByDate = Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereBetween('receipt_date', [$cashflowFrom, $cashflowTo])
+            ->selectRaw('receipt_date as date, COALESCE(SUM(amount), 0) as total')
+            ->groupBy('receipt_date')
+            ->pluck('total', 'date');
+
+        $paymentsByDate = Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereBetween('payment_date', [$cashflowFrom, $cashflowTo])
+            ->selectRaw('payment_date as date, COALESCE(SUM(amount), 0) as total')
+            ->groupBy('payment_date')
+            ->pluck('total', 'date');
+
+        $cashflow = collect(range(0, 9))->map(function (int $index) use ($cashflowFrom, $receiptsByDate, $paymentsByDate) {
+            $date = Carbon::parse($cashflowFrom)->addDays($index);
+            $key = $date->toDateString();
+
+            return [
+                'date' => $key,
+                'label' => $date->format('M j'),
+                'inflow' => round((float) ($receiptsByDate[$key] ?? 0), 2),
+                'outflow' => round((float) ($paymentsByDate[$key] ?? 0), 2),
+            ];
+        });
+
+        $revenue = (float) $invoice->invoiced;
+        $profit = $revenue - (float) $cost;
+
+        return [
+            'period' => ['from' => $from, 'to' => $to],
+            'summary' => [
+                'invoiced' => round($revenue, 2),
+                'collected' => round((float) $invoice->collected, 2),
+                'outstanding' => round((float) $invoice->outstanding, 2),
+                'cash_in' => round((float) $cashIn, 2),
+                'cash_out' => round((float) $cashOut, 2),
+                'profit' => round($profit, 2),
+                'margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
+            ],
+            'mix' => [
+                ['type' => 'Collected', 'value' => round((float) $invoice->collected, 2)],
+                ['type' => 'Outstanding', 'value' => round((float) $invoice->outstanding, 2)],
+                ['type' => 'Cash Out', 'value' => round((float) $cashOut, 2)],
+                ['type' => 'Profit', 'value' => round(max($profit, 0), 2)],
+            ],
+            'expenses' => $expenses->all(),
+            'flow' => [
+                ['type' => 'Cash In', 'value' => round((float) $cashIn, 2)],
+                ['type' => 'Cash Out', 'value' => round((float) $cashOut, 2)],
+            ],
+            'cashflow' => $cashflow->all(),
         ];
     }
 

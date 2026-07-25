@@ -1,18 +1,46 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Col, Empty, Layout, Row, Skeleton, Space, Statistic, Tag, Typography, theme } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Badge, Button, Card, Col, Empty, Layout, Row, Skeleton, Space, Statistic, Tag, Typography } from 'antd';
 import {
   ArrowRightOutlined,
-  BellOutlined,
-  CalendarOutlined,
+  DollarOutlined,
+  FileAddOutlined,
+  FileTextOutlined,
   LoginOutlined,
   LogoutOutlined,
   ReloadOutlined,
   RocketOutlined,
+  RiseOutlined,
+  SettingOutlined,
+  SwapOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
+import { Pie } from '@ant-design/plots';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 
 const { Text, Title } = Typography;
+const money = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+const percent = (value, total) => {
+  const safeTotal = Number(total || 0);
+
+  return safeTotal > 0 ? Math.round((Number(value || 0) / safeTotal) * 100) : 0;
+};
+
+const storedUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const dayGreeting = () => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+};
 
 const authHeaders = () => {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -111,7 +139,6 @@ function EventListCard({ type, events, loading, onOpen }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { token } = theme.useToken();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
 
@@ -140,32 +167,41 @@ export default function Dashboard() {
     loadDashboard();
   }, []);
 
-  const stats = useMemo(() => [
-    {
-      title: 'Check-ins',
-      value: report?.summary?.checkins || 0,
-      icon: <LoginOutlined />,
-      color: token.colorSuccess,
+  const finance = report?.finance;
+  const user = storedUser();
+  const firstName = (user?.name || user?.email || 'there').split(' ')[0];
+  const expenses = (finance?.expenses?.length ? finance.expenses : finance?.mix || [])
+    .filter((item) => Number(item.value) > 0);
+  const expenseTotal = expenses.reduce((total, item) => total + Number(item.value || 0), 0);
+  const cashflow = finance?.cashflow || [];
+  const maxCashflow = Math.max(
+    1,
+    ...cashflow.flatMap((item) => [Number(item.inflow || 0), Number(item.outflow || 0)])
+  );
+  const cashflowPoints = cashflow
+    .map((item, index) => {
+      const x = cashflow.length <= 1 ? 50 : (index / (cashflow.length - 1)) * 100;
+      const net = Number(item.inflow || 0) - Number(item.outflow || 0);
+      const y = 78 - ((net + maxCashflow) / (maxCashflow * 2)) * 56;
+
+      return `${x},${Math.min(86, Math.max(12, y))}`;
+    })
+    .join(' ');
+  const pieConfig = {
+    data: expenses,
+    angleField: 'value',
+    colorField: 'type',
+    radius: 0.88,
+    innerRadius: 0.62,
+    height: 230,
+    legend: false,
+    label: false,
+    color: ['#ffc233', '#ff7a1a', '#8a4df6', '#d899f9', '#5cc8ff', '#c4c9d4'],
+    tooltip: {
+      title: (item) => item.type,
+      items: [{ field: 'value', name: 'Amount', valueFormatter: (value) => money(value) }],
     },
-    {
-      title: 'Check-outs',
-      value: report?.summary?.checkouts || 0,
-      icon: <LogoutOutlined />,
-      color: token.colorWarning,
-    },
-    {
-      title: 'Departures',
-      value: report?.summary?.departures || 0,
-      icon: <RocketOutlined />,
-      color: token.colorInfo,
-    },
-    {
-      title: 'Updates',
-      value: report?.summary?.notifications || 0,
-      icon: <BellOutlined />,
-      color: token.colorPrimary,
-    },
-  ], [report, token]);
+  };
 
   const openVoucher = (event) => {
     if (event?.order_uid) {
@@ -176,82 +212,125 @@ export default function Dashboard() {
   return (
     <div className="page-shell page-fade-up dashboard-page">
       <Layout.Content>
-        <div className="elevated-card border-beam-aurora dashboard-hero">
-          <div>
-            <Title level={1}>Dashboard</Title>
-            <Text type="secondary">
-              Upcoming travel movements and company updates for the next {report?.period?.days || 30} days.
-            </Text>
-          </div>
-          <Space>
-            <Button icon={<CalendarOutlined />} onClick={() => navigate('/orders')}>
-              Orders
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={loadDashboard} loading={loading}>
-              Refresh
-            </Button>
-          </Space>
+        <div className="dashboard-topbar">
+          <Title level={1}>{dayGreeting()}, {firstName}</Title>
+          <Button icon={<ReloadOutlined />} onClick={loadDashboard} loading={loading}>
+            Refresh
+          </Button>
         </div>
 
-        <Row gutter={[16, 16]} className="dashboard-summary-row">
-          {stats.map((stat, index) => (
-            <Col xs={12} lg={6} key={stat.title}>
-              <Card className={`dashboard-stat-card border-beam-aurora stagger-${(index % 3) + 1}`}>
-                <Statistic title={stat.title} value={stat.value} />
-                <div className="dashboard-stat-icon" style={{ color: stat.color }}>{stat.icon}</div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+        <div className="dashboard-action-strip">
+          <Button className="dashboard-action dashboard-action-mint" icon={<FileAddOutlined />} onClick={() => navigate('/sales-flow')}>
+            Create order
+          </Button>
+          <Button className="dashboard-action dashboard-action-blue" icon={<FileTextOutlined />} onClick={() => navigate('/invoices')}>
+            Create invoice
+          </Button>
+          <Button className="dashboard-action dashboard-action-purple" icon={<SwapOutlined />} onClick={() => navigate('/payments')}>
+            Add transaction
+          </Button>
+          <Button className="dashboard-action dashboard-action-peach" icon={<DollarOutlined />} onClick={() => navigate('/vendor-payments')}>
+            Add bill
+          </Button>
+        </div>
 
-        <Row gutter={[16, 16]}>
-          <Col xs={24} xl={16}>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={12}>
-                <EventListCard type="checkin" events={report?.checkins || []} loading={loading} onOpen={openVoucher} />
+        <div className="dashboard-insights-head">
+          <Title level={2}>Insights for you</Title>
+          <Button size="small" icon={<SettingOutlined />} onClick={() => navigate('/reports/profit')}>
+            Customize
+          </Button>
+        </div>
+
+        {finance && (
+          <>
+            <Row gutter={[18, 18]} className="dashboard-insights-grid">
+              <Col xs={24} xl={12}>
+                <Card
+                  className="dashboard-insight-card"
+                  title="Services breakdown"
+                  extra={<Button size="small" onClick={() => navigate('/reports/profit')}>View report</Button>}
+                >
+                  {expenses.length ? (
+                    <div className="dashboard-expense-layout">
+                      <div className="dashboard-expense-legend">
+                        {expenses.map((item, index) => (
+                          <button key={item.type} type="button" className="dashboard-expense-row" onClick={() => navigate('/reports/profit')}>
+                            <span className={`dashboard-expense-dot dot-${index % 6}`} />
+                            <span>{percent(item.value, expenseTotal)}% {item.type}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <Pie {...pieConfig} />
+                    </div>
+                  ) : (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No finance data" />
+                  )}
+                </Card>
               </Col>
-              <Col xs={24} lg={12}>
-                <EventListCard type="checkout" events={report?.checkouts || []} loading={loading} onOpen={openVoucher} />
-              </Col>
-              <Col xs={24}>
-                <EventListCard type="departure" events={report?.departures || []} loading={loading} onOpen={openVoucher} />
+
+              <Col xs={24} xl={12}>
+                <Card
+                  className="dashboard-insight-card"
+                  title="Cashflow"
+                  extra={<Button size="small" onClick={() => navigate('/reports/payments')}>View report</Button>}
+                >
+                  {cashflow.length ? (
+                    <div className="dashboard-cashflow-chart">
+                      <div className="dashboard-cashflow-legend">
+                        <span><i className="cash-dot inflow" />Inflow</span>
+                        <span><i className="cash-dot outflow" />Outflow</span>
+                        <span><i className="cash-dot net" />Net change</span>
+                      </div>
+                      <div className="dashboard-cashflow-bars">
+                        <svg className="dashboard-cashflow-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                          <polyline points={cashflowPoints} />
+                        </svg>
+                        {cashflow.map((item) => {
+                          const inflow = Number(item.inflow || 0);
+                          const outflow = Number(item.outflow || 0);
+
+                          return (
+                            <div key={item.date} className="dashboard-cashflow-day">
+                              <div className="dashboard-cashflow-bars-stack">
+                                <span className="bar inflow" style={{ height: `${Math.max(6, (inflow / maxCashflow) * 118)}px` }} title={`Inflow ${money(inflow)}`} />
+                                <span className="bar outflow" style={{ height: `${Math.max(6, (outflow / maxCashflow) * 118)}px` }} title={`Outflow ${money(outflow)}`} />
+                              </div>
+                              <Text type="secondary">{item.label}</Text>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No cashflow data" />
+                  )}
+                </Card>
               </Col>
             </Row>
+
+            <Row gutter={[14, 14]} className="dashboard-finance-pill-row">
+              <Col xs={24} md={8}>
+                <Statistic title="Invoiced this month" value={finance.summary.invoiced} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic title="Collected" value={finance.summary.collected} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic title="Profit margin" value={finance.summary.margin} precision={2} suffix="%" prefix={<RiseOutlined />} />
+              </Col>
+            </Row>
+          </>
+        )}
+
+        <Row gutter={[16, 16]} className="dashboard-travel-row">
+          <Col xs={24} lg={8}>
+            <EventListCard type="checkin" events={report?.checkins || []} loading={loading} onOpen={openVoucher} />
           </Col>
-
-          <Col xs={24} xl={8}>
-            <Card
-              className="dashboard-notification-card border-beam-aurora"
-              title={<Space><BellOutlined /><span>Notification Panel</span></Space>}
-              extra={<Badge count={report?.notifications?.length || 0} showZero />}
-            >
-              {loading ? (
-                <Skeleton active paragraph={{ rows: 8 }} />
-              ) : !report?.notifications?.length ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No upcoming updates" />
-              ) : (
-                <div className="dashboard-notification-list">
-                  {report.notifications.map((item) => {
-                    const urgency = getEventUrgency(item);
-
-                    return (
-                      <button key={item.key} type="button" className={`dashboard-notification-item ${urgency.className}`} onClick={() => openVoucher(item)}>
-                        <span className="dashboard-item-main">
-                          <span className="dashboard-item-title">
-                            <span>{item.message}</span>
-                            <Tag color={urgency.color}>{item.relative_label}</Tag>
-                          </span>
-                          <span className="dashboard-item-description">
-                            <Text type="secondary">{eventDateLabel(item)}</Text>
-                            <Text type="secondary">{[item.title, item.order_number].filter(Boolean).join(' - ')}</Text>
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
+          <Col xs={24} lg={8}>
+            <EventListCard type="checkout" events={report?.checkouts || []} loading={loading} onOpen={openVoucher} />
+          </Col>
+          <Col xs={24} lg={8}>
+            <EventListCard type="departure" events={report?.departures || []} loading={loading} onOpen={openVoucher} />
           </Col>
         </Row>
       </Layout.Content>

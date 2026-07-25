@@ -400,16 +400,100 @@ body {
   gap: 16px;
 }
 
-.dashboard-hero {
+.dashboard-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
-.dashboard-hero h1 {
-  margin: 0 0 6px;
+.dashboard-topbar h1,
+.dashboard-insights-head h2 {
+  margin: 0;
+}
+
+.dashboard-action-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-action {
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--app-text);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.dashboard-action:hover {
+  color: var(--app-text) !important;
+  filter: brightness(0.98);
+}
+
+.dashboard-action-mint {
+  background: #e4fbef;
+}
+
+.dashboard-action-blue {
+  background: #e3f4ff;
+}
+
+.dashboard-action-purple {
+  background: #f0e4ff;
+}
+
+.dashboard-action-peach {
+  background: #fff0e6;
+}
+
+.dashboard-insights-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-insights-head .ant-btn,
+.dashboard-insight-card .ant-card-extra .ant-btn {
+  border-color: #9bbdf7;
+  color: #3369b7;
+  font-weight: 700;
+}
+
+.dashboard-insights-grid {
+  margin-bottom: 14px;
+}
+
+[data-theme='dark'] .dashboard-topbar h1,
+[data-theme='dark'] .dashboard-insights-head h2 {
+  color: #f8fbff !important;
+  background: transparent;
+}
+
+[data-theme='dark'] .dashboard-action {
+  color: #102033 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+[data-theme='dark'] .dashboard-action .anticon {
+  color: currentColor !important;
+}
+
+[data-theme='dark'] .dashboard-action:hover,
+[data-theme='dark'] .dashboard-action:focus-visible {
+  color: #07111f !important;
+}
+
+[data-theme='dark'] .dashboard-insights-head .ant-btn,
+[data-theme='dark'] .dashboard-insight-card .ant-card-extra .ant-btn {
+  color: #87baff !important;
+  border-color: #87baff;
+  background: rgba(84, 162, 255, 0.1);
 }
 
 .dashboard-summary-row {
@@ -550,6 +634,213 @@ body {
 .dashboard-event-item.urgency-blue,
 .dashboard-notification-item.urgency-blue {
   border-left-color: #38bdf8;
+}
+
+.dashboard-insight-card {
+  height: 100%;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--app-text) 7%, transparent);
+}
+
+.dashboard-insight-card .ant-card-head {
+  min-height: 46px;
+  padding: 0 16px;
+  border-bottom: 0;
+}
+
+.dashboard-insight-card .ant-card-head-title {
+  font-weight: 800;
+}
+
+.dashboard-insight-card .ant-card-body {
+  min-height: 284px;
+  padding: 10px 16px 16px;
+}
+
+.dashboard-expense-layout {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.78fr) minmax(220px, 1.22fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-expense-legend {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-expense-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dashboard-expense-dot {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.dashboard-expense-dot.dot-0 {
+  background: #ffc233;
+}
+
+.dashboard-expense-dot.dot-1 {
+  background: #ff7a1a;
+}
+
+.dashboard-expense-dot.dot-2 {
+  background: #8a4df6;
+}
+
+.dashboard-expense-dot.dot-3 {
+  background: #d899f9;
+}
+
+.dashboard-expense-dot.dot-4 {
+  background: #5cc8ff;
+}
+
+.dashboard-expense-dot.dot-5 {
+  background: #c4c9d4;
+}
+
+.dashboard-cashflow-chart {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-cashflow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dashboard-cashflow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cash-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-text) 22%, transparent);
+  border-radius: 3px;
+}
+
+.cash-dot.inflow {
+  background: #058b49;
+  border-color: #058b49;
+}
+
+.cash-dot.outflow {
+  background: repeating-linear-gradient(135deg, #ffffff 0 4px, #d8d8d8 4px 7px);
+}
+
+.cash-dot.net {
+  background: #d9a51d;
+  border-radius: 50%;
+}
+
+.dashboard-cashflow-bars {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(24px, 1fr));
+  min-height: 210px;
+  align-items: end;
+  gap: 8px;
+  padding-top: 12px;
+  overflow: hidden;
+}
+
+.dashboard-cashflow-line {
+  position: absolute;
+  inset: 12px 6px 34px;
+  z-index: 2;
+  width: calc(100% - 12px);
+  height: calc(100% - 46px);
+  pointer-events: none;
+}
+
+.dashboard-cashflow-line polyline {
+  fill: none;
+  stroke: #d9a51d;
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-cashflow-day {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 8px;
+}
+
+.dashboard-cashflow-bars-stack {
+  display: flex;
+  height: 148px;
+  align-items: end;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.dashboard-cashflow-bars-stack .bar {
+  display: block;
+  width: min(14px, 38%);
+  min-height: 6px;
+  border-radius: 4px 4px 0 0;
+}
+
+.dashboard-cashflow-bars-stack .bar.inflow {
+  background: #058b49;
+}
+
+.dashboard-cashflow-bars-stack .bar.outflow {
+  background: repeating-linear-gradient(135deg, #ffffff 0 5px, #d8d8d8 5px 8px);
+  border: 1px solid #c8c8c8;
+}
+
+.dashboard-cashflow-day .ant-typography {
+  margin: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dashboard-finance-pill-row {
+  margin-bottom: 18px;
+}
+
+.dashboard-finance-pill-row .ant-statistic {
+  height: 100%;
+  min-height: 86px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+.dashboard-travel-row {
+  margin-top: 4px;
 }
 
 .internal-portal {
@@ -750,9 +1041,23 @@ body {
     text-align: left;
   }
 
-  .dashboard-hero {
+  .dashboard-topbar,
+  .dashboard-insights-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .dashboard-action-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-expense-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-cashflow-bars {
+    overflow-x: auto;
+    grid-template-columns: repeat(10, minmax(44px, 1fr));
   }
 }
 

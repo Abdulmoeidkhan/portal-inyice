@@ -26,6 +26,7 @@ return new class extends Migration
             $table->index('account_id');
             $table->index('entry_date');
             $table->index('created_at');
+            $table->index(['tenant_id', 'account_type', 'account_id', 'entry_date', 'id'], 'ledger_entries_tenant_account_date_id_index');
             $table->unique(['tenant_id', 'uid']);
 
             $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');

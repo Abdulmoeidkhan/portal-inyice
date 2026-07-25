@@ -189,7 +189,7 @@ export default function ReferenceSearch() {
               },
             ]}
           />
-
+          <br />
           <Space wrap>
             <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={loading}>Search</Button>
             <Button icon={<ClearOutlined />} onClick={reset}>Clear</Button>

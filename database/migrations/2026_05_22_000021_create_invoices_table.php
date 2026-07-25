@@ -36,6 +36,8 @@ return new class extends Migration
             $table->index('customer_id');
             $table->index('invoice_date');
             $table->index('status');
+            $table->index(['tenant_id', 'company_id', 'status', 'invoice_date', 'id'], 'invoices_tenant_company_status_date_id_index');
+            $table->index(['tenant_id', 'company_id', 'customer_id', 'invoice_date', 'id'], 'invoices_tenant_company_customer_date_id_index');
             $table->unique(['tenant_id', 'uid']);
             $table->unique(['company_id', 'invoice_number']);
 
