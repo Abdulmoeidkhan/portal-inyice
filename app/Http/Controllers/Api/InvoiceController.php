@@ -44,7 +44,7 @@ class InvoiceController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = (int) $request->query('per_page', 50);
+        $perPage = max(1, min(100, (int) $request->query('per_page', 50)));
         $page = max(1, (int) $request->query('page', 1));
         $status = $request->query('status');
         $customerId = $request->query('customer_id');
@@ -77,15 +77,24 @@ class InvoiceController extends Controller
             });
         }
 
-        $invoiceRows = collect($query->get()->map(fn (Invoice $invoice): array => [
+        $candidateLimit = $page * $perPage;
+        $invoiceTotal = (clone $query)->count();
+        $invoiceRows = collect((clone $query)
+            ->orderByDesc('invoice_date')
+            ->orderByDesc('id')
+            ->limit($candidateLimit)
+            ->get()
+            ->map(fn (Invoice $invoice): array => [
             ...$invoice->toArray(),
             'is_refund_order' => false,
             'sort_date' => optional($invoice->invoice_date)->toDateString() ?? optional($invoice->created_at)->toDateString(),
+            'sort_id' => $invoice->id,
         ])->all());
 
         $refundOrders = collect();
+        $refundTotal = 0;
         if (!$status || in_array($status, ['partial_refund', 'refund'], true)) {
-            $refundOrders = Order::where('tenant_id', $tenantId)
+            $refundQuery = Order::where('tenant_id', $tenantId)
                 ->where('company_id', $companyId)
                 ->whereIn('status', ['partial_refund', 'refund'])
                 ->when($customerId, fn ($orderQuery) => $orderQuery->where('customer_id', $customerId))
@@ -96,7 +105,13 @@ class InvoiceController extends Controller
                             ->orWhere('booking_reference', 'like', "%{$search}%")
                             ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"));
                     });
-                })
+                });
+
+            $refundTotal = (clone $refundQuery)->count();
+            $refundOrders = $refundQuery
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->limit($candidateLimit)
                 ->get()
                 ->map(fn (Order $order): array => [
                     'id' => 'refund-order-' . $order->id,
@@ -116,21 +131,22 @@ class InvoiceController extends Controller
                     'order' => $order->toArray(),
                     'is_refund_order' => true,
                     'sort_date' => optional($order->updated_at)->toDateString() ?? optional($order->created_at)->toDateString(),
+                    'sort_id' => $order->id,
                 ]);
         }
 
         $rows = $invoiceRows
             ->merge($refundOrders)
-            ->sortByDesc(fn (array $row) => ($row['sort_date'] ?? '') . '-' . str_pad((string) $row['id'], 16, '0', STR_PAD_LEFT))
+            ->sortByDesc(fn (array $row) => ($row['sort_date'] ?? '') . '-' . str_pad((string) ($row['sort_id'] ?? 0), 16, '0', STR_PAD_LEFT))
             ->values()
             ->map(function (array $row): array {
-                unset($row['sort_date']);
+                unset($row['sort_date'], $row['sort_id']);
                 return $row;
             });
 
         $invoices = new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),
-            $rows->count(),
+            $invoiceTotal + $refundTotal,
             $perPage,
             $page,
             ['path' => $request->url(), 'query' => $request->query()]

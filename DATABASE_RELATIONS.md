@@ -1,12 +1,12 @@
 # Database Relations
 
-This document describes the current database shape from the Laravel models and migrations. `tenant_id` is the main isolation key for operational tables, and most business models use the `TenantAware` trait.
+This document describes the current database shape from the Laravel models and migrations. `tenant_id` is the main isolation key for operational tables, and company-owned workflows also use `company_id`.
 
 ## Core Tenant Structure
 
 ### tenants
 
-Represents one agency workspace.
+Represents one agency workspace or the internal provider workspace.
 
 Important fields:
 
@@ -20,11 +20,13 @@ Relations:
 
 - `Tenant hasMany Company`
 - `Tenant hasMany User`
-- Many operational tables belong to a tenant through `tenant_id`
+- Tenant-owned operational tables reference `tenant_id`
+
+The internal provider tenant uses code `INYICE` when internal portal records are created.
 
 ### companies
 
-Represents the agency company profile inside a tenant.
+Represents an agency company profile inside a tenant.
 
 Important fields:
 
@@ -38,17 +40,44 @@ Important fields:
 - `country_code`
 - `base_currency_code`
 - `default_timezone`
+- `monthly_invoice_limit`
+- `user_limit`
+- `logo_path`
+- `footer_logo_path`
 - `is_active`
 
 Relations:
 
 - `Company belongsTo Tenant`
 - `Company hasMany User`
-- Referenced by orders, invoices, receipts, payments, cash accounts, and bank accounts
+- `Company hasMany Customer`
+- `Company hasMany Vendor`
+- `Company hasMany Order`
+- `Company hasMany Invoice`
+- Referenced by receipts, payments, cash accounts, and bank accounts
+
+Usage:
+
+- Monthly invoice limits are enforced during invoice creation.
+- User limits are enforced during company user creation.
+- Internal portal users can update limits and block/unblock non-internal companies.
 
 ### roles
 
-Defines user permissions by role code.
+Defines tenant and system permissions by role code.
+
+Tenant roles:
+
+- `owner`
+- `admin`
+- `sales`
+- `accounts`
+
+System roles:
+
+- `super-admin`
+- `inyice-admin`
+- `support-executive`
 
 Important fields:
 
@@ -63,18 +92,9 @@ Relations:
 - `Role belongsTo Tenant`
 - `Role hasMany User`
 
-Current tenant roles created during registration:
-
-- `owner`
-- `admin`
-- `sales`
-- `accounts`
-
-The initial signup user is assigned `owner`. Owner users satisfy admin-level permission checks in the `User` model. System role support exists through `is_system`, including provider-level `super-admin` behavior.
-
 ### users
 
-Represents staff accounts.
+Represents agency staff and internal provider users.
 
 Important fields:
 
@@ -101,15 +121,16 @@ Relations:
 
 Auth:
 
-- Laravel Sanctum tokens are stored in `personal_access_tokens`
-- `password` is cast as hashed
-- inactive users cannot log in
+- Laravel Sanctum tokens are stored in `personal_access_tokens`.
+- `password` is cast as hashed.
+- Inactive users cannot log in.
+- Blocking a company or user deletes affected tokens where implemented.
 
 ## Master Data
 
 ### customers
 
-Represents customers for B2B or B2C business.
+Represents B2B or B2C customers.
 
 Important fields:
 
@@ -133,7 +154,7 @@ Relations:
 
 - `Customer belongsTo Tenant`
 - `Customer belongsTo Company`
-- `Customer belongsTo Tenant as b2bAgency` through `b2b_agency_id`
+- `Customer belongsTo Tenant as b2bAgency`
 - `Customer hasMany Order`
 - `Customer hasMany Invoice`
 
@@ -142,11 +163,6 @@ Scopes:
 - `b2b`
 - `b2c`
 - `active`
-
-API:
-
-- `GET /api/v1/customers` lists active tenant customers for selectors.
-- `POST /api/v1/customers` creates a customer inside the authenticated user's tenant/company.
 
 ### vendors
 
@@ -175,32 +191,20 @@ Relations:
 
 - `Vendor belongsTo Tenant`
 - `Vendor belongsTo Company`
-- `Vendor belongsTo Tenant as b2bAgency` through `b2b_agency_id`
+- `Vendor belongsTo Tenant as b2bAgency`
 - `Vendor hasMany Order`
 
 Usage:
 
 - Vendors can be selected on order creation.
-- Flight voucher rows can store `vendor_id` and `vendor_name` in voucher metadata.
-- Visa voucher rows can store `vendor_id` and `visa_vendor` in voucher metadata.
-- The vendor table is the reusable supplier list for flight, visa, and upcoming service modules.
-
-Scopes:
-
-- `b2b`
-- `b2c`
-- `active`
-
-API:
-
-- `GET /api/v1/vendors` lists active tenant vendors for selectors.
-- `POST /api/v1/vendors` creates a vendor inside the authenticated user's tenant/company.
+- Flight pricing and service rows can reference vendors.
+- Vendor costs drive vendor payables and profit reporting.
 
 ## Order And Voucher Flow
 
 ### orders
 
-Represents a quote/order/confirmed booking.
+Represents a quote/order lifecycle record. Orders use soft deletes.
 
 Important fields:
 
@@ -211,7 +215,13 @@ Important fields:
 - `created_by_user_id`
 - `updated_by_user_id`
 - `uid`
+- `share_token`
 - `order_number`
+- `voucher_no`
+- `issue_date`
+- `package_type`
+- `active_sections`
+- `emergency_contact`
 - `booking_reference`
 - `status`
 - `currency_code`
@@ -220,6 +230,7 @@ Important fields:
 - `gds_source`
 - `gds_parsed_record_id`
 - `meta`
+- `deleted_at`
 
 Relations:
 
@@ -233,52 +244,30 @@ Relations:
 - `Order hasMany OrderItem`
 - `Order hasMany OrderVendorCost`
 - `Order hasMany OrderStatusHistory`
-- `Invoice belongsTo Order`
+- `Order hasOne latest Invoice`
+- `Order hasMany Invoice`
+- `Order hasMany VendorPaymentAllocation`
 
-Status transitions in model:
+Current model transitions:
 
-- `quote -> order`
-- `order -> confirm`
-- `order -> cancel`
-- `confirm -> invoice`
-- `confirm -> refund`
-- `invoice -> paid`
-- `invoice -> partial_paid`
+- `quote -> order|cancel|invoice`
+- `order -> cancel|invoice`
+- `invoice -> void|refund_request|refund|partial_refund|paid|partial_paid`
+- `refund_request -> partial_refund|refund|cancel`
+- `partial_refund -> refund`
 - `partial_paid -> paid`
 
 Voucher payload:
 
 - Stored in `orders.meta`
 - Includes voucher header fields, contact, active sections, flights, passengers, pricing, hotels, transfers, city tours, visa, and other services
-- Flight rows can include `vendor_id` and `vendor_name`
-- Visa rows can include `visa_type`, `validity`, `visa_no`, `vendor_id`, `visa_vendor`, `cost`, `profit`, `sales`, legacy `amount`, and notes
-- Hotel, transfer, city tour/ziarat, and other service rows can include `vendor_id`, `vendor_name`, `cost`, `profit`, `sales`, and legacy `amount`
+- Search-friendly values are copied to `voucher_no`, `issue_date`, `package_type`, `active_sections`, and `emergency_contact`
 - Generated order items keep original row data in `order_items.gds_data`
 
-### order_vendor_costs
+Sharing:
 
-Represents supplier cost rows used by vendor payments and profit reporting.
-
-Important fields:
-
-- `tenant_id`
-- `order_id`
-- `vendor_id`
-- `service_type`
-- `service_index`
-- `amount`
-
-Relations:
-
-- `OrderVendorCost belongsTo Order`
-- `OrderVendorCost belongsTo Vendor`
-
-Usage:
-
-- Flight pricing rows create `flight` costs from `voucher.pricing.*.flight_cost` when a vendor is selected.
-- Visa, hotel, transfer, city tour/ziarat, and other service rows create supplier costs from their `cost` field when a vendor is selected. Legacy rows without `cost` fall back to `amount`.
-- Profit Report subtracts these costs from invoiced order revenue.
-- Vendor-wise profit allocates an invoiced order's revenue proportionally across vendor cost rows to avoid double-counting multi-vendor orders.
+- `share_token` creates public voucher access through `/api/v1/shared-vouchers/{token}`.
+- Public responses hide tenant/company/internal identifiers and share tokens.
 
 ### order_items
 
@@ -302,14 +291,39 @@ Relations:
 
 How voucher rows become order items:
 
-- Flight reference rows create zero-amount traceability items
-- Pricing rows create priced items per passenger and component
-- Hotels, transfers, ziarat, visa, and other services can also create order items from their sales fields. Legacy rows without `sales` fall back to `amount`.
-- A fallback `Voucher Booking` item is created if no items exist
+- Flight reference rows create zero-amount traceability items.
+- Passenger pricing rows create priced items.
+- Hotels, transfers, ziarat, visa, and other services create order items from sales fields, falling back to legacy `amount` where needed.
+- A fallback `Voucher Booking` item is created if no items are generated.
+
+### order_vendor_costs
+
+Represents supplier cost rows used by vendor payments and profit reporting.
+
+Important fields:
+
+- `tenant_id`
+- `order_id`
+- `vendor_id`
+- `service_type`
+- `service_index`
+- `amount`
+
+Relations:
+
+- `OrderVendorCost belongsTo Order`
+- `OrderVendorCost belongsTo Vendor`
+
+Usage:
+
+- Flight pricing rows create `flight` costs from `flight_cost` when a vendor is selected.
+- Visa, hotel, transfer, city tour/ziarat, and other service rows create supplier costs from `cost` when a vendor is selected.
+- Legacy service rows without `cost` can fall back to `amount`.
+- Vendor-wise profit allocates invoiced order revenue by vendor cost share.
 
 ### order_status_histories
 
-Stores order lifecycle changes.
+Stores lifecycle changes.
 
 Important fields:
 
@@ -350,8 +364,8 @@ Relations:
 
 Current source handling:
 
-- Backend endpoint accepts `sabre` and `galileo`
-- Frontend local parser also supports source labeling for `amadeus` and `other` payloads
+- Backend endpoint accepts `sabre` and `galileo`.
+- Frontend local parsing can label `amadeus` and `other` payloads.
 
 ## Invoicing
 
@@ -366,6 +380,7 @@ Important fields:
 - `order_id`
 - `customer_id`
 - `uid`
+- `share_token`
 - `invoice_number`
 - `invoice_date`
 - `due_date`
@@ -397,6 +412,14 @@ Statuses:
 - `paid`
 - `overdue`
 - `void`
+- `cancel`
+
+Usage:
+
+- `share_token` creates public invoice access through `/api/v1/shared-invoices/{token}`.
+- Discounts are represented as negative invoice lines.
+- Cancelled invoices have status `cancel` and are excluded from the active invoice list.
+- Invoice creation enforces `companies.monthly_invoice_limit`.
 
 ### invoice_lines
 
@@ -419,7 +442,7 @@ Relations:
 
 ### invoice_settlements
 
-Represents invoice payment/refund/advance applications.
+Represents invoice receipt/refund/advance applications.
 
 Important fields:
 
@@ -445,19 +468,22 @@ Relations:
 
 ### receipts
 
-Represents money received from customers.
+Represents money received.
 
 Important fields:
 
 - `tenant_id`
 - `company_id`
 - `customer_id`
+- `vendor_id`
 - `uid`
 - `receipt_number`
 - `receipt_date`
 - `amount`
 - `currency_code`
 - `payment_method`
+- `account_id`
+- `account_type`
 - `reference_number`
 - `description`
 - `created_by_user_id`
@@ -467,17 +493,19 @@ Relations:
 - `Receipt belongsTo Tenant`
 - `Receipt belongsTo Company`
 - `Receipt belongsTo Customer`
+- `Receipt belongsTo Vendor`
 - `Receipt belongsTo User as createdBy`
-- `Receipt hasMany InvoiceSettlement` through the settlement reference document fields
+- Customer receipts link to `invoice_settlements` by settlement reference fields.
 
 ### payments
 
-Represents money paid to vendors.
+Represents money paid.
 
 Important fields:
 
 - `tenant_id`
 - `company_id`
+- `customer_id`
 - `vendor_id`
 - `uid`
 - `payment_number`
@@ -495,13 +523,14 @@ Relations:
 
 - `Payment belongsTo Tenant`
 - `Payment belongsTo Company`
+- `Payment belongsTo Customer`
 - `Payment belongsTo Vendor`
 - `Payment belongsTo User as createdBy`
 - `Payment hasMany VendorPaymentAllocation`
 
 ### vendor_payment_allocations
 
-Allocates one vendor payment across one or more payable orders. This keeps the payment header (method, account, date, reference, and total) separate from its document-level distribution.
+Allocates one vendor payment across one or more payable orders.
 
 Important fields:
 
@@ -513,12 +542,10 @@ Important fields:
 
 Constraints and relations:
 
-- One row per payment/order pair (`payment_id`, `order_id` is unique).
+- One row per payment/order pair.
 - `VendorPaymentAllocation belongsTo Payment`.
 - `VendorPaymentAllocation belongsTo Order`.
-- `Payment hasMany VendorPaymentAllocation`.
-- `Order hasMany VendorPaymentAllocation`.
-- Deleting a payment cascades to its allocations; deleting an allocated order is restricted.
+- Deleting a payment cascades to its allocations; deleting an allocated order is restricted by the schema.
 
 ### cash_accounts
 
@@ -542,7 +569,7 @@ Relations:
 - `CashAccount belongsTo Company`
 - `CashAccount hasMany LedgerEntry` where `account_type = cash`
 
-Registration creates a default cash account named `Main Cash Box`.
+Registration creates `Main Cash Box`.
 
 ### bank_accounts
 
@@ -588,14 +615,14 @@ Important fields:
 Relations:
 
 - `LedgerEntry belongsTo Tenant`
-- Linked to cash or bank account by `account_id` and `account_type`
+- Linked to cash or bank by `account_id` and `account_type`
 - Linked to source document by `reference_type` and `reference_id`
 
 ## Currency And Audit
 
 ### currencies
 
-Reference table for currency codes used by companies, customers, vendors, orders, invoices, receipts, payments, cash accounts, bank accounts, and exchange rates.
+Reference table for currency codes used by companies, counterparties, orders, invoices, receipts, payments, accounts, and exchange rates.
 
 ### exchange_rates
 
@@ -619,8 +646,8 @@ Relations:
 
 Lookup behavior:
 
-- `ExchangeRate::getRate()` returns `1.0` when source and target currencies are the same
-- Otherwise it returns the latest active rate on or before the requested date
+- `ExchangeRate::getRate()` returns `1.0` when source and target currencies match.
+- Otherwise it returns the latest active rate on or before the requested date.
 
 ### audit_logs
 
@@ -650,38 +677,52 @@ Scopes:
 - `byAction`
 - `byModel`
 
+## Reporting And Search Data Paths
+
+- Revenue and aging reports read invoices and settlements.
+- Profit report reads invoiced order revenue and `order_vendor_costs`.
+- Receipt report reads `receipts`.
+- Payment report reads `payments`.
+- Cancelled report reads invoices with `status = cancel`.
+- Customer/vendor statements read invoices, settlements, receipts, payments, and vendor allocation/payable data.
+- Reference search queries orders, invoices, customers, vendors, receipts, and payments by tenant/company scope.
+
 ## High-Level Relationship Map
 
 ```text
 Tenant
   -> Company
+       -> User
+       -> Customer
+       -> Vendor
+       -> Order
+            -> OrderItem
+            -> OrderVendorCost
+            -> OrderStatusHistory
+            -> Invoice
+                 -> InvoiceLine
+                 -> InvoiceSettlement
+            -> VendorPaymentAllocation
+       -> Receipt
+       -> Payment
+            -> VendorPaymentAllocation
+       -> CashAccount
+            -> LedgerEntry(account_type=cash)
+       -> BankAccount
+            -> LedgerEntry(account_type=bank)
   -> Role
-  -> User
-  -> Customer
-  -> Vendor
-  -> Order
-       -> OrderVendorCost
-       -> OrderItem
-       -> OrderStatusHistory
-       -> Invoice
-            -> InvoiceLine
-            -> InvoiceSettlement
   -> GdsParsedRecord
        -> Order
-  -> Receipt
-  -> Payment
-  -> CashAccount
-       -> LedgerEntry(account_type=cash)
-  -> BankAccount
-       -> LedgerEntry(account_type=bank)
   -> ExchangeRate
   -> AuditLog
 ```
 
 ## Tenant Safety Rules
 
-- Always filter business data by authenticated user's `tenant_id`.
+- Filter business data by authenticated `tenant_id`.
+- Filter company-specific views by authenticated `company_id`.
 - Prefer model scopes/traits already present in the app.
-- Do not expose records by raw `id` without tenant checks.
-- Public registration and auth routes are the only intentionally unauthenticated flows.
+- Do not expose records by raw `id` without tenant/company checks.
 - API detail routes should resolve records by `uid` where controllers currently expect it.
+- Public registration/auth and shared token reads are the deliberate unauthenticated exceptions.
+- Internal portal cross-tenant queries must use system-role middleware and narrow `withoutGlobalScopes()` usage.

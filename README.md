@@ -1,59 +1,94 @@
 # Portal inYice
 
-Portal inYice is a Laravel 13 and React 18 travel-agency order workspace. The current focus is voucher-to-order flow, local GDS text parsing, passenger and flight references, per-passenger service pricing, orders, invoices, receipts, payments, reports, and statements.
+Portal inYice, branded in the UI as InYice OS, is a Laravel and React travel-finance workspace for agencies. The current product covers tenant registration, company setup, limited company users, customer/vendor master data, GDS-assisted voucher capture, order creation, invoice conversion, receipts, payments, statements, reports, public sharing links, and an internal provider portal.
 
 ## Current Stack
 
-- Backend: Laravel 13, PHP 8.4, Laravel Sanctum
-- Frontend: React 18, Ant Design, Vite
-- Database: MySQL in normal runtime, with Laravel migrations in `database/migrations`
+- Backend: Laravel 13.11, PHP 8.4 runtime, Laravel Sanctum
+- Frontend: React 18, Ant Design 6, Vite 8
+- Database: Laravel migrations for the relational schema; this environment is connected to SQLite through Laravel Boost, while local/runtime environments may use MySQL-compatible migrations
 - Runtime support: local PHP/Vite development and Docker compose files
 
-## Key Areas
+## Main Product Areas
 
-- Authentication and registration: `app/Http/Controllers/AuthController.php`, `RegistrationController.php`
-- API routes: `routes/api.php`
+- Public registration and login: `app/Http/Controllers/RegistrationController.php`, `app/Http/Controllers/AuthController.php`
+- Authenticated API routes: `routes/api.php`, under `/api/v1`
 - React shell and navigation: `resources/js/pages/App.jsx`
-- Voucher/order workspace: `resources/js/pages/SalesFlow.jsx`
-- Sales-flow components: `resources/js/pages/sales-flow`
-- Customer module: `resources/js/pages/CustomerList.jsx`
-- Vendor module: `resources/js/pages/VendorList.jsx`
-- Voucher-to-order backend: `app/Http/Controllers/Api/OrderController.php`
-- Customer/vendor selectors and quick-create API: `app/Http/Controllers/Api/MasterDataController.php`
-- Invoice, receipt, and payment APIs: `app/Http/Controllers/Api`
+- Create Order workspace: `resources/js/pages/SalesFlow.jsx` and `resources/js/pages/sales-flow`
+- Order list, edit, voucher detail, and sharing: `OrderList.jsx`, `OrderEdit.jsx`, `VoucherDetail.jsx`
+- Invoices and invoice sharing: `InvoiceList.jsx`, `InvoiceDetail.jsx`
+- Customer/vendor master data: `CustomerList.jsx`, `VendorList.jsx`, `MasterDataController.php`
+- Customer receipts, customer payments, vendor receipts, vendor payments: `Payments.jsx`, `VendorPayments.jsx`, `CounterpartyTransaction.jsx`, `PaymentController.php`
+- Reports and statements: `ReportController.php`, `ReportService.php`, `StatementController.php`, `StatementService.php`
+- Company profile and company users: `CompanyProfileController.php`, `CompanyUserController.php`
+- Internal provider portal: `InternalPortal.jsx`, `InternalPortalController.php`
+- Cross-reference search: `ReferenceSearch.jsx`, `ReferenceSearchController.php`
 
-## Financial terminology
+## Financial Terminology
 
-Cash transactions use direction-based names consistently throughout the API, screens, statements, and reports:
+Cash movement names are direction-based:
 
-- **Receipt (money in):** money received by the company. A customer receipt records money received from a customer. A vendor receipt records money received from a vendor, such as a rebate or returned overpayment.
-- **Payment (money out):** money paid by the company. A vendor payment records money paid to a vendor. A customer payment records money paid to a customer, including full and partial invoice refunds.
+- **Receipt:** money received by the company. Customer receipts settle customer invoices or advances. Vendor receipts record money received from vendors, such as rebates or returned overpayments.
+- **Payment:** money paid by the company. Vendor payments settle supplier/order payables. Customer payments record money paid back to customers, including refunds.
 
-The four finance entry screens are Customer Receipts, Customer Payments, Vendor Receipts, and Vendor Payments. Receipt Report contains only money-in records; Payment Report contains only money-out records. Both reports can be filtered by customer/vendor, method, date, and search text.
+The finance screens are Customer Receipts, Customer Payments, Vendor Receipts, and Vendor Payments. Receipt Report contains money-in records; Payment Report contains money-out records. Reports use the signed-in user's company automatically.
 
-Invoice payments and customer advances create customer receipts. Invoice refunds create customer payments and linked refund settlements so invoice balances and cash-direction reports remain consistent.
+## Current Workflow
 
-Reports use the signed-in user's company automatically; report screens should not ask the user to choose a company. Profit Report uses invoiced order revenue minus supplier costs from `order_vendor_costs`. It can be grouped customer-wise, vendor-wise, or staff-wise, and the list is shown only after the user chooses All or one customer/vendor/staff member. Vendor-wise revenue is allocated proportionally across supplier cost rows so one multi-vendor invoiced order is not counted multiple times.
-
-## Project Docs
-
-- [Database relations](DATABASE_RELATIONS.md)
-- [User guide](USER_GUIDE.md)
-- [Developer guide](DEVELOPER_GUIDE.md)
+1. Register a tenant/company or sign in.
+2. Create company users within the company's configured user limit.
+3. Maintain customers and vendors.
+4. Use Create Order to parse GDS text or enter voucher data manually.
+5. Create a quote/order from the voucher.
+6. Review orders, edit editable orders, share voucher links when needed, or request refunds.
+7. Convert orders into invoices.
+8. Share invoices, mark sent, discount, void, cancel, or settle them through receipts/payments.
+9. Review dashboard, aging, revenue, profit, receipt, payment, cancelled, statement, and reference-search views.
 
 ## Sales Flow Notes
 
-The voucher workspace currently uses a concise tabbed UI:
+The Create Order workspace has four top-level tabs:
+
+- GDS Parser
+- Voucher Fields
+- Create Quotation/Order
+- Convert Invoice
+
+Voucher detail tabs are:
 
 - Passengers
-- Flights, with selectable flight vendor and service-per-passenger cost/profit/sales pricing inside the Flights tab
+- Flights, including flight vendor and per-passenger pricing
 - Visa
 - Transfer
 - Ziarat
 - Hotels
 - Services
 
-Passenger rows and pricing rows are kept aligned in `SalesFlow.jsx`. The pricing payload is still stored as `voucher.pricing`, with fields for flight cost, profit, sales, ticket number, and optional `total`. Visa, hotel, transfer, ziarat, and other service rows can each store selected vendor, cost, profit, and sales. Sales creates the customer-facing order item; cost creates supplier payable/profit data.
+The voucher payload is stored on orders in `orders.meta`, with selected search fields also copied to order columns such as `voucher_no`, `issue_date`, `package_type`, `active_sections`, and `emergency_contact`. Supplier costs are stored in `order_vendor_costs` for vendor payables and profit reporting.
+
+## API Shape
+
+Public endpoints include registration, currency/timezone helpers, agency-code checking, login, and shared invoice/voucher reads.
+
+Authenticated API groups include:
+
+- `/api/v1/user`
+- `/api/v1/company-users`
+- `/api/v1/company-profile`
+- `/api/v1/internal`
+- `/api/v1/customers`
+- `/api/v1/vendors`
+- `/api/v1/staff`
+- `/api/v1/reference-search`
+- `/api/v1/orders`
+- `/api/v1/invoices`
+- `/api/v1/payments`
+- `/api/v1/receipts`
+- `/api/v1/accounts`
+- `/api/v1/reports`
+- `/api/v1/statements`
+
+Route definitions in `routes/api.php` are the source of truth.
 
 ## Local Setup
 
@@ -63,11 +98,11 @@ npm install
 copy .env.example .env
 php artisan key:generate
 php artisan migrate
-npm run dev
 php artisan serve
+npm run dev
 ```
 
-For a production asset build:
+Run production frontend builds only when explicitly needed:
 
 ```bash
 npm run build
@@ -77,33 +112,18 @@ npm run build
 
 ```bash
 php artisan test
+php artisan route:list
 php -l app/Http/Controllers/Api/OrderController.php
-npm run build
 ```
 
-For frontend syntax checks during focused UI edits, parse touched JSX files with `@babel/parser` if available.
+For focused frontend edits, parse touched JSX with `@babel/parser` when available instead of running a full build by default.
 
-## API Shape
+## Project Docs
 
-Public endpoints include registration, currency/timezone helpers, agency-code checking, and login.
-
-Authenticated API groups include:
-
-- `/api/user`
-- `/api/customers`
-- `/api/vendors`
-- `/api/orders`
-- `/api/invoices`
-- `/api/payments`
-- `/api/receipts`
-- `/api/accounts`
-- `/api/reports`
-- `/api/statements`
-
-Key report endpoints include `/api/v1/reports/revenue`, `/api/v1/reports/profit`, `/api/v1/reports/receipts`, and `/api/v1/reports/payments`.
-
-Route definitions in `routes/api.php` are the source of truth.
+- [Database relations](DATABASE_RELATIONS.md)
+- [User guide](USER_GUIDE.md)
+- [Developer guide](DEVELOPER_GUIDE.md)
 
 ## Documentation Policy
 
-Root markdown has been consolidated into this README to avoid stale draft and completion documents. When project behavior changes, update this file with only current, actionable information.
+Keep root documentation current with shipped behavior only. Avoid adding temporary planning, completion, or scratch Markdown files in the project root.

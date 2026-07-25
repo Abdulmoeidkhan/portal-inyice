@@ -376,7 +376,7 @@ class OrderController extends Controller
                 });
             })
             ->orderByDesc('id')
-            ->paginate((int) $request->query('per_page', 20));
+            ->paginate(max(1, min(100, (int) $request->query('per_page', 20))));
 
         if ($this->isSalesStaff($user)) {
             $orders->getCollection()->transform(fn (Order $order) => $this->orderForUser($order, $user));

@@ -1,135 +1,289 @@
 ================================================================================
-  inYice-Lite — PROJECT BRIEF
-  Last Updated: May 20, 2026
+  inYice OS / Portal inYice — PROJECT BRIEF
+  Last Updated: July 25, 2026
 ================================================================================
 
 --------------------------------------------------------------------------------
 1. PROJECT PURPOSE
 --------------------------------------------------------------------------------
-inYice-Lite is a multi-tenant B2B and B2C order-bookkeeping platform for travel
-agencies. The product focus is intentionally narrow:
+Portal inYice is a multi-tenant travel-agency finance and order workspace. The
+current product focus is:
 
-- Company profile management
-- Limited agency staff management
-- Customer and vendor network management
-- Order bookkeeping with full lifecycle tracking
-- Full auditability of user actions and order changes
+- Agency registration and tenant/company setup
+- Company profile and company user management
+- Customer and vendor master data
+- GDS-assisted voucher capture
+- Quote/order bookkeeping
+- Order-to-invoice conversion
+- Customer receipts and customer payments
+- Vendor receipts and vendor payments
+- Cash/bank ledger movement
+- Reports, statements, and reference search
+- Public voucher/invoice sharing by secure token
+- Internal provider operations for support and account control
 
-This scope excludes expense management, attendance, and shift management.
-
---------------------------------------------------------------------------------
-2. COMPANY INFO
---------------------------------------------------------------------------------
-Each agency manages its own company profile and operational identity, including
-business details required for order and invoice operations.
-
-- Company-level setup and ownership
-- Company-linked orders, customers, and vendors
-- Company-scoped records for complete tenant isolation
+This scope continues to exclude expense management, attendance, shift
+management, payroll, and broad HR workflows.
 
 --------------------------------------------------------------------------------
-3. COMPANY STAFF (LIMITED TO 3 PER AGENCY)
+2. CURRENT IMPLEMENTATION STACK
 --------------------------------------------------------------------------------
-Each agency can create and operate with only three unique staff users,
-mapped to three business roles:
+The current application is a single Laravel and React project.
 
+- Backend: Laravel 13.11, PHP 8.4 runtime, Laravel Sanctum
+- Frontend: React 18, Ant Design 6, Vite 8
+- Database: Laravel migrations for relational storage
+- Runtime support: local PHP/Vite and Docker compose files
+- API base path: /api/v1
+
+--------------------------------------------------------------------------------
+3. TENANCY, COMPANY PROFILE, AND LIMITS
+--------------------------------------------------------------------------------
+Each agency operates inside its own tenant and company scope. Business records
+are tenant-scoped and, where relevant, company-scoped.
+
+Company setup includes:
+
+- Legal/display name
+- Email, phone, address, and country
+- Base currency
+- Default timezone
+- Monthly invoice limit
+- User limit
+- Optional logo/footer logo paths
+- Active/blocked status
+
+The internal provider portal can inspect non-internal companies, update monthly
+invoice and user limits, and block or unblock companies.
+
+--------------------------------------------------------------------------------
+4. COMPANY USERS AND ROLES
+--------------------------------------------------------------------------------
+Tenant roles:
+
+- Owner
 - Admin
 - Sales
 - Accounts
 
-Rules:
-- Agency accounts are limited to these three users/roles.
-- The platform provider account can create unlimited employees.
-- Staff actions are always captured in activity/audit logs.
+The initial registration user is assigned Owner. Owner users satisfy admin-level
+checks in application logic. Owner/admin users can create company users with
+Admin, Sales, or Accounts roles until the company user limit is reached.
+
+System/provider roles:
+
+- Super Admin
+- InYice Admin
+- Support Executive
+
+System users enter the internal portal rather than the normal agency workspace.
+System-role middleware controls internal access, and selected sensitive internal
+actions are limited to Super Admin.
 
 --------------------------------------------------------------------------------
-4. CUSTOMER & VENDOR DATA MODEL
+5. CUSTOMER AND VENDOR DATA MODEL
 --------------------------------------------------------------------------------
-The platform supports both B2B agency-to-agency relationships and agency-local
-B2C customer records.
+The platform supports both B2B agency-to-agency records and agency-local B2C
+records.
 
-4.1 B2B AGENCY RELATIONSHIPS
-----------------------------
-- A company can mark itself as a vendor for other agencies.
-- Agencies can become each other's B2B customer/vendor counterpart.
-- B2B links are explicit and controlled by business records.
+Customer records support:
 
-4.2 B2C CUSTOMER OWNERSHIP
---------------------------
-- Every agency keeps its own offline/direct customer database.
-- B2C customer data is private to the owning agency.
-- One agency cannot read or manage another agency's B2C customers.
+- B2B/B2C type
+- Contact and address details
+- Postal code and tax id
+- Currency code
+- Optional B2B agency link
 
---------------------------------------------------------------------------------
-5. ORDER BOOKKEEPING & FULL LIFECYCLE
---------------------------------------------------------------------------------
-The core business flow is lifecycle-based order bookkeeping.
+Vendor records support:
 
-5.1 LIFECYCLE
--------------
-Quote -> Order -> Confirm/Cancel -> Invoice/Refund/Void
+- B2B/B2C type
+- Contact and address details
+- Postal code and tax id
+- Currency code
+- Optional B2B agency link
+- Payment terms
 
-Business meaning:
-- Quote: Initial commercial offer.
-- Order: Accepted quote and active processing state.
-- Confirm: Operationally confirmed booking/order.
-- Cancel: Order cancelled before financial completion.
-- Invoice: Financial posting and customer billing.
-- Refund: Reversal after invoicing where applicable.
-- Void: Invoice/order invalidated as per control policy.
-
-5.2 ORDER RECORDING
--------------------
-- Booking reference and order number tracking
-- Customer and vendor linkage
-- Staff ownership (who created/updated)
-- Notes and status history for audit-safe bookkeeping
-
-5.3 GDS-DRIVEN FLIGHT DATA CAPTURE
-----------------------------------
-Order capture supports GDS text parsing for flight-related bookkeeping.
-From GDS PNR content, the system can extract and structure:
-
-- Booking reference (PNR)
-- Passenger details and passenger type codes
-- Segment-level flight details (airline, route, dates/times, status)
-- GDS source markers (e.g., Sabre/Galileo)
-- Ticket-related details used in order records
-
-This parsed data is attached to order items to reduce manual entry and improve
-accuracy in quote/order/confirmation/invoice stages.
+Customers and vendors are reusable across order creation, voucher services,
+receipts, payments, reports, statements, and reference search.
 
 --------------------------------------------------------------------------------
-6. TENANT ISOLATION & PLATFORM VISIBILITY
+6. ORDER, VOUCHER, AND GDS WORKFLOW
 --------------------------------------------------------------------------------
-Data visibility rules are strict:
+The core order workflow starts in the Create Order workspace:
 
-- Agency A cannot access Agency B data.
-- Agency B cannot access Agency A data.
-- Each agency operates in an isolated tenant space for customers, vendors,
-  and orders.
-- Only the platform provider has cross-tenant/global visibility.
+1. Paste and parse GDS text or enter voucher details manually.
+2. Review passenger, flight, service, pricing, and vendor-cost data.
+3. Select customer, optional vendor, currency, status, and notes.
+4. Create a quote/order.
+5. Convert the order to an invoice when ready.
+
+Voucher data includes:
+
+- Voucher number and issue date
+- Travel/package details
+- Booking reference and GDS source
+- Emergency/company/executive contact details
+- Active service sections
+- Passengers
+- Flights
+- Per-passenger pricing
+- Visa, transfer, ziarat, hotel, and other service rows
+
+Orders store the full voucher payload in metadata. Searchable voucher fields are
+also copied to order columns for list/report/search use.
+
+GDS parsing currently supports backend parsing for Sabre and Galileo. The
+frontend can also label Amadeus or Other source data for manual workflows.
 
 --------------------------------------------------------------------------------
-7. ACTIVITY LOGGING & AUDIT CONTROL
+7. ORDER LIFECYCLE
 --------------------------------------------------------------------------------
-System logging is mandatory for accountability and operations review.
+Current order statuses include:
 
-Track at minimum:
-- User sign-in activity
-- Order creation
-- Order lifecycle transitions (Quote, Order, Confirm, Cancel,
-  Invoice, Refund, Void)
-- Order edits
-- Order deletes
+- quote
+- order
+- cancel
+- invoice
+- void
+- refund_request
+- refund
+- partial_refund
+- paid
+- partial_paid
+
+Current model transitions:
+
+- quote -> order, cancel, invoice
+- order -> cancel, invoice
+- invoice -> void, refund_request, refund, partial_refund, paid, partial_paid
+- refund_request -> partial_refund, refund, cancel
+- partial_refund -> refund
+- partial_paid -> paid
+
+Order history and audit-support models exist for lifecycle accountability.
+Orders use soft deletes. Editing an already-invoiced order may cancel the current
+invoice and create a replacement order to preserve financial history.
+
+--------------------------------------------------------------------------------
+8. INVOICING
+--------------------------------------------------------------------------------
+Orders can be converted into invoices. Invoice creation copies generated order
+items into invoice lines and enforces the company's monthly invoice limit.
+
+Invoice statuses include:
+
+- draft
+- issued
+- sent
+- partial_paid
+- paid
+- overdue
+- void
+- cancel
+
+Invoice operations include:
+
+- Create from order
+- List and view detail
+- Mark as sent
+- Add discount through a negative invoice line
+- Void
+- Cancel
+- Share and revoke public sharing
+- Check aging status
+
+--------------------------------------------------------------------------------
+9. RECEIPTS, PAYMENTS, AND LEDGER
+--------------------------------------------------------------------------------
+Financial movement uses direction-based terminology.
+
+Receipts are money received:
+
+- Customer receipts settle one or many customer invoices.
+- Customer advances are supported.
+- Vendor receipts record money received from vendors.
+
+Payments are money paid:
+
+- Vendor payments settle one or many payable orders.
+- Customer payments record money paid back to customers, including refunds.
+
+Cash and bank accounts can be linked to receipts/payments. Ledger entries keep
+account balances synchronized when an account is supplied.
+
+--------------------------------------------------------------------------------
+10. REPORTS, STATEMENTS, AND SEARCH
+--------------------------------------------------------------------------------
+Current reporting and lookup areas include:
+
+- Dashboard upcoming data
+- Aging Report
+- Revenue Report
+- Profit Report
+- Receipt Report
+- Payment Report
+- Cancelled Report
+- Customer Summary API
+- Customer Statement
+- Vendor Statement
+- Reference Search
+
+Reports and statements use the signed-in user's company automatically. Profit
+Report uses invoiced order revenue minus supplier costs from order_vendor_costs.
+Vendor-wise profit allocates order revenue by vendor cost share to avoid
+double-counting multi-vendor orders.
+
+Reference Search can search tenant/company-scoped orders, invoices, customers,
+vendors, receipts, and payments by references, passenger/customer fields, dates,
+statuses, and amount ranges.
+
+--------------------------------------------------------------------------------
+11. PUBLIC SHARING
+--------------------------------------------------------------------------------
+Authenticated users with permission can create public share links for:
+
+- Vouchers/orders
+- Invoices
+
+Public shared reads use long random share tokens and return limited record data.
+Share tokens can be revoked from the authenticated workspace.
+
+--------------------------------------------------------------------------------
+12. INTERNAL PROVIDER PORTAL
+--------------------------------------------------------------------------------
+System users are routed to the internal portal. Current internal capabilities
+include:
+
+- List/search customer companies
+- Inspect company usage and recent records
+- View company users
+- Update company limits
+- Block/unblock companies
+- Manage internal users
+- Reset internal user passwords
+- View selected orders and invoices across tenants
+
+The provider tenant is kept separate from normal customer company listings.
+
+--------------------------------------------------------------------------------
+13. TENANT ISOLATION AND AUDIT CONTROL
+--------------------------------------------------------------------------------
+Data visibility rules remain strict:
+
+- Agency users cannot access another agency's tenant/company records.
+- Company-specific screens use the signed-in user's company.
+- Public shared-token endpoints are the controlled external visibility path.
+- Internal portal cross-tenant visibility is restricted to system roles.
 
 Audit goals:
-- Who performed each action
-- What changed
-- When it changed
+
+- Track who performed important actions.
+- Track what changed.
+- Track when it changed.
+- Preserve financial history for posted invoices and edited invoiced orders.
 
 ================================================================================
-  NOTE: This brief intentionally covers project scope only.
-  Implementation packaging decision: single Laravel project, containerized
-  with Docker for isolated runtime environments.
+  NOTE: This brief intentionally covers current project scope and implemented
+  product shape. Detailed developer and schema guidance lives in README.md,
+  DEVELOPER_GUIDE.md, USER_GUIDE.md, and DATABASE_RELATIONS.md.
 ================================================================================

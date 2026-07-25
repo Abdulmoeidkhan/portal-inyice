@@ -169,6 +169,10 @@ const compactColumns = (columns, data) => columns.filter((column) => {
 
 const PreviewTable = ({ columns, data }) => {
   const visibleColumns = compactColumns(columns, data);
+  const keyedData = data.map((row, index) => ({
+    ...row,
+    __previewRowKey: row.key || `${index}:${visibleColumns.map((column) => row?.[column.dataIndex] ?? '').join('|')}`,
+  }));
 
   if (!data.length || !visibleColumns.length) {
     return null;
@@ -177,9 +181,9 @@ const PreviewTable = ({ columns, data }) => {
   return (
     <Table
       size="small"
-      rowKey={(row, index) => row.key || index}
+      rowKey="__previewRowKey"
       columns={visibleColumns}
-      dataSource={data}
+      dataSource={keyedData}
       pagination={false}
       scroll={{ x: 'max-content' }}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" /> }}

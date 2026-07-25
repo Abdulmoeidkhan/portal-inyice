@@ -174,7 +174,7 @@ class AccountController extends Controller
      */
     public function ledgerEntries(string $accountType, int $accountId, Request $request): JsonResponse
     {
-        $perPage = $request->query('per_page', 100);
+        $perPage = max(1, min(100, (int) $request->query('per_page', 100)));
         $model = $accountType === 'cash' ? CashAccount::class : BankAccount::class;
         $model::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)

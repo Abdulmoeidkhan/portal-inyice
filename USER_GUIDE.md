@@ -7,11 +7,13 @@ This guide explains how an agency user should use the current Portal inYice work
 Portal inYice helps a travel agency move from booking data to financial records:
 
 1. Register or sign in.
-2. Parse GDS or enter voucher details manually.
-3. Create a quotation/order.
-4. Convert the order into an invoice.
-5. Record payments, refunds, or advances.
-6. Review dashboard, aging, revenue, and statement data.
+2. Maintain company profile, company users, customers, and vendors.
+3. Parse GDS or enter voucher details manually in Create Order.
+4. Create a quotation/order.
+5. Convert the order into an invoice.
+6. Share voucher or invoice links when needed.
+7. Record customer receipts, customer payments, vendor receipts, or vendor payments.
+8. Review dashboard, reports, statements, and reference search.
 
 ## Registering A New Agency
 
@@ -24,108 +26,47 @@ Registration has four steps:
 3. Admin Account
 4. Complete
 
-### Agency Info
+Agency Code must be lowercase alphanumeric, at least 3 characters, and unique. The registration screen checks availability before continuing.
 
-Enter:
+Company Details include legal name, company email, phone, billing address, base currency, and timezone. Base currency is used for reporting and default account setup.
 
-- Agency Code
-- Agency Name
-
-Agency Code rules:
-
-- Lowercase alphanumeric
-- Minimum 3 characters
-- Must be unique
-
-The screen checks code availability before allowing the user to continue.
-
-### Company Details
-
-Enter:
-
-- Legal Company Name
-- Company Email
-- Phone
-- Billing Address
-- Base Currency
-- Timezone
-
-The base currency is important because internal reporting and account defaults use it.
-
-### Admin Account
-
-Enter:
-
-- Admin Name
-- Admin Email
-- Password
-- Confirm Password
-
-Password must be at least 8 characters.
+The Admin Account step creates the initial owner/admin user. Passwords must be at least 8 characters.
 
 When registration succeeds:
 
 - A tenant is created.
 - A company profile is created.
-- Admin, Sales, and Accounts roles are created for that tenant.
-- The admin user is created.
+- Owner, Admin, Sales, and Accounts roles are created.
+- The initial user is created and signed in.
 - A default `Main Cash Box` account is created.
-- The user is signed in automatically after a short redirect.
 
-## Signing In
+## Signing In And Sessions
 
-Open `/login`.
+Open `/login`, then enter email and password.
 
-Enter:
-
-- Email
-- Password
-
-After login, the app stores the Sanctum token and user profile in browser local storage. Use the profile dropdown in the top bar to log out.
-
-If a user account is inactive, login is blocked.
+After login, the app stores the Sanctum token and user profile in browser local storage. The top profile menu contains User Profile and Logout. Inactive users cannot sign in, and active sessions expire after four hours of inactivity.
 
 ## App Navigation
 
 The sidebar contains:
 
 - Dashboard
-- Finance
-- Quotes & GDS
-- Invoices
-- Payments
-- Master Data
-- Customers
-- Vendors
-- Profiles
-- Company Profile
-- Reports
-- Aging Report
-- Revenue Report
-- Profit Report
+- Finance: Create Order, Orders, Invoices, Reference Search, Customer Receipts, Customer Payments, Vendor Receipts, Vendor Payments
+- Master Data: Customers, Vendors
+- Profiles: Company Profile, Company Users
+- Reports: Aging Report, Revenue Report, Profit Report, Receipt Report, Payment Report, Cancelled Report, Customer Statement, Vendor Statement
 
-The top bar contains:
-
-- Theme style selector: Ocean, Slate, Sand
-- Light/dark toggle
-- Profile menu
-- Logout
+Sales users do not see the Reports group. Cancelled Report is shown to owner/admin users. The top bar contains the Ocean/Slate/Sand theme selector, light/dark toggle, and profile menu.
 
 ## Dashboard
 
-The dashboard is the landing page after login. Use it as the starting point for financial and operational visibility.
+Dashboard is the landing page after login. Use it for high-level operational visibility and quick movement into finance/reporting workflows.
 
-Typical use:
+## Create Order
 
-- Review high-level business state.
-- Move into Finance for order/invoice/payment workflows.
-- Move into Reports for aging and revenue views.
+Open Finance -> Create Order.
 
-## Quotes & GDS
-
-Open Finance -> Quotes & GDS.
-
-This workspace has four top-level tabs:
+The workspace has four top-level tabs:
 
 - GDS Parser
 - Voucher Fields
@@ -134,28 +75,13 @@ This workspace has four top-level tabs:
 
 ### GDS Parser
 
-Use this when you have pasted GDS text.
+Use this when you have pasted GDS text. The parser can pre-fill booking reference, passenger rows, flight rows, GDS source, and ticket references. Backend parsing currently accepts Sabre and Galileo; the frontend can also label Amadeus or Other data for manual review.
 
-Current parser behavior:
-
-- Frontend local parsing can pre-fill booking reference, flights, and passengers.
-- Backend parse endpoint exists for Sabre and Galileo.
-- The current voucher flow can also label parsed data as Amadeus or Other on the frontend side.
-
-Steps:
-
-1. Paste the raw GDS text.
-2. Parse it.
-3. Review parsed passenger and flight count.
-4. Continue to Voucher Fields.
-
-The parser is intended to reduce manual entry, not replace review. Always check passenger names, ticket numbers, routes, PNRs, dates, times, and pricing before creating the order.
+Always review passenger names, ticket numbers, routes, PNRs, dates, times, and pricing before creating the order.
 
 ### Voucher Fields
 
-Voucher Fields contains header data and detailed tabs.
-
-Header information includes:
+Voucher header fields include:
 
 - Voucher number
 - Issue date
@@ -167,7 +93,7 @@ Header information includes:
 - Company/executive contact information
 - Active optional service sections
 
-The detailed voucher tabs are:
+Detailed tabs include:
 
 - Passengers
 - Flights
@@ -177,240 +103,80 @@ The detailed voucher tabs are:
 - Hotels
 - Services
 
-Optional sections are controlled from the voucher header. If a service section is not active, its tab is not shown.
+Optional sections are controlled from the voucher header.
 
-### Passengers Tab
+### Passengers
 
-Use this for traveler-level reference data.
+Passenger fields include name, passport number, ticket number, visa publisher, visa number, and notes.
 
-Fields:
+Adding a passenger adds a matching pricing row. Removing a passenger removes the matching pricing row when possible. Updating a passenger name updates the matching pricing passenger name unless the pricing row was manually changed.
 
-- Name
-- Passport No
-- Ticket No
-- Visa Publisher
-- Visa No
-- Notes
+### Flights And Pricing
 
-Adding a passenger also adds a matching pricing row. Removing a passenger removes the matching pricing row when possible. Updating a passenger name updates the matching pricing passenger name unless the pricing name was manually changed.
+Flight fields include GDS PNR, airline PNR, date, flight number, from/to airports, departure/arrival, cabin, booking class, baggage, and flight vendor.
 
-### Flights Tab
+Pricing is inside the Flights tab and is passenger-based. Pricing fields include passenger, flight cost, flight profit, flight amount/sales, and optional total.
 
-Use this for flight segment references and passenger/service pricing.
+Flight references create zero-value traceability rows on the order. Sales/amount fields create customer-facing order items. Vendor-linked cost fields create supplier payable rows for vendor payments and profit reporting.
 
-Flight fields:
+### Visa, Transfer, Ziarat, Hotels, And Services
 
-- GDS PNR
-- Airline PNR
-- Date
-- Flight No
-- From
-- To
-- Departure
-- Arrival
-- Cabin
-- Booking Class
-- Baggage
-- Flight Vendor selected from the vendor list
+Service rows can store operational details, selected vendors, cost, profit, sales/amount, and notes where the screen exposes them.
 
-Airport fields show a helper label when the airport code is known in `airportLookup.js`.
-
-Pricing is inside the Flights tab and is service-per-passenger.
-
-Pricing fields:
-
-- Passenger
-- Flight cost
-- Flight profit
-- Flight amount/sales
-- Total (optional)
-
-Pricing behavior:
-
-- Each row represents one passenger.
-- Component prices create separate order items.
-- If component prices are blank but `Total (optional)` is filled, the total creates a package total item.
-- Other Service pricing is included in the order item calculation.
-
-### Visa Tab
-
-Use this for visa reference rows.
-
-Fields:
-
-- Passenger Name
-- Visa Type: Visit, Umrah, Hajj, Tourist, or Other
-- Validity
-- Visa Number
-- Visa Vendor selected from the vendor list
-- Cost
-- Profit
-- Amount/Sales
-- Notes
-
-### Transfer Tab
-
-Use this for transfer service rows.
-
-Fields:
-
-- TN
-- Service
-- From
-- To
-- Vehicle
-- Contact Person
-- Transfer Vendor selected from the vendor list
-- Cost
-- Profit
-- Amount/Sales
-- Notes
-
-### Ziarat Tab
-
-Use this for city tour or ziarat rows.
-
-Fields:
-
-- City
-- Tour Title
-- Attractions
-- Date
-- Ziarat Vendor selected from the vendor list
-- Cost
-- Profit
-- Amount/Sales
-- Notes
-
-### Hotels Tab
-
-Use this for hotel rows.
-
-Fields:
-
-- HCN
-- City
-- Hotel Name
-- Room Type
-- Check In
-- Check Out
-- Lead Passenger
-- Hotel Vendor selected from the vendor list
-- Cost
-- Profit
-- Amount/Sales
-- Notes
-
-### Services Tab
-
-Use this for other service rows.
-
-Fields:
-
-- Description
-- Vendor selected from the vendor list
-- Cost
-- Profit
-- Amount/Sales
+- Visa rows include passenger name, visa type, validity, visa number, visa vendor, cost, profit, sales/amount, and notes.
+- Transfer rows include transfer/service details, vendor, cost, profit, sales/amount, and notes.
+- Ziarat rows include city/tour/date details, vendor, cost, profit, sales/amount, and notes.
+- Hotel rows include hotel/stay details, lead passenger, vendor, cost, profit, sales/amount, and notes.
+- Service rows include description, vendor, cost, profit, and sales/amount.
 
 ## Creating A Quotation Or Order
 
-Open the Create Quotation/Order tab inside Quotes & GDS.
+Open the Create Quotation/Order tab.
 
 Typical inputs:
 
 - Customer
-- Optional vendor
+- Optional order vendor
 - Currency
 - Status
 - Notes
 
-Customers and vendors are selected from searchable lists. If the required customer or vendor does not exist, use the `+ Add Customer` or `+ Add Vendor` action in the dropdown to create it without leaving the order screen.
-
-## Master Data
-
-### Customers
-
-Open Master Data -> Customers.
-
-Use this module to create customers before using them in quotations, orders, invoices, reports, and statements.
-
-Customer fields:
-
-- Name
-- Type: B2C or B2B
-- Email
-- Phone
-- Address
-- City
-- Country Code
-- Currency Code
-
-Customers created here immediately become available in the customer selector on the Create Quotation/Order tab.
-
-### Vendors
-
-Open Master Data -> Vendors.
-
-Use this module to create suppliers once and reuse them across voucher services. Vendors are currently selectable for:
-
-- Order vendor
-- Flight vendor
-- Visa vendor
-- Hotel, transfer, ziarat, and other service vendors
-
-They are also ready for upcoming service modules such as hotels, transport, ziarat, and other supplier-based workflows.
-
-Vendor fields:
-
-- Name
-- Type: B2C or B2B
-- Email
-- Phone
-- Address
-- City
-- Country Code
-- Currency Code
-- Payment Terms
-
-Vendors created here immediately become available in order and service vendor selectors.
+Customers and vendors are searchable. Use `+ Add Customer` or `+ Add Vendor` in the dropdown when a record does not exist yet.
 
 When submitted:
 
 - The voucher payload is sent to `/api/v1/orders/create-from-voucher`.
-- The backend creates an order.
-- The voucher detail is stored in `orders.meta`.
+- The backend creates an order and stores voucher detail in `orders.meta`.
+- Searchable voucher fields are copied to order columns.
 - Order items are generated from flights, pricing, hotels, transfers, ziarat, visa, and other services.
-- The order total is calculated from generated order item totals.
+- Vendor costs are generated for vendor-linked cost rows.
+- The order total is calculated from generated order items.
 
-Order item rules:
+## Orders And Vouchers
 
-- Flight references are kept as zero-value traceability rows.
-- Passenger pricing creates priced line items per service.
-- Hotel, transfer, ziarat, visa, and other service amount/sales fields can also create priced line items.
-- Vendor cost fields create supplier cost rows for profit reporting and vendor payables.
-- Visa order item descriptions include visa type, visa number, validity, and visa vendor when provided.
-- Flight reference rows include flight vendor when provided.
-- If no items are generated, a zero-value `Voucher Booking` item is created for traceability.
+Open Finance -> Orders.
+
+Use Orders to:
+
+- View order/voucher records.
+- Open voucher detail.
+- Edit editable orders.
+- Share a public voucher link.
+- Revoke sharing.
+- Create refund requests where available.
+- Delete orders when permitted.
+
+Shared voucher links open through `/shared/vouchers/:token` and do not require the recipient to sign in.
+
+Editing an order that already has a live invoice may cancel the current invoice and create a replacement order for manual invoicing. This preserves financial history instead of silently changing posted invoice data.
 
 ## Converting To Invoice
 
 Open the Convert Invoice tab after creating an order.
 
-Use it to create an invoice from the generated order.
+Invoice conversion copies order items into invoice lines. The invoice tracks invoice number, invoice date, due date, currency, subtotal, tax amount, total amount, outstanding amount, advance balance, status, and FX rate to base.
 
-The backend copies order items into invoice lines through the invoice service. The invoice tracks:
-
-- Invoice number
-- Invoice date
-- Due date
-- Currency
-- Subtotal
-- Tax amount
-- Total amount
-- Outstanding amount
-- Advance balance
-- Status
+Company monthly invoice limits are enforced during invoice creation.
 
 ## Invoices
 
@@ -420,10 +186,13 @@ Use this area to:
 
 - View invoices.
 - Inspect invoice details.
+- Copy a public invoice share link.
 - Mark invoices as sent.
+- Add a discount.
+- Create a refund request from an invoice's order.
 - Void invoices when allowed.
+- Cancel invoices when allowed.
 - Check aging status.
-- Start payment workflows where the screen supports it.
 
 Invoice statuses include:
 
@@ -434,94 +203,123 @@ Invoice statuses include:
 - Paid
 - Overdue
 - Void
+- Cancel
 
-## Customer Receipts And Vendor Payments
+Shared invoice links open through `/shared/invoices/:token` and do not require the recipient to sign in.
 
-Open Finance -> Customer Receipts to record money received from a customer.
+## Receipts And Payments
 
-1. Select the customer. The allocation grid loads their open invoices.
-2. Enter the receipt date and choose Cash, Bank, Card, or Cheque.
-3. Optionally select the matching cash/bank account and enter a reference and description.
-4. Tick one or more invoices. Select all fills every open balance; each allocation can be reduced for a partial receipt.
-5. Confirm that Receipt total matches the money received, then choose Record receipt.
+Portal inYice separates cash movement by direction.
 
-One selected invoice creates a normal receipt. Multiple selected invoices create one bulk receipt with a settlement against each invoice. A receipt cannot exceed any selected invoice balance, and invoices must belong to the same customer, company, and currency. The Receipt history tab shows the receipt number, method, reference, allocated invoices, and total.
+- Customer Receipts: money received from customers.
+- Customer Payments: money paid back to customers, including refunds.
+- Vendor Receipts: money received from vendors.
+- Vendor Payments: money paid to vendors/suppliers.
 
-Open Finance -> Vendor Payments to record money paid to a supplier. Select a vendor, choose one or more payable orders, adjust any partial allocations, and record the payment. One payment number is retained even when the payment is allocated across several orders. Older payments created before order allocation support are applied to the oldest payable orders when the grid calculates remaining balances.
+### Customer Receipts
 
-Cash and bank selections create the corresponding ledger deposit or withdrawal when an account is supplied. Refund and advance endpoints remain available for invoice-specific accounting workflows.
+Open Finance -> Customer Receipts.
+
+1. Select the customer.
+2. Load open invoices.
+3. Choose receipt date, method, optional cash/bank account, reference, and description.
+4. Select one or more invoices.
+5. Adjust allocations for partial receipts.
+6. Record the receipt when the receipt total matches the selected allocations.
+
+One selected invoice creates a normal receipt. Multiple selected invoices create one bulk receipt with a settlement against each invoice.
+
+### Vendor Payments
+
+Open Finance -> Vendor Payments.
+
+Select a vendor, choose one or more payable orders, adjust allocations, and record the payment. One payment number is retained even when the payment is allocated across several orders.
+
+### Customer Payments And Vendor Receipts
+
+Open Finance -> Customer Payments or Vendor Receipts for the other cash-direction workflows. These screens use the shared counterparty transaction interface for recording, updating, and deleting supported transactions.
+
+Cash and bank selections create ledger deposits or withdrawals when an account is supplied.
+
+## Master Data
+
+### Customers
+
+Open Master Data -> Customers.
+
+Customer fields include name, type, email, phone, address, city, country code, postal code, tax id, and currency code. Customers created here immediately become available in order, invoice, report, statement, and receipt workflows.
+
+### Vendors
+
+Open Master Data -> Vendors.
+
+Vendor fields include name, type, email, phone, address, city, country code, postal code, tax id, currency code, and payment terms. Vendors become available in order and service vendor selectors, vendor payments, vendor receipts, reports, and statements.
+
+## Reference Search
+
+Open Finance -> Reference Search.
+
+Use it to search across orders, invoices, customers, vendors, receipts, and payments. Filters include general text, PNR, airline PNR, internal reference, folder/order/invoice numbers, passenger/customer data, ticket number, destination, status, payment status, date ranges, and amount ranges.
+
+Results are scoped to the signed-in user's tenant and company.
 
 ## Reports
 
 ### Aging Report
 
-Open Reports -> Aging Report.
-
-Use this to review outstanding invoices by aging bucket.
+Open Reports -> Aging Report to review outstanding invoices by aging bucket.
 
 ### Revenue Report
 
-Open Reports -> Revenue Report.
-
-Use this to review revenue over a selected period and grouping.
-
-The report uses the signed-in user's company automatically.
+Open Reports -> Revenue Report to review revenue over a selected period and grouping. The signed-in user's company is used automatically.
 
 ### Profit Report
 
-Open Reports -> Profit Report.
+Open Reports -> Profit Report to review gross profit over a selected period. The View selector switches between customer-wise, vendor-wise, and staff-wise reporting. Choose All or a specific customer/vendor/staff member before the list is shown.
 
-Use this to check gross profit over a selected period. The View selector switches between customer-wise, vendor-wise, and staff-wise reporting. After choosing the view, select All or one customer/vendor/staff member before the report list is shown.
+Profit uses invoiced order revenue minus supplier costs from `order_vendor_costs`. Vendor-wise view allocates multi-vendor order revenue proportionally across supplier cost rows.
 
-Profit is calculated from invoiced order revenue minus supplier costs captured from voucher flight costs and visa vendor amounts. Draft quotations and uninvoiced orders are not included. Customer-wise and staff-wise views show the full invoiced order revenue and cost under the customer or staff member. Vendor-wise view allocates each invoiced order's revenue proportionally across its supplier cost rows so multi-vendor orders are not double-counted.
+### Receipt And Payment Reports
 
-The company is selected automatically from the signed-in user.
+Receipt Report shows money received. Payment Report shows money paid. Both can be filtered by counterparty, method, date, and search text.
 
-The report includes:
+### Cancelled Report
 
-- Summary profit by currency
-- Grouped totals with revenue, cost, profit, and margin
-- Order-level details for checking vouchers, PNRs, customers, vendors, staff, and status
-- CSV export for the grouped and detail data
+Open Reports -> Cancelled Report to review cancelled invoices over a selected date range. This report is available to owner/admin users.
 
-Customer Statement and Vendor Statement also use the signed-in user's company automatically. Vendor payable rows include invoiced orders only.
+## Statements
 
-## Profiles
+Customer Statement and Vendor Statement use the signed-in user's company automatically. Vendor payable rows include invoiced orders only, excluding void/cancelled invoices.
+
+## Profiles And Users
 
 ### Company Profile
 
-Open Profiles -> Company Profile.
+Open Profiles -> Company Profile to review or update company details. The screen also shows configured monthly invoice and user limits.
 
-Use this to review company identity and base details loaded from the authenticated user/company context.
+### Company Users
+
+Open Profiles -> Company Users to list company users and create new admin, sales, or accounts users. Owner/admin users can create company users until the company `user_limit` is reached.
 
 ### User Profile
 
-Open the profile dropdown and choose User Profile.
+Open the profile dropdown and choose User Profile to review signed-in user details.
 
-Use this to review the signed-in user's basic account details.
+## Roles And Permissions
+
+- Owner/admin users manage company users and broad operational setup.
+- Sales users can create voucher orders and work operational sales flows.
+- Accounts users work with invoices, receipts, payments, accounts, reports, and statements.
+- Some read/list endpoints are available to any authenticated active user.
+
+If an action is unavailable, confirm the user is active, has the correct role, has a valid token, and is working with records from the same tenant/company.
 
 ## Practical Operating Rules
 
 - Always review parsed GDS output before creating an order.
-- Keep passenger names consistent across passengers, visa rows, hotel lead passenger, and pricing.
-- Use pricing inside Flights for service-per-passenger amounts.
-- Use service tabs for operational details and supplier/reference notes.
-- Use order notes for internal context that should travel with the order.
-- Confirm customer and currency before creating an order because invoice and payment flows depend on them.
-- Use active sections to keep the voucher UI concise.
-
-## Roles And Permissions
-
-Current role behavior is enforced by API middleware:
-
-- Admin can access management and financial actions.
-- Sales can parse GDS and create voucher orders.
-- Accounts can work with invoices, payments, and accounts.
-- Some read/list endpoints are available to any authenticated active user.
-
-If a user cannot perform an action, confirm:
-
-- The user is active.
-- The user has the correct role.
-- The token is valid.
-- The record belongs to the same tenant.
+- Keep passenger names consistent across voucher tabs.
+- Use pricing inside Flights for passenger-level flight amounts.
+- Use service tabs for operational details, supplier references, costs, and sales values.
+- Confirm customer and currency before creating an order.
+- Use active sections to keep the voucher UI focused.
+- Use public share links only for records intended to be visible outside the signed-in workspace.

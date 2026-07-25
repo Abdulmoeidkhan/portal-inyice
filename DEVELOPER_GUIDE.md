@@ -1,16 +1,16 @@
 # Developer Guide
 
-This guide explains the current project structure and the conventions to follow when changing Portal inYice.
+This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
 ## Project Stack
 
-- Laravel 13
-- PHP 8.3
-- Laravel Sanctum
+- Laravel 13.11
+- PHP 8.4 runtime, with Composer requiring `^8.3`
+- Laravel Sanctum 4
 - React 18
-- Ant Design
-- Vite
-- MySQL-oriented migrations
+- Ant Design 6
+- Vite 8
+- Laravel Boost and MCP tooling in development
 - Docker compose support
 
 ## Important Commands
@@ -22,7 +22,7 @@ composer install
 npm install
 ```
 
-Create local environment:
+Create a local environment:
 
 ```bash
 copy .env.example .env
@@ -37,176 +37,137 @@ php artisan serve
 npm run dev
 ```
 
-Build frontend assets:
-
-```bash
-npm run build
-```
-
-Run tests:
+Run tests and focused checks:
 
 ```bash
 php artisan test
-```
-
-Useful focused checks:
-
-```bash
-php -l app/Http/Controllers/Api/OrderController.php
 php artisan route:list
+php -l app/Http/Controllers/Api/OrderController.php
 ```
 
-For focused JSX edits, parse touched files with `@babel/parser` when available.
+Do not run `npm run build` unless a production asset build is explicitly requested or approved. For frontend-only edits, prefer focused JSX parsing or targeted checks.
 
 ## Directory Map
 
 ### Backend
 
-- `app/Http/Controllers/AuthController.php`: login/logout token flow
-- `app/Http/Controllers/RegistrationController.php`: tenant/company/owner registration
-- `app/Http/Controllers/Api/OrderController.php`: order listing, GDS parse endpoint, voucher-to-order creation
-- `app/Http/Controllers/Api/MasterDataController.php`: customer/vendor list and quick-create endpoints
-- `app/Http/Controllers/Api/InvoiceController.php`: invoice workflows
-- `app/Http/Controllers/Api/PaymentController.php`: payment/refund/advance workflows
-- `app/Http/Controllers/Api/AccountController.php`: cash and bank account APIs
-- `app/Http/Controllers/Api/ReportController.php`: reporting APIs
-- `app/Http/Controllers/Api/StatementController.php`: statement APIs
-- `app/Models`: Eloquent models and relationships
-- `app/Services`: business services
-- `app/Traits/TenantAware.php`: tenant scoping support
-- `routes/api.php`: API routes
-- `routes/web.php`: React app fallback and public web auth routes
-- `database/migrations`: schema
-- `database/seeders`: seed data
+- `routes/api.php`: `/api/v1` routes and middleware.
+- `routes/web.php`: public web posts and React fallback.
+- `app/Http/Controllers/AuthController.php`: Sanctum login/logout.
+- `app/Http/Controllers/RegistrationController.php`: tenant, company, owner, roles, and default cash account registration.
+- `app/Http/Controllers/Api/OrderController.php`: order list/detail/edit/delete, GDS parsing, voucher order creation, voucher sharing, refund requests.
+- `app/Http/Controllers/Api/InvoiceController.php`: invoice list/detail, create-from-order, share/revoke, discount, mark-sent, void, cancel, shared invoice reads.
+- `app/Http/Controllers/Api/PaymentController.php`: customer/vendor receipts and payments, invoice settlements, advances, refunds, update/delete operations.
+- `app/Http/Controllers/Api/MasterDataController.php`: customers, vendors, staff selectors, and quick-create APIs.
+- `app/Http/Controllers/Api/CompanyProfileController.php`: company profile show/update.
+- `app/Http/Controllers/Api/CompanyUserController.php`: owner/admin company user management with company user limits.
+- `app/Http/Controllers/Api/InternalPortalController.php`: provider/internal company and user management.
+- `app/Http/Controllers/Api/ReferenceSearchController.php`: tenant/company scoped cross-reference search.
+- `app/Http/Controllers/Api/ReportController.php`: dashboard upcoming, aging, revenue, profit, receipt, payment, cancelled, and customer summary reports.
+- `app/Http/Controllers/Api/StatementController.php`: customer and vendor statements.
+- `app/Models`: Eloquent models and relationships.
+- `app/Services`: business services for GDS parsing, invoices, ledgers, payments, reports, statements, audit, tenancy, and order numbers.
+- `app/Traits/TenantAware.php`: tenant scoping support.
+- `database/migrations`: schema.
+- `database/seeders`: seed data.
 
 ### Frontend
 
-- `resources/js/pages/App.jsx`: authenticated layout, routes, navigation
-- `resources/js/pages/Login.jsx`: sign in
-- `resources/js/pages/Register.jsx`: agency registration wizard
-- `resources/js/pages/Dashboard.jsx`: dashboard
-- `resources/js/pages/SalesFlow.jsx`: voucher/GDS/order/invoice workspace orchestration
-- `resources/js/pages/CustomerList.jsx`: customer master-data module
-- `resources/js/pages/VendorList.jsx`: vendor master-data module
-- `resources/js/pages/InvoiceList.jsx`: invoices
-- `resources/js/pages/Payments.jsx`: payments
-- `resources/js/pages/AgingReport.jsx`: aging report
-- `resources/js/pages/RevenueReport.jsx`: revenue report
-- `resources/js/pages/ProfitReport.jsx`: customer/vendor/staff gross profit report
-- `resources/js/pages/CompanyProfile.jsx`: company profile
-- `resources/js/pages/UserProfile.jsx`: user profile
-- `resources/js/pages/sales-flow`: focused sales-flow components and helpers
+- `resources/js/pages/App.jsx`: authenticated shell, routes, role-gated navigation, idle logout, public shared routes, internal user routing.
+- `Login.jsx`, `Register.jsx`: auth screens.
+- `Dashboard.jsx`: operational landing dashboard.
+- `SalesFlow.jsx`: Create Order workspace orchestration.
+- `sales-flow/*`: voucher parser, row sections, preview, summary, defaults, and helpers.
+- `OrderList.jsx`, `OrderEdit.jsx`, `VoucherDetail.jsx`: order management.
+- `InvoiceList.jsx`, `InvoiceDetail.jsx`: invoice management and public invoice view.
+- `Payments.jsx`: customer receipts.
+- `VendorPayments.jsx`: vendor payments.
+- `CounterpartyTransaction.jsx`: customer payments and vendor receipts.
+- `CustomerList.jsx`, `VendorList.jsx`: master data.
+- `ReferenceSearch.jsx`: broad reference search.
+- `CompanyProfile.jsx`, `CompanyUsers.jsx`, `UserProfile.jsx`: profile/user management.
+- `InternalPortal.jsx`: provider/internal operations portal.
+- `AgingReport.jsx`, `RevenueReport.jsx`, `ProfitReport.jsx`, `PaymentReport.jsx`, `CancelledReport.jsx`: reports.
+- `CustomerStatement.jsx`, `VendorStatement.jsx`: statements.
 
-## Authentication
+## Authentication And Sessions
 
 Authentication uses Laravel Sanctum tokens.
 
 Login flow:
 
 1. Frontend posts to `/api/v1/auth/login`.
-2. Backend validates email/password.
-3. Backend rejects inactive users.
-4. Backend returns a token and user payload.
-5. Frontend stores `auth_token`, `token`, and `user` in local storage.
+2. Backend validates email/password and rejects inactive users.
+3. Backend returns a token and user payload, including role/system-user flags.
+4. Frontend stores `auth_token`, `token`, `user`, and an idle activity timestamp in local storage.
 
-Logout flow:
+The React shell signs users out after four hours of inactivity. Logout posts to `/api/v1/auth/logout`, clears local storage, and redirects to `/login`.
 
-1. Frontend posts to `/api/v1/auth/logout`.
-2. Backend deletes the current token.
-3. Frontend clears local storage and redirects to `/login`.
+Protected routes use `auth:sanctum`, `active.user`, role middleware, system-role middleware, and sensitive-write throttling where appropriate.
 
-Protected routes use:
-
-- `auth:sanctum`
-- `active.user`
-- role middleware where needed
-
-## Registration Flow
+## Registration And Company Users
 
 Registration endpoint:
 
-- `/api/v1/registration/register`
+- `POST /api/v1/registration/register`
 
-Registration creates:
+Registration creates a tenant, company, `owner`, `admin`, `sales`, and `accounts` tenant roles, the owner user, a default `Main Cash Box`, and an owner Sanctum token.
 
-- `tenants` row
-- tenant roles: `owner`, `admin`, `sales`, `accounts`
-- `companies` row
-- owner `users` row
-- default `cash_accounts` row named `Main Cash Box`
-- Sanctum token for the owner
+Supporting public endpoints:
 
-Supporting endpoints:
+- `GET /api/v1/registration/currencies`
+- `GET /api/v1/registration/timezones`
+- `GET /api/v1/registration/check-code`
 
-- `/api/v1/registration/currencies`
-- `/api/v1/registration/timezones`
-- `/api/v1/registration/check-code`
+Company user management:
+
+- `GET /api/v1/company-users`
+- `POST /api/v1/company-users`
+
+Only owner/admin users can list and create company users. New company users can be assigned `admin`, `sales`, or `accounts`. The company `user_limit` controls capacity; the default is 4 users unless changed by the internal portal.
 
 ## Multi-Tenant Rules
 
-Most business data belongs to a tenant.
-
-Development rules:
-
-- Always scope reads and writes by authenticated user's `tenant_id`.
-- Prefer `uid` for public/detail identifiers where existing controllers use it.
-- Do not let raw `id` access cross tenant boundaries.
-- New models that contain tenant-owned business data should include `tenant_id`.
-- New Eloquent models should use `TenantAware` if they follow existing tenant scoping behavior.
-- Registration and login are the main public flows.
+- Business data must be scoped by authenticated `tenant_id` and usually `company_id`.
+- Prefer existing model scopes and `TenantAware`.
+- Use `uid` for public/detail references where controllers already do so.
+- Never trust raw `id` values without tenant/company checks.
+- Public registration, auth, and shared invoice/voucher token reads are the intentionally unauthenticated business exceptions.
+- Report and statement screens use the signed-in user's company; do not add frontend company selectors without explicit authorization design.
 
 ## Role Rules
 
-Current role codes:
+Tenant roles:
 
 - `owner`
 - `admin`
 - `sales`
 - `accounts`
-- `super-admin` for provider/system behavior
 
-The initial signup user is assigned `owner`. Owner users satisfy admin-level permission checks.
+System roles:
 
-Route examples:
+- `super-admin`
+- `inyice-admin`
+- `support-executive`
+
+Owner users satisfy admin-level checks in the `User` model. Internal provider routes use `system-role:super-admin,inyice-admin,support-executive`, with some actions limited to `super-admin`.
+
+Examples:
 
 - GDS parse and voucher order creation: `admin`, `sales`
-- Invoice create-from-order: `admin`, `sales`, `accounts`
-- Invoice sent/void actions: `admin`, `accounts`
-- Payment/account mutations: `admin`, `accounts`
-
-When adding endpoints:
-
-- Decide whether the route is public, authenticated, or role-restricted.
-- Add role middleware in `routes/api.php`.
-- Keep read/list behavior tenant-scoped even when no role middleware is applied.
+- Invoice create/share: `admin`, `sales`, `accounts`
+- Invoice sent/discount/void/cancel: `admin`, `accounts`
+- Receipt/payment/account mutations: `admin`, `accounts`
+- Company profile update: `owner`
+- Company user management: `owner`, `admin`
+- Cancelled report: owner/admin in the UI and general authenticated API route
+- Financial reports/statements: `admin`, `accounts`
 
 ## Sales Flow Architecture
 
-### Frontend Modules
+`SalesFlow.jsx` owns the top-level state for active tab, voucher payload, parse result, created order, created invoice, and loading flags.
 
-`SalesFlow.jsx` owns state for:
-
-- active top-level tab
-- voucher payload
-- parse result
-- created order
-- created invoice
-- loading flags
-
-Sales-flow components:
-
-- `GdsParserCard.jsx`: paste/parse UI
-- `VoucherHeaderCard.jsx`: voucher header and active sections
-- `VoucherRowsSections.jsx`: tabbed passenger/service UI
-- `OrderInvoiceCards.jsx`: create order and convert invoice cards
-- `RowGroupCard.jsx`: reusable row card wrapper
-- `defaults.js`: blank row factories and parsed-payload mapping
-- `gdsParser.js`: frontend local parser
-- `airportLookup.js`: airport code helper labels
-
-### Voucher Shape
-
-The voucher payload includes:
+Voucher payload fields include:
 
 - `voucher_no`
 - `issue_date`
@@ -227,59 +188,15 @@ The voucher payload includes:
 - `visa`
 - `other_services`
 
-### Current Voucher UI
+The detailed UI tabs are Passengers, Flights, Visa, Transfer, Ziarat, Hotels, and Services. Pricing stays inside Flights and remains stored as `voucher.pricing`.
 
-The detailed voucher UI is tabbed:
+Passenger/pricing alignment behavior:
 
-- Passengers
-- Flights
-- Visa
-- Transfer
-- Ziarat
-- Hotels
-- Services
+- Adding a passenger adds a pricing row.
+- Removing a passenger removes the matching pricing row where possible.
+- Editing a passenger name updates the matching pricing row if it was not manually changed.
 
-Pricing is intentionally inside the Flights tab.
-
-Pricing remains stored in `voucher.pricing` because the backend order builder expects that shape.
-
-Flight rows now also support selectable vendors:
-
-- `vendor_id`
-- `vendor_name`
-
-Visa rows now support:
-
-- `passenger_name`
-- `visa_type`
-- `validity`
-- `visa_no`
-- `vendor_id`
-- `visa_vendor`
-- `cost`
-- `profit`
-- `sales`
-- `amount` as a legacy sales alias
-- `notes`
-
-Hotel, transfer, city tour/ziarat, and other service rows now support:
-
-- `vendor_id`
-- `vendor_name`
-- `cost`
-- `profit`
-- `sales`
-- `amount` as a legacy sales alias
-
-### Passenger/Pricing Alignment
-
-`SalesFlow.jsx` keeps passengers and pricing rows aligned:
-
-- Adding a passenger adds a blank pricing row.
-- Removing a passenger removes the matching pricing row when possible.
-- Editing passenger name updates the matching pricing row if the pricing name was not manually changed.
-
-Keep this behavior intact unless the backend payload shape is changed at the same time.
+When changing voucher fields, update the frontend defaults/UI, `SalesFlow.jsx` alignment if needed, `OrderController::buildVoucherOrderItems()`, vendor cost generation, and the docs.
 
 ## Voucher To Order Backend
 
@@ -287,226 +204,129 @@ Endpoint:
 
 - `POST /api/v1/orders/create-from-voucher`
 
-Controller:
-
-- `app/Http/Controllers/Api/OrderController.php`
-
 Flow:
 
 1. Validate customer/vendor/company/currency/status and voucher shape.
-2. Resolve authenticated user tenant.
-3. Resolve company inside the same tenant.
-4. Merge company/user contact into voucher contact.
-5. Create `orders` row.
-6. Store full voucher payload in `orders.meta`.
-7. Build `order_items` from voucher rows.
-8. Sum order item totals into `orders.total_amount`.
+2. Resolve authenticated tenant/company.
+3. Merge company/user contact data into voucher contact.
+4. Create the order and copy searchable voucher fields onto order columns.
+5. Store the full voucher in `orders.meta`.
+6. Build order items from flight references, passenger pricing, visa, hotel, transfer, ziarat, and other service rows.
+7. Build `order_vendor_costs` from vendor-linked cost rows.
+8. Sum order items into `orders.total_amount`.
 
-Pricing component map:
+Generated order behavior:
 
-- `flight_fare` -> Flight Fare
-- `hotel_price` -> Hotel
-- `visa_price` -> Visa
-- `transfer_price` -> Transfer
-- `city_tour_ziarat_price` -> City Tour/Ziarat
-- `other_service_price` -> Other Service
+- Flight rows create zero-amount traceability items.
+- Passenger pricing creates sellable order items.
+- Service sales fields create customer-facing order items.
+- Service/vendor cost fields create supplier payable rows.
+- A fallback `Voucher Booking` item is created when no item rows are generated.
 
-Important behavior:
+## Orders, Sharing, And Editing
 
-- Flight rows create zero-amount traceability items and include the flight vendor in the description when present.
-- Pricing component amounts create per-passenger priced items.
-- If only `total` is provided, it creates a package total item.
-- Visa rows include visa type, visa number, validity, and visa vendor in their order item description.
-- Service rows with sales fields create customer-facing order items.
-- Service rows with cost fields create `order_vendor_costs` rows for supplier payables and profit reporting.
-- A fallback `Voucher Booking` item is created if no items are generated.
+Current order APIs include list, show, update, delete, share, revoke share, refund request, parse GDS, and create-from-voucher.
 
-## Customer And Vendor Modules
+Shared voucher links are created from authenticated order actions and read publicly through:
 
-Order creation uses searchable customer and vendor selects. Dedicated Customer and Vendor modules are available from the sidebar under Master Data.
+- Backend: `GET /api/v1/shared-vouchers/{token}`
+- Frontend: `/shared/vouchers/:token`
 
-API endpoints:
+Orders use soft deletes. Editing an already-invoiced order can cancel the current invoice and create a replacement order that can be invoiced manually, preserving an audit trail instead of silently mutating posted financial records.
 
-- `GET /api/v1/customers`
-- `POST /api/v1/customers`
-- `GET /api/v1/vendors`
-- `POST /api/v1/vendors`
+## Invoices
 
-Frontend API helpers live in `resources/js/services/salesFlowApi.js`.
+Invoice APIs include list, show, create-from-order, share/revoke share, mark sent, discount, void, cancel, and aging status.
 
-Frontend modules:
+Shared invoice links are read publicly through:
 
-- `resources/js/pages/CustomerList.jsx`
-- `resources/js/pages/VendorList.jsx`
+- Backend: `GET /api/v1/shared-invoices/{token}`
+- Frontend: `/shared/invoices/:token`
 
-The create-order card can quick-create a customer or vendor from the dropdown. Created records are scoped to the authenticated user's tenant and default company unless a `company_id` is supplied.
+Invoice statuses include:
 
-Flight and visa vendor fields in `VoucherRowsSections.jsx` use the same vendor list. They store both the selected vendor id and display name in voucher metadata so order item descriptions remain readable.
+- `draft`
+- `issued`
+- `sent`
+- `partial_paid`
+- `paid`
+- `overdue`
+- `void`
+- `cancel`
 
-## GDS Parsing
+Invoice creation enforces the company's monthly invoice limit. Discounting adds a negative invoice line and recalculates totals/outstanding. Cancelled invoices are removed from the active invoice list and included in Cancelled Report.
 
-Backend service:
+## Receipts, Payments, And Accounts
 
-- `app/Services/GdsParserService.php`
+Money-in endpoints live under `/api/v1/receipts`; money-out endpoints live under `/api/v1/payments`.
 
-Backend endpoint:
+Current supported workflows:
 
-- `POST /api/v1/orders/parse-gds`
+- Customer receipt against one invoice.
+- Bulk customer receipt across multiple invoices.
+- Customer advance and advance application.
+- Customer payment/refund.
+- Vendor receipt.
+- Vendor payment against one or more payable orders.
+- Receipt/payment detail, update, and delete where routes expose it.
+- Ledger deposits/withdrawals for cash and bank accounts when an account is supplied.
 
-Accepted backend `gds_source` values:
+Customer allocations use `invoice_settlements`. Vendor allocations use `vendor_payment_allocations`.
 
-- `sabre`
-- `galileo`
+When changing money behavior:
 
-Frontend parser files:
+- Use transactions for multi-table updates.
+- Keep invoice outstanding values, account balances, ledger entries, and allocation totals consistent.
+- Validate that no allocation exceeds live outstanding/payable balances.
+- Preserve tenant/company scope.
 
-- `resources/js/pages/sales-flow/gdsParser.js`
-- `resources/js/pages/sales-flow/defaults.js`
-
-Parsed payload is mapped into:
-
-- booking reference
-- GDS source
-- passengers
-- flights/segments
-- ticket info
-
-When extending parser support:
-
-- Add parsing behavior in frontend and/or backend intentionally.
-- Keep field names compatible with `buildVoucherFromParsed()`.
-- Add or update fixture-like manual test strings.
-- Verify passenger names, flight number, route, date, departure, arrival, ticket number, and fare.
-
-## Invoice And Payment Flow
-
-Invoice conversion starts from created orders.
-
-Relevant services:
-
-- `InvoiceService.php`
-- `PaymentService.php`
-- `LedgerService.php`
-- `ReportService.php`
-- `StatementService.php`
-
-Profit reporting lives in `ReportService::profitReport()` and `ReportController::profitReport()`. It reads invoiced order revenue and `order_vendor_costs`, supports `group_by=customer|vendor|staff` with optional `entity_id`, and exposes `GET /api/v1/reports/profit`. The React page requires the user to choose All or a specific customer/vendor/staff member before loading the list. Vendor grouping allocates order revenue by vendor cost share so one invoiced order with multiple suppliers does not duplicate the full sale amount.
-
-Invoice model tracks:
-
-- subtotal
-- tax amount
-- total amount
-- outstanding amount
-- advance balance
-- status
-- FX rate to base
-
-Payment behavior includes:
-
-- record customer receipt against one invoice
-- record one bulk customer receipt across multiple invoices
-- list customer receipts with invoice allocations
-- record vendor payment against one or many payable orders
-- list vendor order balances and payment allocations
-- record refund
-- record advance
-- apply advance
-- invoice settlements
-- ledger entries for cash/bank accounts
-
-The two financial workbenches are `resources/js/pages/Payments.jsx` (customer receipts) and `resources/js/pages/VendorPayments.jsx` (vendor payments). Both keep per-document allocation amounts in client state and post one atomic transaction. Customer allocations use `invoice_settlements`; vendor allocations use `vendor_payment_allocations`.
-
-Key endpoints:
-
-- `GET /api/v1/payments/customer`
-- `POST /api/v1/payments/record`
-- `POST /api/v1/payments/record-bulk`
-- `GET /api/v1/payments/vendor`
-- `GET /api/v1/payments/vendor/{vendorId}/payables`
-- `POST /api/v1/payments/vendor`
-
-When changing payment behavior:
-
-- Keep settlement and invoice outstanding calculations consistent.
-- Keep account balance and ledger entries synchronized.
-- Preserve tenant scoping.
-- Use transactions for multi-table money updates.
-- Validate that allocation totals equal the receipt/payment header total and that no row exceeds its live outstanding balance.
-
-## Frontend Conventions
-
-Use existing patterns:
-
-- Ant Design components
-- React functional components
-- Local component state where the page already uses it
-- Service modules for API calls where present
-- Compact operational UI, not marketing-style layouts
-
-For sales-flow rows:
-
-- Use `RowGroupCard` for repeatable row sections.
-- Use factories from `defaults.js` for blank rows.
-- Update both frontend shape and backend order builder when adding priced fields.
-- Keep active sections controlled through `VoucherHeaderCard`.
-
-## API Conventions
-
-Current API base path:
-
-- `/api/v1`
-
-API route groups:
-
-- `/registration`
-- `/auth`
-- `/user`
-- `/customers`
-- `/vendors`
-- `/orders`
-- `/invoices`
-- `/payments`
-- `/accounts`
-- `/reports`
-- `/statements`
+## Reports, Statements, And Search
 
 Report endpoints include:
 
+- `GET /api/v1/reports/dashboard-upcoming`
+- `GET /api/v1/reports/aging`
 - `GET /api/v1/reports/revenue`
 - `GET /api/v1/reports/profit`
 - `GET /api/v1/reports/receipts`
 - `GET /api/v1/reports/payments`
+- `GET /api/v1/reports/cancelled`
+- `GET /api/v1/reports/customer-summary`
 
-Controller responses are JSON.
+Statement endpoints:
 
-Report and statement endpoints must use `auth()->user()->company_id` for company scoping. Do not accept frontend `company_id` selectors for these report screens unless multi-company switching is deliberately reintroduced with authorization checks.
+- `GET /api/v1/statements/customer/{customerId}`
+- `GET /api/v1/statements/vendor/{vendorId}`
 
-When adding endpoints:
+Reference search:
 
-- Validate request data in the controller or form request.
-- Use transactions for multi-write operations.
-- Return explicit success flags when existing endpoints do so.
-- Use `uid` in response payloads for external references.
-- Avoid leaking unrelated tenant data through relationship eager loading.
+- `GET /api/v1/reference-search`
+
+Reference search is tenant/company scoped and can search across orders, invoices, customers, vendors, receipts, and payments by references, passenger/customer fields, dates, statuses, and amount ranges.
+
+## Internal Portal
+
+System users are routed to `/internal/*`. The internal portal can:
+
+- List/search non-internal companies.
+- Inspect company usage, users, recent orders, invoices, payments, and receipts.
+- Update company monthly invoice and user limits.
+- Block/unblock companies.
+- Manage internal users.
+- Reset internal user passwords.
+- View selected orders and invoices across tenants.
+
+Use `withoutGlobalScopes()` intentionally and narrowly in internal APIs. Never expose the provider tenant (`INYICE`) in normal agency lists.
 
 ## Database Change Rules
 
-When adding a table:
+When adding tenant-owned tables:
 
-- Include `tenant_id` for tenant-owned business data.
-- Include `uid` when records may be referenced outside internal database joins.
-- Add indexes for tenant, foreign keys, status, and date filters as needed.
-- Add Eloquent relationships on both sides when useful.
-- Add casts for dates, JSON, booleans, and decimals.
-
-When changing a voucher/pricing field:
-
-- Update `defaults.js`.
-- Update `VoucherRowsSections.jsx`.
-- Update `SalesFlow.jsx` if row alignment is affected.
-- Update `OrderController::buildVoucherOrderItems()`.
-- Update `MasterDataController.php` or sales-flow selectors if customer/vendor behavior changes.
+- Include `tenant_id`.
+- Include `company_id` where data is company-specific.
+- Include `uid` when records are referenced outside internal joins.
+- Add indexes for tenant/company, foreign keys, status, date, and search filters as needed.
+- Add Eloquent relationships and casts.
 - Update `DATABASE_RELATIONS.md`, `USER_GUIDE.md`, and this guide.
 
 ## Verification Checklist
@@ -514,26 +334,23 @@ When changing a voucher/pricing field:
 For PHP/backend changes:
 
 - `php -l` touched PHP files
-- `php artisan test` when tests exist for the area
+- `php artisan test` when tests exist or behavior is shared/risky
 - `php artisan route:list` when routes changed
-- Manual API test for new endpoints
+- Manual API checks for new/changed endpoints
 
 For React/frontend changes:
 
-- Parse touched JSX
-- `npm run build` when allowed
-- Verify route renders
-- Check mobile and desktop layout for tabbed/row UIs
+- Parse touched JSX when possible
+- Check route rendering
+- Check mobile and desktop layout for dense operational screens
+- Run `npm run build` only when explicitly requested or approved
 
 For sales-flow changes:
 
 - Parse sample GDS text
-- Confirm passengers populate
-- Confirm flights populate
-- Confirm pricing remains inside Flights
-- Add/remove passenger and confirm pricing rows stay aligned
-- Create order and confirm order items/totals
-- Convert invoice and confirm invoice lines
+- Confirm passengers, flights, pricing, and service rows populate
+- Create an order and verify order items/totals/vendor costs
+- Convert an invoice and verify invoice lines
 
 ## Documentation Rules
 
@@ -543,5 +360,6 @@ Current root docs:
 - `DATABASE_RELATIONS.md`
 - `USER_GUIDE.md`
 - `DEVELOPER_GUIDE.md`
+- `AGENTS.md`
 
-Keep these files current when behavior changes. Avoid adding temporary planning or completion-summary markdown in the project root; stale docs have already caused confusion.
+`AGENTS.md` is workflow guidance for coding agents. Keep product behavior in README, user, developer, database, and project brief docs. Avoid root-level temporary planning or completion Markdown.
