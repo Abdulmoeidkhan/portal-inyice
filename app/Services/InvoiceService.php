@@ -85,7 +85,7 @@ class InvoiceService
             (int) $order->tenant_id,
             (int) $order->company_id,
             $invoiceDate,
-            (int) ($order->company?->monthly_invoice_limit ?: 50),
+            (int) ($order->company?->monthly_invoice_limit ?: 15),
         );
 
         $invoice = new Invoice();

@@ -32,6 +32,10 @@ class DatabaseSeeder extends Seeder
                 'email' => 'info@demo.local',
                 'base_currency_code' => 'PKR',
                 'default_timezone' => 'UTC',
+                'monthly_invoice_limit' => 15,
+                'order_limit' => 20,
+                'user_limit' => 2,
+                'is_paid' => false,
                 'is_active' => true,
             ]
         );
@@ -74,7 +78,9 @@ class DatabaseSeeder extends Seeder
                 'base_currency_code' => 'PKR',
                 'default_timezone' => 'UTC',
                 'monthly_invoice_limit' => 50,
+                'order_limit' => 100000,
                 'user_limit' => 4,
+                'is_paid' => true,
                 'is_active' => true,
             ]
         );

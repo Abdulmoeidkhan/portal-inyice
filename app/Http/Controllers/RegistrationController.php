@@ -79,6 +79,10 @@ class RegistrationController extends Controller
                     'address' => $validated['billing_address'],
                     'base_currency_code' => $validated['base_currency_code'],
                     'default_timezone' => $validated['timezone'],
+                    'monthly_invoice_limit' => 15,
+                    'order_limit' => 20,
+                    'user_limit' => 2,
+                    'is_paid' => false,
                     'is_active' => true,
                 ]);
 
@@ -118,6 +122,7 @@ class RegistrationController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $ownerRole->code,
+                        'company_is_paid' => false,
                         'company_name' => $company->display_name,
                         'tenant_name' => $tenant->name,
                     ],

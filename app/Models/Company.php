@@ -25,7 +25,9 @@ class Company extends Model
         'base_currency_code',
         'default_timezone',
         'monthly_invoice_limit',
+        'order_limit',
         'user_limit',
+        'is_paid',
         'logo_path',
         'footer_logo_path',
         'is_active',
@@ -38,9 +40,21 @@ class Company extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_paid' => 'boolean',
         'monthly_invoice_limit' => 'integer',
+        'order_limit' => 'integer',
         'user_limit' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Company $company): void {
+            $company->monthly_invoice_limit ??= 15;
+            $company->order_limit ??= 20;
+            $company->user_limit ??= 2;
+            $company->is_paid ??= false;
+        });
+    }
 
     /**
      * Get the tenant this company belongs to

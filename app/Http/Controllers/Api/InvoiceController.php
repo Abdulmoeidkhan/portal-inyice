@@ -218,7 +218,7 @@ class InvoiceController extends Controller
         });
         $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
-        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url']);
+        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url', 'is_paid']);
         return response()->json($invoice);
     }
 

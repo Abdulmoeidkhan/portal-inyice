@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('companies', function (Blueprint $table) {
-            $table->unsignedInteger('monthly_invoice_limit')->default(50)->after('default_timezone');
-            $table->unsignedInteger('user_limit')->default(4)->after('monthly_invoice_limit');
+            $table->unsignedInteger('monthly_invoice_limit')->default(15)->after('default_timezone');
+            $table->unsignedInteger('user_limit')->default(2)->after('monthly_invoice_limit');
             $table->string('logo_path')->nullable()->after('user_limit');
             $table->string('footer_logo_path')->nullable()->after('logo_path');
         });

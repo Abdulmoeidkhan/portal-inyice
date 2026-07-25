@@ -1033,8 +1033,53 @@ body {
   cursor: pointer;
 }
 
+.internal-company-name-cell,
+.internal-company-name-cell .ant-typography {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .internal-company-list .ant-table-row-selected > td {
   background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface)) !important;
+}
+
+.internal-state-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.internal-state-icon.success {
+  color: #058b49;
+}
+
+.internal-state-icon.warning {
+  color: #d99308;
+}
+
+.internal-state-icon.muted {
+  color: var(--app-muted);
+}
+
+.internal-usage-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.internal-usage-stack span {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 5px;
+  min-width: 0;
+  align-items: baseline;
+}
+
+.internal-usage-stack .ant-typography {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .internal-detail-stack {
@@ -1221,6 +1266,7 @@ body {
 }
 
 .voucher-preview {
+  position: relative;
   width: 100%;
   min-width: 0;
   padding: 16px;
@@ -1229,6 +1275,7 @@ body {
   border: 1px solid rgba(15, 27, 45, 0.1);
   border-radius: 8px;
   box-shadow: 0 14px 38px rgba(31, 61, 102, 0.14);
+  overflow: hidden;
 }
 
 .voucher-preview .ant-typography,
@@ -1472,6 +1519,7 @@ body {
   padding: 44px 48px;
   background: #ffffff;
   color: #111827;
+  overflow: hidden;
 }
 
 .invoice-paper,

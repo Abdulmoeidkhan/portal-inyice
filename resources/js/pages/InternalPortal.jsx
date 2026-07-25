@@ -13,14 +13,18 @@ import {
   Select,
   Segmented,
   Space,
+  Switch,
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import {
   BankOutlined,
   CheckCircleOutlined,
+  CloseCircleOutlined,
+  DollarCircleOutlined,
   LockOutlined,
   LogoutOutlined,
   MoonOutlined,
@@ -142,7 +146,9 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       setRecords(data.records || {});
       limitForm.setFieldsValue({
         monthly_invoice_limit: data.company.monthly_invoice_limit,
+        order_limit: data.company.order_limit,
         user_limit: data.company.user_limit,
+        is_paid: Boolean(data.company.is_paid),
       });
     } catch (error) {
       message.error(error.message || 'Unable to load company details');
@@ -201,6 +207,21 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     } finally {
       setSavingLimits(false);
     }
+  };
+
+  const savePaidStatus = (checked) => {
+    if (!detail?.uid || savingLimits) return;
+
+    const values = {
+      monthly_invoice_limit: detail.monthly_invoice_limit,
+      order_limit: detail.order_limit,
+      user_limit: detail.user_limit,
+      ...limitForm.getFieldsValue(),
+      is_paid: checked,
+    };
+
+    limitForm.setFieldsValue({ is_paid: checked });
+    saveLimits(values);
   };
 
   const createStaff = async (values) => {
@@ -415,33 +436,53 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     {
       title: 'Company',
       dataIndex: 'display_name',
+      width: 88,
       render: (name, company) => (
-        <Space direction="vertical" size={0}>
+        <Space className="internal-company-name-cell" direction="vertical" size={0}>
           <Text strong>{name}</Text>
           <Text type="secondary">{company.tenant?.name || '-'}</Text>
         </Space>
       ),
     },
     {
-      title: 'Status',
-      dataIndex: 'is_active',
-      width: 96,
-      render: (value) => <Tag color={value ? 'success' : 'default'}>{value ? 'Active' : 'Blocked'}</Tag>,
-    },
-    {
       title: 'Usage',
       key: 'usage',
+      width: 118,
       render: (_, company) => (
-        <Space direction="vertical" size={0}>
-          <Text>{company.counts?.monthly_invoices || 0}/{company.monthly_invoice_limit} invoices</Text>
-          <Text type="secondary">{company.counts?.users || 0}/{company.user_limit} users</Text>
-        </Space>
+        <div className="internal-usage-stack">
+          <span><Text type="secondary">Inv</Text><Text strong>{company.counts?.monthly_invoices || 0}/{company.monthly_invoice_limit}</Text></span>
+          <span><Text type="secondary">Ord</Text><Text strong>{company.counts?.orders || 0}/{company.order_limit}</Text></span>
+          <span><Text type="secondary">Usr</Text><Text strong>{company.counts?.users || 0}/{company.user_limit}</Text></span>
+        </div>
+      ),
+    },
+    {
+      title: <Tooltip title="Status"><CheckCircleOutlined /></Tooltip>,
+      dataIndex: 'is_active',
+      width: 48,
+      align: 'center',
+      render: (value) => (
+        <Tooltip title={value ? 'Active' : 'Blocked'}>
+          {value ? <CheckCircleOutlined className="internal-state-icon success" /> : <StopOutlined className="internal-state-icon muted" />}
+        </Tooltip>
+      ),
+    },
+    {
+      title: <Tooltip title="Paid customer"><DollarCircleOutlined /></Tooltip>,
+      dataIndex: 'is_paid',
+      width: 48,
+      align: 'center',
+      render: (value) => (
+        <Tooltip title={value ? 'Paid customer' : 'Unpaid customer'}>
+          {value ? <DollarCircleOutlined className="internal-state-icon success" /> : <CloseCircleOutlined className="internal-state-icon warning" />}
+        </Tooltip>
       ),
     },
     ...(isSuperAdmin ? [{
-      title: '',
+      title: <Tooltip title="Access"><StopOutlined /></Tooltip>,
       key: 'actions',
-      width: 104,
+      width: 48,
+      align: 'center',
       render: (_, company) => {
         const blockLabel = company.is_active ? 'Block' : 'Unblock';
         const actionKey = `company:${company.uid}`;
@@ -462,10 +503,9 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
               danger={company.is_active}
               icon={company.is_active ? <StopOutlined /> : <CheckCircleOutlined />}
               loading={savingManagementAction === actionKey}
+              aria-label={blockLabel}
               onClick={(event) => event.stopPropagation()}
-            >
-              {blockLabel}
-            </Button>
+            />
           </Popconfirm>
         );
       },
@@ -600,10 +640,12 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                   <Table
                     rowKey="uid"
                     size="small"
+                    tableLayout="fixed"
                     columns={companyColumns}
                     dataSource={companies}
                     loading={loadingCompanies}
                     pagination={false}
+                    scroll={{ x: 350 }}
                     rowClassName={(record) => (record.uid === selectedUid ? 'ant-table-row-selected' : '')}
                     onRow={(record) => ({ onClick: () => setSelectedUid(record.uid) })}
                   />
@@ -644,6 +686,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                             { key: 'phone', label: 'Phone', children: detail.phone || '-' },
                             { key: 'currency', label: 'Currency', children: detail.base_currency_code },
                             { key: 'status', label: 'Status', children: <Tag color={detail.is_active ? 'success' : 'default'}>{detail.is_active ? 'Active' : 'Inactive'}</Tag> },
+                            { key: 'paid', label: 'Paid customer', children: <Tag color={detail.is_paid ? 'success' : 'warning'}>{detail.is_paid ? 'Paid' : 'Unpaid'}</Tag> },
                             { key: 'address', label: 'Address', children: detail.address || '-', span: 2 },
                           ]}
                         />
@@ -651,8 +694,19 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           <Form.Item name="monthly_invoice_limit" label="Monthly invoices" rules={[{ required: true }]}>
                             <InputNumber min={1} max={100000} />
                           </Form.Item>
+                          <Form.Item name="order_limit" label="Orders" rules={[{ required: true }]}>
+                            <InputNumber min={1} max={100000} />
+                          </Form.Item>
                           <Form.Item name="user_limit" label="Users" rules={[{ required: true }]}>
                             <InputNumber min={1} max={1000} />
+                          </Form.Item>
+                          <Form.Item name="is_paid" label="Paid customer" valuePropName="checked">
+                            <Switch
+                              checkedChildren="Paid"
+                              unCheckedChildren="Unpaid"
+                              loading={savingLimits}
+                              onChange={savePaidStatus}
+                            />
                           </Form.Item>
                           <Button type="primary" htmlType="submit" loading={savingLimits}>Update Limits</Button>
                         </Form>

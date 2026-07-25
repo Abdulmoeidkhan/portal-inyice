@@ -27,7 +27,7 @@ class CompanyUserController extends Controller
         return response()->json([
             'users' => $users->map(fn (User $companyUser) => $this->serializeUser($companyUser))->values(),
             'roles' => $this->availableRoles((int) $user->tenant_id),
-            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 4)),
+            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 2)),
         ]);
     }
 
@@ -43,7 +43,7 @@ class CompanyUserController extends Controller
             'role' => ['required', Rule::in($roles->pluck('code')->all())],
         ]);
 
-        $limits = $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 4));
+        $limits = $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 2));
 
         if ($limits['remaining'] < 1) {
             return response()->json([
@@ -74,7 +74,7 @@ class CompanyUserController extends Controller
             'success' => true,
             'message' => 'Company user created successfully.',
             'user' => $this->serializeUser($companyUser),
-            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 4)),
+            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, (int) ($user->company?->user_limit ?: 2)),
         ], 201);
     }
 

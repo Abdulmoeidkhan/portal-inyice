@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 
@@ -187,6 +187,7 @@ export default function InvoiceDetail({ shared = false }) {
     invoice.customer?.email,
     invoice.customer?.address,
   ].filter(Boolean);
+  const showInyiceWatermark = invoice.company && invoice.company.is_paid === false;
 
   return (
     <div className="page-shell page-fade-up invoice-document">
@@ -197,102 +198,109 @@ export default function InvoiceDetail({ shared = false }) {
         {!shared && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
       </Space>
       <Card className="invoice-paper">
-        <div className="invoice-header">
-          <div className="invoice-brand">
-            {invoice.company?.logo_url && (
-              <img className="invoice-company-logo" src={invoice.company.logo_url} alt={`${companyName} logo`} />
-            )}
-            <div>
-              <Title level={2}>{companyName}</Title>
-              {companyContact.map((item) => <Text key={item}>{item}<br /></Text>)}
-            </div>
-          </div>
-          <div className="invoice-heading">
-            <Title level={1}>INVOICE</Title>
-            <Text strong># {invoice.invoice_number}</Text>
-            <Text className="invoice-balance-label">Balance Due</Text>
-            <Title level={4}>{invoice.currency_code} {money(invoice.outstanding_amount)}</Title>
-            <Tag>{String(invoice.status).replaceAll('_', ' ').toUpperCase()}</Tag>
-          </div>
-        </div>
-        <div className="invoice-meta-grid">
-          <div>
-            <Text type="secondary">Bill To</Text>
-            <div className="invoice-party">
-              {billTo.length ? billTo.map((item, index) => <Text key={`${item}-${index}`} strong={index === 0}>{item}<br /></Text>) : <Text>-</Text>}
-            </div>
-          </div>
-          <div className="invoice-dates">
-            <div><Text>Invoice Date :</Text><Text>{formatDate(invoice.invoice_date)}</Text></div>
-            <div><Text>Terms :</Text><Text>Due on Receipt</Text></div>
-            <div><Text>Due Date :</Text><Text>{formatDate(invoice.due_date)}</Text></div>
-            {invoice.order?.order_number && <div><Text>Order :</Text><Text>{invoice.order.order_number}</Text></div>}
-          </div>
-        </div>
-        {detailed ? (
-          <Table className="invoice-lines-table" rowKey="id" pagination={false} dataSource={detailedRows} columns={[
-            { title: '#', width: 54, render: (_, __, index) => index + 1 },
-            { title: 'Item & Description', dataIndex: 'public_description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
-            { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
-            { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
-            { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
-
-          ]} />
-        ) : (
-          <>
-            {passengerRows.length > 0 && (
-              <div className="invoice-mini-section">
-                <Title level={4}>Passenger</Title>
-                <Table
-                  className="invoice-lines-table"
-                  rowKey="id"
-                  pagination={false}
-                  dataSource={passengerRows}
-                  columns={[
-                    { title: 'Passenger', dataIndex: 'name', render: (value) => value || '-' },
-                  ]}
-                />
+        <Watermark
+          content={showInyiceWatermark ? 'InYice' : undefined}
+          rotate={-24}
+          gap={[140, 120]}
+          font={{ color: 'rgba(0, 0, 0, 0.15)', fontSize: 28, fontWeight: 700 }}
+        >
+          <div className="invoice-header">
+            <div className="invoice-brand">
+              {invoice.company?.logo_url && (
+                <img className="invoice-company-logo" src={invoice.company.logo_url} alt={`${companyName} logo`} />
+              )}
+              <div>
+                <Title level={2}>{companyName}</Title>
+                {companyContact.map((item) => <Text key={item}>{item}<br /></Text>)}
               </div>
-            )}
-            <Table className="invoice-lines-table" rowKey="key" pagination={false} dataSource={serviceRows} columns={[
+            </div>
+            <div className="invoice-heading">
+              <Title level={1}>INVOICE</Title>
+              <Text strong># {invoice.invoice_number}</Text>
+              <Text className="invoice-balance-label">Balance Due</Text>
+              <Title level={4}>{invoice.currency_code} {money(invoice.outstanding_amount)}</Title>
+              <Tag>{String(invoice.status).replaceAll('_', ' ').toUpperCase()}</Tag>
+            </div>
+          </div>
+          <div className="invoice-meta-grid">
+            <div>
+              <Text type="secondary">Bill To</Text>
+              <div className="invoice-party">
+                {billTo.length ? billTo.map((item, index) => <Text key={`${item}-${index}`} strong={index === 0}>{item}<br /></Text>) : <Text>-</Text>}
+              </div>
+            </div>
+            <div className="invoice-dates">
+              <div><Text>Invoice Date :</Text><Text>{formatDate(invoice.invoice_date)}</Text></div>
+              <div><Text>Terms :</Text><Text>Due on Receipt</Text></div>
+              <div><Text>Due Date :</Text><Text>{formatDate(invoice.due_date)}</Text></div>
+              {invoice.order?.order_number && <div><Text>Order :</Text><Text>{invoice.order.order_number}</Text></div>}
+            </div>
+          </div>
+          {detailed ? (
+            <Table className="invoice-lines-table" rowKey="id" pagination={false} dataSource={detailedRows} columns={[
               { title: '#', width: 54, render: (_, __, index) => index + 1 },
-              { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
+              { title: 'Item & Description', dataIndex: 'public_description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
               { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+              { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
+              { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
+
             ]} />
-          </>
-        )}
-        <Divider />
-        <Row justify="end"><Col xs={24} md={11} lg={8}>
-          <div className="invoice-totals">
-            <div><Text>Sub Total</Text><Text>{money(invoice.subtotal)}</Text></div>
-            {discountTotal > 0 && <div><Text>Discount</Text><Text>(-) {money(discountTotal)}</Text></div>}
-            {toNumber(invoice.tax_amount) > 0 && <div><Text>Tax</Text><Text>{money(invoice.tax_amount)}</Text></div>}
-            <div className="invoice-total-row"><Text strong>Total</Text><Text strong>{invoice.currency_code} {money(invoice.total_amount)}</Text></div>
-            {paymentMade > 0 && <div className="invoice-paid-row"><Text>Payment Made</Text><Text>(-) {money(paymentMade)}</Text></div>}
-            {refunded > 0 && <div><Text>Refunded</Text><Text>{money(refunded)}</Text></div>}
-            <div className="invoice-balance-row"><Text strong>Balance Due</Text><Text strong>{invoice.currency_code} {money(invoice.outstanding_amount)}</Text></div>
+          ) : (
+            <>
+              {passengerRows.length > 0 && (
+                <div className="invoice-mini-section">
+                  <Title level={4}>Passenger</Title>
+                  <Table
+                    className="invoice-lines-table"
+                    rowKey="id"
+                    pagination={false}
+                    dataSource={passengerRows}
+                    columns={[
+                      { title: 'Passenger', dataIndex: 'name', render: (value) => value || '-' },
+                    ]}
+                  />
+                </div>
+              )}
+              <Table className="invoice-lines-table" rowKey="key" pagination={false} dataSource={serviceRows} columns={[
+                { title: '#', width: 54, render: (_, __, index) => index + 1 },
+                { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
+                { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+              ]} />
+            </>
+          )}
+          <Divider />
+          <Row justify="end"><Col xs={24} md={11} lg={8}>
+            <div className="invoice-totals">
+              <div><Text>Sub Total</Text><Text>{money(invoice.subtotal)}</Text></div>
+              {discountTotal > 0 && <div><Text>Discount</Text><Text>(-) {money(discountTotal)}</Text></div>}
+              {toNumber(invoice.tax_amount) > 0 && <div><Text>Tax</Text><Text>{money(invoice.tax_amount)}</Text></div>}
+              <div className="invoice-total-row"><Text strong>Total</Text><Text strong>{invoice.currency_code} {money(invoice.total_amount)}</Text></div>
+              {paymentMade > 0 && <div className="invoice-paid-row"><Text>Payment Made</Text><Text>(-) {money(paymentMade)}</Text></div>}
+              {refunded > 0 && <div><Text>Refunded</Text><Text>{money(refunded)}</Text></div>}
+              <div className="invoice-balance-row"><Text strong>Balance Due</Text><Text strong>{invoice.currency_code} {money(invoice.outstanding_amount)}</Text></div>
+            </div>
+          </Col></Row>
+          {hasReceiptRows && (
+            <div className="invoice-receipts">
+              <Title level={4}>Receipts & Payments</Title>
+              <Table rowKey="id" pagination={false} dataSource={settlementRows} columns={[
+                { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
+                {
+                  title: 'Receipt / Reference', render: (_, row) => {
+                    const document = documentForSettlement(row);
+                    return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
+                  }
+                },
+                { title: 'Method', width: 130, render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
+                { title: 'Amount', width: 140, align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
+              ]} />
+            </div>
+          )}
+          <div className="invoice-notes">
+            <Text strong>Notes</Text>
+            <Paragraph>{invoice.notes || 'Thanks for your business.'}</Paragraph>
           </div>
-        </Col></Row>
-        {hasReceiptRows && (
-          <div className="invoice-receipts">
-            <Title level={4}>Receipts & Payments</Title>
-            <Table rowKey="id" pagination={false} dataSource={settlementRows} columns={[
-              { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
-              {
-                title: 'Receipt / Reference', render: (_, row) => {
-                  const document = documentForSettlement(row);
-                  return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
-                }
-              },
-              { title: 'Method', width: 130, render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
-              { title: 'Amount', width: 140, align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
-            ]} />
-          </div>
-        )}
-        <div className="invoice-notes">
-          <Text strong>Notes</Text>
-          <Paragraph>{invoice.notes || 'Thanks for your business.'}</Paragraph>
-        </div>
+        </Watermark>
       </Card>
     </div>
   );

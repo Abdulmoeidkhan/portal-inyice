@@ -358,6 +358,10 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [floatControlsVisible, setFloatControlsVisible] = useState(true);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [canUseCalculator, setCanUseCalculator] = useState(() => {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    return storedUser?.company_is_paid === true;
+  });
   const selectedKey = menuItems
     .flatMap((item) => (item.children ? item.children : [item]))
     .find((item) => item.key === location.pathname)?.key || '/';
@@ -388,6 +392,29 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
         window.removeEventListener(eventName, showControls);
       });
     };
+  }, []);
+
+  useEffect(() => {
+    const token = useAuthToken();
+    if (!token) return;
+
+    fetch('/api/v1/company-profile', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) return;
+
+        const paid = data.company?.is_paid === true;
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        localStorage.setItem('user', JSON.stringify({
+          ...storedUser,
+          company_name: data.company?.display_name || storedUser.company_name,
+          company_is_paid: paid,
+        }));
+        setCanUseCalculator(paid);
+      })
+      .catch(() => {});
   }, []);
 
   const profileMenu = [
@@ -549,16 +576,18 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             <FloatButton
               icon={compactTheme ? <ExpandOutlined /> : <CompressOutlined />}
               tooltip={compactTheme ? 'Comfortable theme' : 'Compact theme'}
-              type='default'
+              type="default"
               onClick={onToggleCompactTheme}
             />
-            <FloatButton
-              icon={<CalculatorOutlined />}
-              tooltip="Calculator"
-              onClick={() => setCalculatorOpen(true)}
-            />
+            {canUseCalculator && (
+              <FloatButton
+                icon={<CalculatorOutlined />}
+                tooltip="Calculator"
+                onClick={() => setCalculatorOpen(true)}
+              />
+            )}
           </FloatButton.Group>
-          <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
+          {canUseCalculator && <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />}
         </Content>
       </Layout>
     </Layout>

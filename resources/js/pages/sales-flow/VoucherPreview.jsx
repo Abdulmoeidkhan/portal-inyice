@@ -1,5 +1,5 @@
 import React from 'react';
-import { Empty, Table, Typography } from 'antd';
+import { Empty, Table, Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
 import { getAirportCity } from './airportLookup';
 
@@ -241,29 +241,36 @@ export default function VoucherPreview({ order }) {
   const companyPhone = firstFilled(company.phone, contact.phone);
   const contactLine = [companyAddress, [companyEmail, companyPhone].filter(Boolean).join(' | ')].filter(Boolean).join('\n');
   const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(order.notes) || hasValue(company.footer_logo_url);
+  const showInyiceWatermark = company && company.is_paid === false;
 
   return (
     <div className="voucher-preview">
-      <header className="voucher-preview-header">
-        <div>
-          <Title level={3}>{companyName}</Title>
-          {contactLine && <Text type="secondary">{contactLine}</Text>}
-        </div>
-        {company.logo_url && (
-          <img className="voucher-preview-logo" src={company.logo_url} alt={`${companyName} logo`} />
-        )}
-      </header>
+      <Watermark
+        content={showInyiceWatermark ? 'InYice' : undefined}
+        rotate={-24}
+        gap={[140, 120]}
+        font={{ color: 'rgba(0, 0, 0, 0.1)', fontSize: 28, fontWeight: 700 }}
+      >
+        <header className="voucher-preview-header">
+          <div>
+            <Title level={3}>{companyName}</Title>
+            {contactLine && <Text type="secondary">{contactLine}</Text>}
+          </div>
+          {company.logo_url && (
+            <img className="voucher-preview-logo" src={company.logo_url} alt={`${companyName} logo`} />
+          )}
+        </header>
 
-      {primaryReferenceItems.length > 0 && (
-        <div className="voucher-reference-table voucher-reference-table-primary">
-          {primaryReferenceItems.map(([label, value]) => (
-            <div className="voucher-reference-cell" key={label}>
-              <Text type="secondary">{label}</Text>
-              <Text strong>{value}</Text>
-            </div>
-          ))}
-        </div>
-      )}
+        {primaryReferenceItems.length > 0 && (
+          <div className="voucher-reference-table voucher-reference-table-primary">
+            {primaryReferenceItems.map(([label, value]) => (
+              <div className="voucher-reference-cell" key={label}>
+                <Text type="secondary">{label}</Text>
+                <Text strong>{value}</Text>
+              </div>
+            ))}
+          </div>
+        )}
 
       {secondaryReferenceItems.length > 0 && (
         <div className="voucher-reference-table voucher-reference-table-secondary">
@@ -395,6 +402,7 @@ export default function VoucherPreview({ order }) {
           )}
         </section>
       )}
+      </Watermark>
     </div>
   );
 }

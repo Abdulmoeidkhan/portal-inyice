@@ -258,6 +258,10 @@ class OrderController extends Controller
         ]);
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
+        if ($limitResponse = $this->orderLimitExceededResponse($company)) {
+            return $limitResponse;
+        }
+
         $customer = Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->findOrFail((int) $validated['customer_id']);
@@ -442,7 +446,7 @@ class OrderController extends Controller
             'updated_at',
         ]);
         $order->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
-        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url']);
+        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid']);
         $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
         return response()->json($order);
@@ -629,6 +633,13 @@ class OrderController extends Controller
             ], 409);
         }
 
+        if ($activeInvoice) {
+            $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
+            if ($limitResponse = $this->orderLimitExceededResponse($company)) {
+                return $limitResponse;
+            }
+        }
+
         $createdOrder = null;
         $createdInvoice = null;
         $voidedInvoice = null;
@@ -789,6 +800,11 @@ class OrderController extends Controller
             return response()->json([
                 'error' => 'Create a refund request after the order has moved to the invoice section.',
             ], 422);
+        }
+
+        $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
+        if ($limitResponse = $this->orderLimitExceededResponse($company)) {
+            return $limitResponse;
         }
 
         $refundOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
@@ -1403,6 +1419,24 @@ class OrderController extends Controller
     private function isSalesStaff($user): bool
     {
         return $user?->hasRole('sales') === true;
+    }
+
+    private function orderLimitExceededResponse(Company $company): ?JsonResponse
+    {
+        $limit = (int) ($company->order_limit ?: 20);
+        $currentOrders = Order::where('tenant_id', $company->tenant_id)
+            ->where('company_id', $company->id)
+            ->count();
+
+        if ($currentOrders < $limit) {
+            return null;
+        }
+
+        return response()->json([
+            'error' => "Order limit reached. This company can create up to {$limit} orders.",
+            'limit' => $limit,
+            'used' => $currentOrders,
+        ], 422);
     }
 
     private function isInvoiceSectionStatus(string $status): bool
