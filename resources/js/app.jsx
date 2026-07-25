@@ -25,6 +25,7 @@ function FeedbackBridge() {
 function RootApp() {
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem('ui_theme') || 'light');
   const [themeStyle, setThemeStyle] = useState(() => localStorage.getItem('ui_style') || 'ocean');
+  const [compactTheme, setCompactTheme] = useState(() => localStorage.getItem('ui_compact') === 'true');
 
   useEffect(() => {
     localStorage.setItem('ui_theme', themeMode);
@@ -35,6 +36,11 @@ function RootApp() {
     localStorage.setItem('ui_style', themeStyle);
     document.documentElement.setAttribute('data-style', themeStyle);
   }, [themeStyle]);
+
+  useEffect(() => {
+    localStorage.setItem('ui_compact', compactTheme ? 'true' : 'false');
+    document.documentElement.setAttribute('data-density', compactTheme ? 'compact' : 'comfortable');
+  }, [compactTheme]);
 
   const styleTokens = useMemo(() => {
     const tokenMap = {
@@ -61,8 +67,10 @@ function RootApp() {
   }, [themeMode]);
 
   const currentAlgorithm = useMemo(() => {
-    return themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
-  }, [themeMode]);
+    const baseAlgorithm = themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
+
+    return compactTheme ? [baseAlgorithm, antdTheme.compactAlgorithm] : baseAlgorithm;
+  }, [compactTheme, themeMode]);
 
   return (
     <ConfigProvider
@@ -83,8 +91,10 @@ function RootApp() {
           <MainApp
             themeMode={themeMode}
             themeStyle={themeStyle}
+            compactTheme={compactTheme}
             onChangeThemeStyle={setThemeStyle}
             onToggleTheme={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            onToggleCompactTheme={() => setCompactTheme((prev) => !prev)}
           />
         </BrowserRouter>
       </AntdApp>

@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton, Drawer } from 'antd';
+import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton, Drawer, Modal } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -18,8 +18,13 @@ import {
   SunOutlined,
   MoonOutlined,
   MenuOutlined,
+  CompressOutlined,
+  ExpandOutlined,
+  VerticalAlignTopOutlined,
+  CalculatorOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import { message } from '../services/feedback';
 
 // Components
 import InvoiceList from './InvoiceList';
@@ -54,6 +59,23 @@ const { Text } = Typography;
 const AUTH_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const AUTH_LAST_ACTIVITY_KEY = 'auth_last_activity_at';
 const AUTH_ACTIVITY_THROTTLE_MS = 60 * 1000;
+const CALCULATOR_HISTORY_KEY = 'calculator_history';
+
+const calculate = (left, operator, right) => {
+  if (operator === '+') return left + right;
+  if (operator === '-') return left - right;
+  if (operator === '*') return left * right;
+  if (operator === '/') return right === 0 ? null : left / right;
+
+  return right;
+};
+
+const formatCalculatorValue = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '0';
+
+  return Number(number.toFixed(10)).toString();
+};
 
 function getLastAuthActivity() {
   return Number(localStorage.getItem(AUTH_LAST_ACTIVITY_KEY) || 0);
@@ -95,10 +117,247 @@ function useAuthToken() {
   return localStorage.getItem('auth_token') || localStorage.getItem('token');
 }
 
-function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onChangeThemeStyle, onToggleTheme }) {
+function AppCalculator({ open, onClose }) {
+  const [display, setDisplay] = useState('0');
+  const [storedValue, setStoredValue] = useState(null);
+  const [operator, setOperator] = useState(null);
+  const [waitingForValue, setWaitingForValue] = useState(false);
+  const [history, setHistory] = useState(() => {
+    try {
+      const savedHistory = JSON.parse(localStorage.getItem(CALCULATOR_HISTORY_KEY) || '[]');
+      return Array.isArray(savedHistory) ? savedHistory : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(CALCULATOR_HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+  }, [history]);
+
+  const addHistory = (entry) => {
+    setHistory((current) => [entry, ...current].slice(0, 50));
+  };
+
+  const inputDigit = (digit) => {
+    setDisplay((current) => {
+      if (waitingForValue) {
+        setWaitingForValue(false);
+        return digit;
+      }
+
+      return current === '0' ? digit : current + digit;
+    });
+  };
+
+  const inputDecimal = () => {
+    setDisplay((current) => {
+      if (waitingForValue) {
+        setWaitingForValue(false);
+        return '0.';
+      }
+
+      return current.includes('.') ? current : current + '.';
+    });
+  };
+
+  const clear = () => {
+    setDisplay('0');
+    setStoredValue(null);
+    setOperator(null);
+    setWaitingForValue(false);
+  };
+
+  const backspace = () => {
+    if (waitingForValue) return;
+    setDisplay((current) => (current.length > 1 ? current.slice(0, -1) : '0'));
+  };
+
+  const percent = () => {
+    const next = formatCalculatorValue(Number(display) / 100);
+    setDisplay(next);
+    addHistory(`${display}% = ${next}`);
+    setWaitingForValue(true);
+  };
+
+  const chooseOperator = (nextOperator) => {
+    const inputValue = Number(display);
+
+    if (storedValue === null) {
+      setStoredValue(inputValue);
+    } else if (operator) {
+      const result = calculate(storedValue, operator, inputValue);
+      if (result === null) {
+        message.error('Cannot divide by zero');
+        clear();
+        return;
+      }
+      const formatted = formatCalculatorValue(result);
+      addHistory(`${formatCalculatorValue(storedValue)} ${operator} ${formatCalculatorValue(inputValue)} = ${formatted}`);
+      setStoredValue(result);
+      setDisplay(formatted);
+    }
+
+    setOperator(nextOperator);
+    setWaitingForValue(true);
+  };
+
+  const equals = () => {
+    if (storedValue === null || !operator) return;
+
+    const inputValue = Number(display);
+    const result = calculate(storedValue, operator, inputValue);
+    if (result === null) {
+      message.error('Cannot divide by zero');
+      clear();
+      return;
+    }
+
+    const formatted = formatCalculatorValue(result);
+    addHistory(`${formatCalculatorValue(storedValue)} ${operator} ${formatCalculatorValue(inputValue)} = ${formatted}`);
+    setDisplay(formatted);
+    setStoredValue(null);
+    setOperator(null);
+    setWaitingForValue(true);
+  };
+
+  const copyValue = async (value = display) => {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      message.success('Calculator value copied');
+    } catch {
+      window.prompt('Copy calculator value:', value);
+    }
+  };
+
+  const pasteValue = async () => {
+    try {
+      const clipboardValue = await navigator.clipboard.readText();
+      const numericValue = Number(String(clipboardValue).replace(/,/g, '').trim());
+
+      if (!Number.isFinite(numericValue)) {
+        message.error('Clipboard does not contain a number');
+        return;
+      }
+
+      setDisplay(formatCalculatorValue(numericValue));
+      setWaitingForValue(false);
+    } catch {
+      message.error('Could not read clipboard');
+    }
+  };
+
+  const buttons = [
+    ['C', 'Back', '%', '/'],
+    ['7', '8', '9', '*'],
+    ['4', '5', '6', '-'],
+    ['1', '2', '3', '+'],
+    ['.', '0', 'Paste', '='],
+  ];
+
+  const handleButton = (label) => {
+    if (/^\d$/.test(label)) return inputDigit(label);
+    if (label === '.') return inputDecimal();
+    if (label === 'C') return clear();
+    if (label === 'Back') return backspace();
+    if (label === '%') return percent();
+    if (['+', '-', '*', '/'].includes(label)) return chooseOperator(label);
+    if (label === '=') return equals();
+    if (label === 'Copy') return copyValue();
+    if (label === 'Paste') return pasteValue();
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      const keyMap = {
+        Enter: '=',
+        '=': '=',
+        Backspace: 'Back',
+        Delete: 'C',
+        Escape: 'Escape',
+        ',': '.',
+      };
+      const key = keyMap[event.key] || event.key;
+
+      if (/^\d$/.test(key) || ['+', '-', '*', '/', '.', '%', '='].includes(key)) {
+        event.preventDefault();
+        handleButton(key);
+        return;
+      }
+
+      if (key === 'Back' || key === 'C') {
+        event.preventDefault();
+        handleButton(key);
+        return;
+      }
+
+      if (key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [display, open, operator, storedValue, waitingForValue, onClose]);
+
+  return (
+    <Modal
+      className="app-calculator-modal"
+      title="Calculator"
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={380}
+      destroyOnClose={false}
+    >
+      <div className="app-calculator-display">
+        <Text type="secondary">{operator && storedValue !== null ? `${formatCalculatorValue(storedValue)} ${operator}` : 'Ready'}</Text>
+        <strong>{display}</strong>
+        <Button size="small" onClick={() => copyValue()}>Copy</Button>
+      </div>
+      <div className="app-calculator-grid">
+        {buttons.flat().map((label) => (
+          <Button
+            key={label}
+            type={['=', '+', '-', '*', '/'].includes(label) ? 'primary' : 'default'}
+            onClick={() => handleButton(label)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <div className="app-calculator-history">
+        <div className="app-calculator-history-head">
+          <Text strong>History</Text>
+          <Button size="small" type="link" disabled={!history.length} onClick={() => setHistory([])}>Clear</Button>
+        </div>
+        <div className="app-calculator-history-list">
+          {history.length ? history.map((entry, index) => {
+            const value = entry.split('=').pop().trim();
+            return (
+              <button type="button" key={`${entry}-${index}`} onClick={() => copyValue(value)}>
+                {entry}
+              </button>
+            );
+          }) : <Text type="secondary">No calculations yet.</Text>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compactTheme, onChangeThemeStyle, onToggleTheme, onToggleCompactTheme }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [floatControlsVisible, setFloatControlsVisible] = useState(true);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const selectedKey = menuItems
     .flatMap((item) => (item.children ? item.children : [item]))
     .find((item) => item.key === location.pathname)?.key || '/';
@@ -106,6 +365,30 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const canAccessReports = user?.role !== 'sales';
   const canAccessCancelledReport = ['owner', 'admin'].includes(user?.role);
+
+  useEffect(() => {
+    let idleTimer;
+
+    const showControls = () => {
+      setFloatControlsVisible(true);
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => setFloatControlsVisible(false), 4000);
+    };
+
+    const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+
+    showControls();
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, showControls);
+    });
+
+    return () => {
+      window.clearTimeout(idleTimer);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, showControls);
+      });
+    };
+  }, []);
 
   const profileMenu = [
     {
@@ -249,14 +532,40 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, onCha
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
-          <FloatButton.BackTop visibilityHeight={280} />
+          <FloatButton.Group
+            className={`app-utility-float${floatControlsVisible ? '' : ' is-idle-hidden'}`}
+            trigger="click"
+            type="primary"
+            icon={<MenuOutlined />}
+          >
+            <FloatButton
+              icon={<VerticalAlignTopOutlined />}
+              tooltip="Move to top"
+              onClick={() => {
+                document.querySelector('.app-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+            <FloatButton
+              icon={compactTheme ? <ExpandOutlined /> : <CompressOutlined />}
+              tooltip={compactTheme ? 'Comfortable theme' : 'Compact theme'}
+              type='default'
+              onClick={onToggleCompactTheme}
+            />
+            <FloatButton
+              icon={<CalculatorOutlined />}
+              tooltip="Calculator"
+              onClick={() => setCalculatorOpen(true)}
+            />
+          </FloatButton.Group>
+          <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
         </Content>
       </Layout>
     </Layout>
   );
 }
 
-export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggleTheme }) {
+export default function App({ themeMode, themeStyle, compactTheme, onChangeThemeStyle, onToggleTheme, onToggleCompactTheme }) {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
@@ -500,6 +809,8 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
   if (!isAuthenticated) {
     return (
       <Routes>
+        <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
+        <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -537,7 +848,7 @@ export default function App({ themeMode, themeStyle, onChangeThemeStyle, onToggl
       <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} />} />
+      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} onToggleCompactTheme={onToggleCompactTheme} />} />
     </Routes>
   );
 }

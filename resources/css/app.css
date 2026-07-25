@@ -259,7 +259,6 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -290,10 +289,25 @@ body {
   color: var(--app-muted);
 }
 
+.financial-entry-card {
+  overflow: hidden;
+}
+
+.financial-entry-card .ant-card-body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.financial-entry-card .ant-row,
+.financial-entry-card .ant-col {
+  min-width: 0;
+}
+
 .financial-entry-card .ant-select,
 .financial-entry-card .ant-input,
 .financial-entry-card .ant-input-number {
   width: 100%;
+  max-width: 100%;
 }
 
 .financial-entry-card .ant-col > .ant-typography {
@@ -318,12 +332,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
-  margin: 20px -24px 0;
-  padding: 14px 24px;
+  min-width: 0;
+  margin: 20px 0 0;
+  padding: 14px 0;
   border-top: 1px solid var(--app-border);
   border-bottom: 1px solid var(--app-border);
   background: color-mix(in srgb, var(--app-primary) 5%, var(--app-surface));
+}
+
+.financial-entry-toolbar > .ant-space:last-child {
+  margin-left: auto;
 }
 
 .allocation-total {
@@ -346,7 +366,10 @@ body {
 }
 
 .financial-entry-card .ant-table-wrapper {
-  margin: 0 -24px -24px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
 .financial-entry-card .financial-table-row {
@@ -354,18 +377,31 @@ body {
   justify-content: center;
   align-items: center;
   width: 100%;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
 }
 
 .financial-entry-card .financial-table-column {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-inline: auto;
+  overflow: hidden;
 }
 
 .financial-entry-card .financial-table-column .ant-table-wrapper {
   width: 100%;
   margin: 0;
+}
+
+.financial-entry-card .ant-table-container,
+.financial-entry-card .ant-table-content,
+.financial-history-card .ant-table-container,
+.financial-history-card .ant-table-content {
+  max-width: 100%;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .financial-entry-card .ant-table-thead > tr > th {
@@ -391,8 +427,18 @@ body {
 }
 
 .financial-history-card {
+  overflow: hidden;
   border: 1px solid var(--app-border);
   background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+}
+
+.financial-history-card .ant-card-body,
+.financial-history-card .ant-tabs,
+.financial-history-card .ant-tabs-content-holder,
+.financial-history-card .ant-tabs-content,
+.financial-history-card .ant-tabs-tabpane {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dashboard-page {
@@ -1033,6 +1079,10 @@ body {
     flex-direction: column;
   }
 
+  .financial-entry-toolbar > .ant-space:last-child {
+    margin-left: 0;
+  }
+
   .financial-entry-card .ant-radio-group {
     overflow-x: auto;
   }
@@ -1574,7 +1624,103 @@ body {
   margin-top: 44px;
 }
 
+.app-utility-float {
+  right: 24px;
+  bottom: 24px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-utility-float.is-idle-hidden {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.app-calculator-modal .ant-modal-body {
+  display: grid;
+  gap: 14px;
+}
+
+.app-calculator-display {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-primary) 5%, var(--app-surface));
+  text-align: right;
+}
+
+.app-calculator-display strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 30px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.app-calculator-display .ant-btn {
+  justify-self: end;
+}
+
+.app-calculator-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-calculator-grid .ant-btn {
+  height: 42px;
+  min-width: 0;
+  padding-inline: 6px;
+}
+
+.app-calculator-history {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-calculator-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-calculator-history-list {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.app-calculator-history-list button {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  text-align: right;
+  cursor: pointer;
+}
+
+.app-calculator-history-list button:hover {
+  border-color: var(--app-primary);
+}
+
 @media (max-width: 720px) {
+  .app-utility-float {
+    right: 16px;
+    bottom: 18px;
+  }
+
   .invoice-paper .ant-card-body {
     padding: 28px 20px;
   }

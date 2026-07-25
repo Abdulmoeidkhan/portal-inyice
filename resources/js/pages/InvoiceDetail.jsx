@@ -15,6 +15,11 @@ const toNumber = (value) => {
 const isDiscountLine = (line) => toNumber(line?.total_price) < 0 || /^discount\b/i.test(String(line?.description || '').trim());
 const formatDate = (value) => String(value || '').slice(0, 10) || '-';
 const documentForSettlement = (settlement) => settlement.reference_document || settlement.referenceDocument || null;
+const stripVendorDetails = (value) => String(value || '')
+  .replace(/\s+Vendor:\s+.+$/i, '')
+  .replace(/\s+\((?:vendor|supplier)[^)]+\)/gi, '')
+  .replace(/\s{2,}/g, ' ')
+  .trim();
 const uniqueNames = (values) => {
   const seen = new Set();
 
@@ -59,7 +64,7 @@ const serviceNameForLine = (line) => ({
   transfers: 'Transfers',
   city_tours: 'City Tours/Ziarat',
   visa: 'Visa',
-  other_services: String(line?.description || '').replace(/\s+Vendor:\s+.+$/i, '').trim() || 'Other Services',
+  other_services: stripVendorDetails(line?.description) || 'Other Services',
 }[classifyLine(line)]);
 
 const breakupForLine = (line) => {
@@ -79,6 +84,7 @@ const breakupForLine = (line) => {
 const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line)).map((line, index) => ({
   ...line,
   id: line.id || `line-${index}`,
+  public_description: stripVendorDetails(line.description),
   service_name: serviceNameForLine(line),
   breakup: breakupForLine(line),
 }));
@@ -226,10 +232,11 @@ export default function InvoiceDetail({ shared = false }) {
         {detailed ? (
           <Table className="invoice-lines-table" rowKey="id" pagination={false} dataSource={detailedRows} columns={[
             { title: '#', width: 54, render: (_, __, index) => index + 1 },
-            { title: 'Item & Description', dataIndex: 'description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
+            { title: 'Item & Description', dataIndex: 'public_description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
             { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
             { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
             { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
+
           ]} />
         ) : (
           <>
@@ -251,7 +258,6 @@ export default function InvoiceDetail({ shared = false }) {
               { title: '#', width: 54, render: (_, __, index) => index + 1 },
               { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
               { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
-              { title: 'Total', dataIndex: 'total_price', width: 150, align: 'right', render: (value) => money(value) },
             ]} />
           </>
         )}
@@ -272,10 +278,12 @@ export default function InvoiceDetail({ shared = false }) {
             <Title level={4}>Receipts & Payments</Title>
             <Table rowKey="id" pagination={false} dataSource={settlementRows} columns={[
               { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
-              { title: 'Receipt / Reference', render: (_, row) => {
-                const document = documentForSettlement(row);
-                return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
-              } },
+              {
+                title: 'Receipt / Reference', render: (_, row) => {
+                  const document = documentForSettlement(row);
+                  return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
+                }
+              },
               { title: 'Method', width: 130, render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
               { title: 'Amount', width: 140, align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
             ]} />

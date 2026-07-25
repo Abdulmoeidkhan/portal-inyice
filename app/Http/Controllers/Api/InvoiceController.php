@@ -198,7 +198,10 @@ class InvoiceController extends Controller
             ->with(['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->firstOrFail();
         $invoice->makeHidden(['share_token', 'tenant_id', 'company_id', 'customer_id', 'order_id', 'fx_rate_to_base', 'created_at', 'updated_at']);
-        $invoice->lines->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
+        $invoice->lines->each(function ($line): void {
+            $line->description = $this->publicInvoiceLineDescription($line->description);
+            $line->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
+        });
         $invoice->settlements->each(function ($settlement): void {
             $settlement->setVisible(['id', 'amount_received', 'amount_refunded', 'amount_to_advance', 'settlement_date', 'settlement_type', 'reference_document', 'notes']);
             $settlement->referenceDocument?->setVisible([
@@ -217,6 +220,14 @@ class InvoiceController extends Controller
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
         $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url']);
         return response()->json($invoice);
+    }
+
+    private function publicInvoiceLineDescription(?string $description): string
+    {
+        $clean = preg_replace('/\s+Vendor:\s+.+$/i', '', (string) $description) ?? '';
+        $clean = preg_replace('/\s+\((?:vendor|supplier)[^)]+\)/i', '', $clean) ?? '';
+
+        return trim(preg_replace('/\s{2,}/', ' ', $clean) ?? '');
     }
 
     public function discount(string $uid, Request $request): JsonResponse

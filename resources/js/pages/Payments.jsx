@@ -212,11 +212,11 @@ export default function Payments() {
   const historyColumns = [
     { title: 'Receipt #', dataIndex: 'receipt_number', width: 160 },
     { title: 'Date', dataIndex: 'receipt_date', width: 120, render: (value) => String(value || '').slice(0, 10) },
-    { title: 'Customer', dataIndex: ['customer', 'name'] },
-    { title: 'Method', dataIndex: 'payment_method', render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
-    { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' },
-    { title: 'Invoices', dataIndex: 'settlements', render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || '—' },
-    { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
+    { title: 'Customer', dataIndex: ['customer', 'name'], width: 210 },
+    { title: 'Method', dataIndex: 'payment_method', width: 145, render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
+    { title: 'Reference', dataIndex: 'reference_number', width: 180, ellipsis: true, render: (value) => value || '—' },
+    { title: 'Invoices', dataIndex: 'settlements', width: 260, ellipsis: true, render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || '—' },
+    { title: 'Amount', dataIndex: 'amount', width: 145, align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
     { title: 'Actions', key: 'actions', fixed: 'right', width: 125, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
 
@@ -271,13 +271,13 @@ export default function Payments() {
         </div>
         <Row justify="center" align="middle" className="financial-table-row">
           <Col span={24} className="financial-table-column">
-            <Table rowKey="id" loading={loading} columns={invoiceColumns} dataSource={invoices} pagination={false} tableLayout="fixed" scroll={{ x: 1255, y: 410 }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: customerId ? 'No open invoices for this customer' : 'Select a customer to load open invoices' }} />
+            <Table rowKey="id" loading={loading} columns={invoiceColumns} dataSource={invoices} pagination={false} tableLayout="fixed" scroll={{ x: 1255, ...(invoices.length > 6 ? { y: 410 } : {}) }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: customerId ? 'No open invoices for this customer' : 'Select a customer to load open invoices' }} />
           </Col>
         </Row>
       </Card>
 
       <Card className="financial-history-card">
-        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 900 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} />
+        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1345 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} />
       </Card>
       <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
