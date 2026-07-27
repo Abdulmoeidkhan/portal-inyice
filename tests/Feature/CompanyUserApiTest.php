@@ -93,6 +93,7 @@ class CompanyUserApiTest extends TestCase
             'address' => 'Karachi, Pakistan',
             'base_currency_code' => 'PKR',
             'default_timezone' => 'Asia/Karachi',
+            'user_limit' => 4,
             'is_active' => true,
         ]);
 

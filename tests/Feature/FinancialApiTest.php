@@ -97,7 +97,7 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('total', 0);
     }
 
-    public function test_company_cannot_create_more_than_fifty_invoices_per_month(): void
+    public function test_company_can_create_more_than_fifty_invoices_per_month(): void
     {
         $ctx = $this->seedTenantContext();
 
@@ -138,8 +138,8 @@ class FinancialApiTest extends TestCase
             'order_id' => $nextOrder->id,
         ]);
 
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors(['invoice_limit']);
+        $response->assertCreated()
+            ->assertJsonPath('success', true);
     }
 
     public function test_invoiced_order_edit_requires_confirmation_and_creates_new_order_for_manual_invoice(): void

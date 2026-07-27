@@ -49,8 +49,6 @@ class Company extends Model
     protected static function booted(): void
     {
         static::creating(function (Company $company): void {
-            $company->monthly_invoice_limit ??= 15;
-            $company->order_limit ??= 20;
             $company->user_limit ??= 2;
             $company->is_paid ??= false;
         });

@@ -258,9 +258,6 @@ class OrderController extends Controller
         ]);
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
-        if ($limitResponse = $this->orderLimitExceededResponse($company)) {
-            return $limitResponse;
-        }
 
         $customer = Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
@@ -633,13 +630,6 @@ class OrderController extends Controller
             ], 409);
         }
 
-        if ($activeInvoice) {
-            $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
-            if ($limitResponse = $this->orderLimitExceededResponse($company)) {
-                return $limitResponse;
-            }
-        }
-
         $createdOrder = null;
         $createdInvoice = null;
         $voidedInvoice = null;
@@ -803,9 +793,6 @@ class OrderController extends Controller
         }
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
-        if ($limitResponse = $this->orderLimitExceededResponse($company)) {
-            return $limitResponse;
-        }
 
         $refundOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
             $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
@@ -1419,24 +1406,6 @@ class OrderController extends Controller
     private function isSalesStaff($user): bool
     {
         return $user?->hasRole('sales') === true;
-    }
-
-    private function orderLimitExceededResponse(Company $company): ?JsonResponse
-    {
-        $limit = (int) ($company->order_limit ?: 20);
-        $currentOrders = Order::where('tenant_id', $company->tenant_id)
-            ->where('company_id', $company->id)
-            ->count();
-
-        if ($currentOrders < $limit) {
-            return null;
-        }
-
-        return response()->json([
-            'error' => "Order limit reached. This company can create up to {$limit} orders.",
-            'limit' => $limit,
-            'used' => $currentOrders,
-        ], 422);
     }
 
     private function isInvoiceSectionStatus(string $status): bool

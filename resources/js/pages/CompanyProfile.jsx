@@ -123,7 +123,7 @@ export default function CompanyProfile() {
               <Descriptions.Item label="Phone">{company?.phone || 'N/A'}</Descriptions.Item>
               <Descriptions.Item label="Currency">{company?.base_currency_code || 'N/A'}</Descriptions.Item>
               <Descriptions.Item label="Limits">
-                {company ? `${company.monthly_invoice_limit} invoices/month, ${company.order_limit} orders, ${company.user_limit} users` : 'N/A'}
+                {company ? `Unlimited invoices/month, unlimited orders, ${company.user_limit} users` : 'N/A'}
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={company?.is_active ? 'success' : 'default'}>{company?.is_active ? 'Active' : 'Inactive'}</Tag>

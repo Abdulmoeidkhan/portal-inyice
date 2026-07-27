@@ -23,8 +23,8 @@ return new class extends Migration
             $table->char('country_code', 2)->nullable();
             $table->char('base_currency_code', 3);
             $table->string('default_timezone', 80)->default('UTC');
-            $table->unsignedInteger('monthly_invoice_limit')->default(15);
-            $table->unsignedInteger('order_limit')->default(20);
+            $table->unsignedInteger('monthly_invoice_limit')->nullable();
+            $table->unsignedInteger('order_limit')->nullable();
             $table->unsignedInteger('user_limit')->default(2);
             $table->boolean('is_paid')->default(false);
             $table->string('logo_path')->nullable();

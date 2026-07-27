@@ -72,11 +72,14 @@ class InternalPortalController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'monthly_invoice_limit' => ['required', 'integer', 'min:1', 'max:100000'],
-            'order_limit' => ['required', 'integer', 'min:1', 'max:100000'],
-            'user_limit' => ['required', 'integer', 'min:1', 'max:1000'],
-            'is_paid' => ['required', 'boolean'],
+            'monthly_invoice_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
+            'order_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
+            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:1000'],
+            'is_paid' => ['sometimes', 'boolean'],
         ]);
+
+        $validated['monthly_invoice_limit'] = null;
+        $validated['order_limit'] = null;
 
         $company->update($validated);
 
@@ -284,8 +287,8 @@ class InternalPortalController extends Controller
             'email' => $company->email,
             'phone' => $company->phone,
             'base_currency_code' => $company->base_currency_code,
-            'monthly_invoice_limit' => (int) ($company->monthly_invoice_limit ?: 15),
-            'order_limit' => (int) ($company->order_limit ?: 20),
+            'monthly_invoice_limit' => $company->monthly_invoice_limit,
+            'order_limit' => $company->order_limit,
             'user_limit' => (int) ($company->user_limit ?: 2),
             'is_paid' => (bool) $company->is_paid,
             'is_active' => (bool) $company->is_active,
@@ -389,8 +392,8 @@ class InternalPortalController extends Controller
                 'email' => 'support@inyice.local',
                 'base_currency_code' => 'PKR',
                 'default_timezone' => 'UTC',
-                'monthly_invoice_limit' => 50,
-                'order_limit' => 100000,
+                'monthly_invoice_limit' => null,
+                'order_limit' => null,
                 'user_limit' => 4,
                 'is_paid' => true,
                 'is_active' => true,

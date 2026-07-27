@@ -54,6 +54,7 @@ const authHeaders = (json = false) => {
 };
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
+const limitLabel = (value) => value ?? 'Unlimited';
 
 function RecordTable({ data, columns }) {
   return (
@@ -145,8 +146,6 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       setDetail(data.company);
       setRecords(data.records || {});
       limitForm.setFieldsValue({
-        monthly_invoice_limit: data.company.monthly_invoice_limit,
-        order_limit: data.company.order_limit,
         user_limit: data.company.user_limit,
         is_paid: Boolean(data.company.is_paid),
       });
@@ -213,8 +212,6 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     if (!detail?.uid || savingLimits) return;
 
     const values = {
-      monthly_invoice_limit: detail.monthly_invoice_limit,
-      order_limit: detail.order_limit,
       user_limit: detail.user_limit,
       ...limitForm.getFieldsValue(),
       is_paid: checked,
@@ -450,8 +447,8 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       width: 118,
       render: (_, company) => (
         <div className="internal-usage-stack">
-          <span><Text type="secondary">Inv</Text><Text strong>{company.counts?.monthly_invoices || 0}/{company.monthly_invoice_limit}</Text></span>
-          <span><Text type="secondary">Ord</Text><Text strong>{company.counts?.orders || 0}/{company.order_limit}</Text></span>
+          <span><Text type="secondary">Inv</Text><Text strong>{company.counts?.monthly_invoices || 0}/{limitLabel(company.monthly_invoice_limit)}</Text></span>
+          <span><Text type="secondary">Ord</Text><Text strong>{company.counts?.orders || 0}/{limitLabel(company.order_limit)}</Text></span>
           <span><Text type="secondary">Usr</Text><Text strong>{company.counts?.users || 0}/{company.user_limit}</Text></span>
         </div>
       ),
@@ -691,12 +688,6 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           ]}
                         />
                         <Form form={limitForm} layout="inline" className="internal-limit-form" onFinish={saveLimits}>
-                          <Form.Item name="monthly_invoice_limit" label="Monthly invoices" rules={[{ required: true }]}>
-                            <InputNumber min={1} max={100000} />
-                          </Form.Item>
-                          <Form.Item name="order_limit" label="Orders" rules={[{ required: true }]}>
-                            <InputNumber min={1} max={100000} />
-                          </Form.Item>
                           <Form.Item name="user_limit" label="Users" rules={[{ required: true }]}>
                             <InputNumber min={1} max={1000} />
                           </Form.Item>

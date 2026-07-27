@@ -34,9 +34,11 @@ class InternalPortalApiTest extends TestCase
 
         $this->patchJson('/api/v1/internal/companies/' . $company->uid . '/limits', [
             'monthly_invoice_limit' => 75,
+            'order_limit' => 200,
             'user_limit' => 8,
         ])->assertOk()
-            ->assertJsonPath('company.monthly_invoice_limit', 75)
+            ->assertJsonPath('company.monthly_invoice_limit', null)
+            ->assertJsonPath('company.order_limit', null)
             ->assertJsonPath('company.user_limit', 8);
 
         $this->postJson('/api/v1/internal/users', [
@@ -162,7 +164,8 @@ class InternalPortalApiTest extends TestCase
             'email' => 'support@inyice.local',
             'base_currency_code' => 'PKR',
             'default_timezone' => 'UTC',
-            'monthly_invoice_limit' => 50,
+            'monthly_invoice_limit' => null,
+            'order_limit' => null,
             'user_limit' => 4,
             'is_active' => true,
         ]);
@@ -215,7 +218,8 @@ class InternalPortalApiTest extends TestCase
             'email' => 'customer-company@test.local',
             'base_currency_code' => 'PKR',
             'default_timezone' => 'UTC',
-            'monthly_invoice_limit' => 50,
+            'monthly_invoice_limit' => null,
+            'order_limit' => null,
             'user_limit' => 4,
             'is_active' => true,
         ]);

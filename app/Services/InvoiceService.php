@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Order;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -81,13 +80,6 @@ class InvoiceService
         $order->loadMissing(['company', 'items']);
 
         $invoiceDate = now();
-        $this->ensureMonthlyInvoiceLimitIsAvailable(
-            (int) $order->tenant_id,
-            (int) $order->company_id,
-            $invoiceDate,
-            (int) ($order->company?->monthly_invoice_limit ?: 15),
-        );
-
         $invoice = new Invoice();
         $invoice->uid = (string) Str::ulid();
         $invoice->tenant_id = $order->tenant_id;
@@ -119,25 +111,6 @@ class InvoiceService
         }
 
         return $invoice;
-    }
-
-    private function ensureMonthlyInvoiceLimitIsAvailable(int $tenantId, int $companyId, \DateTimeInterface $invoiceDate, int $limit): void
-    {
-        $invoiceMonth = CarbonImmutable::instance($invoiceDate);
-        $monthStart = $invoiceMonth->startOfMonth()->toDateString();
-        $monthEnd = $invoiceMonth->endOfMonth()->toDateString();
-
-        $monthlyCount = Invoice::query()
-            ->where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->whereBetween('invoice_date', [$monthStart, $monthEnd])
-            ->count();
-
-        if ($monthlyCount >= $limit) {
-            throw ValidationException::withMessages([
-                'invoice_limit' => "This company has reached the monthly limit of {$limit} invoices.",
-            ]);
-        }
     }
 
     /**
