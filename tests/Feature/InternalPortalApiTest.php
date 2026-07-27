@@ -36,10 +36,16 @@ class InternalPortalApiTest extends TestCase
             'monthly_invoice_limit' => 75,
             'order_limit' => 200,
             'user_limit' => 8,
+        ])->assertStatus(422);
+
+        $this->patchJson('/api/v1/internal/companies/' . $company->uid . '/limits', [
+            'monthly_invoice_limit' => 75,
+            'order_limit' => 200,
+            'user_limit' => 2,
         ])->assertOk()
             ->assertJsonPath('company.monthly_invoice_limit', null)
             ->assertJsonPath('company.order_limit', null)
-            ->assertJsonPath('company.user_limit', 8);
+            ->assertJsonPath('company.user_limit', 2);
 
         $this->postJson('/api/v1/internal/users', [
             'name' => 'Blocked Staff',
@@ -166,7 +172,7 @@ class InternalPortalApiTest extends TestCase
             'default_timezone' => 'UTC',
             'monthly_invoice_limit' => null,
             'order_limit' => null,
-            'user_limit' => 4,
+            'user_limit' => 2,
             'is_active' => true,
         ]);
 
@@ -220,7 +226,7 @@ class InternalPortalApiTest extends TestCase
             'default_timezone' => 'UTC',
             'monthly_invoice_limit' => null,
             'order_limit' => null,
-            'user_limit' => 4,
+            'user_limit' => 2,
             'is_active' => true,
         ]);
     }

@@ -7,7 +7,6 @@ import {
   Divider,
   Form,
   Input,
-  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -195,14 +194,14 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to update limits');
+        throw new Error(data.error || 'Unable to update status');
       }
 
-      message.success('Company limits updated');
+      message.success('Company status updated');
       setDetail(data.company);
       await fetchCompanies();
     } catch (error) {
-      message.error(error.message || 'Unable to update limits');
+      message.error(error.message || 'Unable to update status');
     } finally {
       setSavingLimits(false);
     }
@@ -212,7 +211,6 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     if (!detail?.uid || savingLimits) return;
 
     const values = {
-      user_limit: detail.user_limit,
       ...limitForm.getFieldsValue(),
       is_paid: checked,
     };
@@ -688,9 +686,6 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           ]}
                         />
                         <Form form={limitForm} layout="inline" className="internal-limit-form" onFinish={saveLimits}>
-                          <Form.Item name="user_limit" label="Users" rules={[{ required: true }]}>
-                            <InputNumber min={1} max={1000} />
-                          </Form.Item>
                           <Form.Item name="is_paid" label="Paid customer" valuePropName="checked">
                             <Switch
                               checkedChildren="Paid"
@@ -699,7 +694,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                               onChange={savePaidStatus}
                             />
                           </Form.Item>
-                          <Button type="primary" htmlType="submit" loading={savingLimits}>Update Limits</Button>
+                          <Button type="primary" htmlType="submit" loading={savingLimits}>Update Status</Button>
                         </Form>
                       </>
                     ) : (

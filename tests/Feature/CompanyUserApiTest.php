@@ -15,7 +15,7 @@ class CompanyUserApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_owner_can_create_company_users_until_three_extra_seats_are_used(): void
+    public function test_owner_can_create_company_users_until_one_extra_seat_is_used(): void
     {
         $ctx = $this->seedCompanyContext('owner');
         Sanctum::actingAs($ctx['user']);
@@ -31,17 +31,8 @@ class CompanyUserApiTest extends TestCase
         $created->assertCreated()
             ->assertJsonPath('user.email', 'sales-agent@test.local')
             ->assertJsonPath('user.role', 'sales')
-            ->assertJsonPath('limits.remaining', 2);
-
-        foreach (['accounts' => 'accounts-user@test.local', 'admin' => 'admin-user@test.local'] as $role => $email) {
-            $this->postJson('/api/v1/company-users', [
-                'name' => ucfirst($role) . ' User',
-                'email' => $email,
-                'password' => 'password123',
-                'password_confirmation' => 'password123',
-                'role' => $role,
-            ])->assertCreated();
-        }
+            ->assertJsonPath('limits.max', 2)
+            ->assertJsonPath('limits.remaining', 0);
 
         $blocked = $this->postJson('/api/v1/company-users', [
             'name' => 'Extra User',
@@ -52,7 +43,7 @@ class CompanyUserApiTest extends TestCase
         ]);
 
         $blocked->assertStatus(422)
-            ->assertJsonPath('limits.current', 4)
+            ->assertJsonPath('limits.current', 2)
             ->assertJsonPath('limits.remaining', 0);
     }
 
@@ -93,7 +84,6 @@ class CompanyUserApiTest extends TestCase
             'address' => 'Karachi, Pakistan',
             'base_currency_code' => 'PKR',
             'default_timezone' => 'Asia/Karachi',
-            'user_limit' => 4,
             'is_active' => true,
         ]);
 

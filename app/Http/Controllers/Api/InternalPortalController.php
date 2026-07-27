@@ -74,12 +74,13 @@ class InternalPortalController extends Controller
         $validated = $request->validate([
             'monthly_invoice_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
             'order_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
-            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:1000'],
+            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:2'],
             'is_paid' => ['sometimes', 'boolean'],
         ]);
 
         $validated['monthly_invoice_limit'] = null;
         $validated['order_limit'] = null;
+        $validated['user_limit'] = 2;
 
         $company->update($validated);
 
@@ -394,7 +395,7 @@ class InternalPortalController extends Controller
                 'default_timezone' => 'UTC',
                 'monthly_invoice_limit' => null,
                 'order_limit' => null,
-                'user_limit' => 4,
+                'user_limit' => 2,
                 'is_paid' => true,
                 'is_active' => true,
             ]

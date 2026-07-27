@@ -81,7 +81,7 @@ class CompanyProfileApiTest extends TestCase
             'base_currency_code' => 'PKR',
             'default_timezone' => 'UTC',
             'monthly_invoice_limit' => 50,
-            'user_limit' => 4,
+            'user_limit' => 2,
             'is_active' => true,
         ]);
 

@@ -79,7 +79,7 @@ class DatabaseSeeder extends Seeder
                 'default_timezone' => 'UTC',
                 'monthly_invoice_limit' => null,
                 'order_limit' => null,
-                'user_limit' => 4,
+                'user_limit' => 2,
                 'is_paid' => true,
                 'is_active' => true,
             ]
