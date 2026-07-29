@@ -40,6 +40,20 @@ class OrderController extends Controller
         'other_services',
     ];
 
+    private const ORDER_STATUSES = [
+        'quote',
+        'order',
+        'confirm',
+        'cancel',
+        'invoice',
+        'void',
+        'refund_request',
+        'refund',
+        'partial_refund',
+        'paid',
+        'partial_paid',
+    ];
+
     private const PRICING_COST_PROFIT_FIELDS = [
         'flight_cost',
         'flight_profit',
@@ -131,7 +145,7 @@ class OrderController extends Controller
             'company_id' => 'nullable|integer|exists:companies,id',
             'customer_id' => 'required|integer|exists:customers,id',
             'currency_code' => 'nullable|string|size:3',
-            'status' => 'nullable|in:quote,order,cancel,invoice,void,refund_request,refund,partial_refund',
+            'status' => ['nullable', Rule::in(self::ORDER_STATUSES)],
             'notes' => 'nullable|string',
             'voucher' => 'required|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
@@ -471,7 +485,7 @@ class OrderController extends Controller
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',
             'booking_reference' => 'nullable|string|max:50',
-            'status' => 'required|in:quote,order,cancel,invoice,void,refund_request,refund,partial_refund',
+            'status' => ['required', Rule::in(self::ORDER_STATUSES)],
             'currency_code' => 'required|string|size:3|exists:currencies,code',
             'total_amount' => 'nullable|numeric',
             'notes' => 'nullable|string',

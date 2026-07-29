@@ -28,7 +28,7 @@ return new class extends Migration
             $table->json('active_sections')->nullable();
             $table->text('emergency_contact')->nullable();
             $table->string('booking_reference', 50)->nullable();
-            $table->enum('status', ['quote', 'order', 'confirm', 'cancel', 'invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'])->default('quote');
+            $table->enum('status', ['quote', 'order', 'confirm', 'cancel', 'invoice', 'void', 'refund_request', 'refund', 'partial_refund', 'paid', 'partial_paid'])->default('quote');
             $table->char('currency_code', 3);
             $table->decimal('total_amount', 18, 4)->default(0);
             $table->text('notes')->nullable();

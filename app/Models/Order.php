@@ -182,25 +182,30 @@ class Order extends Model
      */
     public function transitionTo(string $newStatus): bool
     {
-        if (!$this->canTransitionTo($newStatus)) {
-            return false;
-        }
+        return DB::transaction(function () use ($newStatus): bool {
+            $order = self::whereKey($this->getKey())->lockForUpdate()->first();
 
-        $oldStatus = $this->status;
-        $this->status = $newStatus;
-        $this->save();
+            if (!$order || !$order->canTransitionTo($newStatus)) {
+                return false;
+            }
 
-        // Record the transition
-        OrderStatusHistory::create([
-            'tenant_id' => $this->tenant_id,
-            'order_id' => $this->id,
-            'from_status' => $oldStatus,
-            'to_status' => $newStatus,
-            'user_id' => auth()->id(),
-            'created_at' => now(),
-        ]);
+            $oldStatus = $order->status;
+            $order->status = $newStatus;
+            $order->save();
 
-        return true;
+            OrderStatusHistory::create([
+                'tenant_id' => $order->tenant_id,
+                'order_id' => $order->id,
+                'from_status' => $oldStatus,
+                'to_status' => $newStatus,
+                'user_id' => auth()->id(),
+                'created_at' => now(),
+            ]);
+
+            $this->setRawAttributes($order->getAttributes(), true);
+
+            return true;
+        });
     }
 
     public function ensureShareToken(): string

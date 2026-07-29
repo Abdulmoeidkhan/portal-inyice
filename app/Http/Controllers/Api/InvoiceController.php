@@ -9,6 +9,7 @@ use App\Services\InvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -273,24 +274,27 @@ class InvoiceController extends Controller
      */
     public function void(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
-            ->where('company_id', auth()->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        return DB::transaction(function () use ($uid): JsonResponse {
+            $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (!in_array($invoice->status, ['draft', 'issued', 'sent'])) {
+            if (!in_array($invoice->status, ['draft', 'issued', 'sent'], true)) {
+                return response()->json([
+                    'error' => 'Cannot void invoice with status: ' . $invoice->status,
+                ], 422);
+            }
+
+            $invoice->update(['status' => 'void']);
+            $invoice->order()->update(['status' => 'void']);
+
             return response()->json([
-                'error' => 'Cannot void invoice with status: ' . $invoice->status,
-            ], 422);
-        }
-
-        $invoice->update(['status' => 'void']);
-        $invoice->order()->update(['status' => 'void']);
-
-        return response()->json([
-            'success' => true,
-            'invoice' => $invoice->fresh(),
-        ]);
+                'success' => true,
+                'invoice' => $invoice->fresh(),
+            ]);
+        });
     }
 
     public function cancel(string $uid, Request $request): JsonResponse
@@ -308,34 +312,37 @@ class InvoiceController extends Controller
             ], 403);
         }
 
-        $invoice = Invoice::where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        return DB::transaction(function () use ($uid, $validated, $user): JsonResponse {
+            $invoice = Invoice::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (!hash_equals($invoice->invoice_number, trim((string) $validated['invoice_number']))) {
+            if (!hash_equals($invoice->invoice_number, trim((string) $validated['invoice_number']))) {
+                return response()->json([
+                    'error' => 'Invoice number does not match.',
+                ], 422);
+            }
+
+            $existingNotes = trim((string) $invoice->notes);
+            $cancelNote = sprintf(
+                'Deleted from invoices tab on %s by %s after password and invoice number confirmation.',
+                now()->format('Y-m-d H:i:s'),
+                $user->name
+            );
+
+            $invoice->update([
+                'status' => 'cancel',
+                'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote,
+            ]);
+            $invoice->order()->update(['status' => 'cancel']);
+
             return response()->json([
-                'error' => 'Invoice number does not match.',
-            ], 422);
-        }
-
-        $existingNotes = trim((string) $invoice->notes);
-        $cancelNote = sprintf(
-            'Deleted from invoices tab on %s by %s after password and invoice number confirmation.',
-            now()->format('Y-m-d H:i:s'),
-            $user->name
-        );
-
-        $invoice->update([
-            'status' => 'cancel',
-            'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote,
-        ]);
-        $invoice->order()->update(['status' => 'cancel']);
-
-        return response()->json([
-            'success' => true,
-            'invoice' => $invoice->fresh(),
-        ]);
+                'success' => true,
+                'invoice' => $invoice->fresh(),
+            ]);
+        });
     }
 
     /**

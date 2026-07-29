@@ -673,6 +673,7 @@ class PaymentService
                 'advance_balance' => $advanceAfter,
                 'status' => $newStatus,
             ]);
+            $invoice->order()->update(['status' => $newStatus]);
 
             return $settlement->fresh();
         });
