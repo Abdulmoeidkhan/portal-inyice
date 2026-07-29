@@ -65,6 +65,7 @@ services:
         condition: service_healthy
     networks:
       - app_net
+      - traefik_proxy
 
   mysql:
     image: mysql:8.4
@@ -93,3 +94,5 @@ volumes:
 networks:
   app_net:
     driver: bridge
+  traefik_proxy:
+    external: true

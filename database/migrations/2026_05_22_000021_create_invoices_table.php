@@ -25,7 +25,7 @@ return new class extends Migration
             $table->decimal('total_amount', 18, 4)->default(0);
             $table->decimal('outstanding_amount', 18, 4)->default(0);
             $table->decimal('advance_balance', 18, 4)->default(0);
-            $table->enum('status', ['draft', 'issued', 'sent', 'partial_paid', 'paid', 'overdue', 'void'])->default('draft');
+            $table->enum('status', ['draft', 'issued', 'sent', 'partial_paid', 'paid', 'overdue', 'void', 'cancel'])->default('draft');
             $table->decimal('fx_rate_to_base', 18, 8)->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
