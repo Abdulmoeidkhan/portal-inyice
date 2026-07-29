@@ -1305,6 +1305,15 @@ body {
   font-weight: 800;
 }
 
+.voucher-preview-document-title {
+  display: block;
+  margin-bottom: 7px;
+  color: #a46f15 !important;
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .voucher-preview-header .ant-typography-secondary {
   display: block;
   white-space: pre-line;

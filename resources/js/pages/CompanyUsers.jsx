@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
-import { PlusOutlined, ReloadOutlined, TeamOutlined } from '@ant-design/icons';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, Grid } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, TeamOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
 const { Title, Paragraph, Text } = Typography;
@@ -17,11 +17,14 @@ const authHeaders = (json = false) => {
 
 export default function CompanyUsers() {
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const screens = Grid.useBreakpoint();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [limits, setLimits] = useState({ current: 0, max: 4, remaining: 0 });
+  const [editing, setEditing] = useState(null);
 
   const roleOptions = useMemo(
     () => roles.map((role) => ({ value: role.code, label: role.name })),
@@ -29,6 +32,7 @@ export default function CompanyUsers() {
   );
 
   const canCreate = limits.remaining > 0;
+  const compactActions = !screens.sm;
 
   const fetchCompanyUsers = async () => {
     setLoading(true);
@@ -82,6 +86,72 @@ export default function CompanyUsers() {
     }
   };
 
+  const openEdit = (record) => {
+    setEditing(record);
+    editForm.setFieldsValue({
+      name: record.name,
+      email: record.email,
+      role: record.role,
+      is_active: record.is_active,
+      password: undefined,
+      password_confirmation: undefined,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editing) return;
+
+    setSaving(true);
+
+    try {
+      const values = await editForm.validateFields();
+      const response = await fetch(`/api/v1/company-users/${editing.uid}`, {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify(values),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update company user');
+      }
+
+      message.success(data.message || 'Company user updated');
+      setEditing(null);
+      editForm.resetFields();
+      await fetchCompanyUsers();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error.message || 'Unable to update company user');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (record) => {
+    setSaving(true);
+
+    try {
+      const response = await fetch(`/api/v1/company-users/${record.uid}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to delete company user');
+      }
+
+      message.success(data.message || 'Company user deleted');
+      await fetchCompanyUsers();
+    } catch (error) {
+      message.error(error.message || 'Unable to delete company user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const columns = [
     {
       title: 'Name',
@@ -105,6 +175,40 @@ export default function CompanyUsers() {
       dataIndex: 'is_active',
       key: 'status',
       render: (isActive) => <Tag color={isActive ? 'success' : 'default'}>{isActive ? 'Active' : 'Inactive'}</Tag>,
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 132,
+      fixed: 'right',
+      render: (_, record) => {
+        const protectedUser = record.role === 'owner';
+
+        return (
+          <Space>
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              disabled={protectedUser}
+              onClick={() => openEdit(record)}
+            >
+              {compactActions ? null : 'Edit'}
+            </Button>
+            <Popconfirm
+              title="Delete this company user?"
+              description="Their active sessions will be revoked."
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              disabled={protectedUser}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button danger size="small" icon={<DeleteOutlined />} disabled={protectedUser}>
+                {compactActions ? null : 'Delete'}
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -197,10 +301,62 @@ export default function CompanyUsers() {
             <Input.Password placeholder="Repeat temporary password" />
           </Form.Item>
           <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving} disabled={!canCreate}>
-            Create User
+            {compactActions ? null : 'Create User'}
           </Button>
         </Form>
       </Card>
+
+      <Modal
+        title={`Edit ${editing?.name || 'company user'}`}
+        open={!!editing}
+        onOk={handleUpdate}
+        onCancel={() => { setEditing(null); editForm.resetFields(); }}
+        confirmLoading={saving}
+        okText="Save changes"
+      >
+        <Form form={editForm} layout="vertical" name="company-user-edit">
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter the user name' }]}>
+            <Input placeholder="Full name" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Please enter the user email' },
+              { type: 'email', message: 'Please enter a valid email' },
+            ]}
+          >
+            <Input placeholder="user@example.com" />
+          </Form.Item>
+          <Form.Item name="role" label="Role" rules={[{ required: true, message: 'Please select a role' }]}>
+            <Select options={roleOptions} placeholder="Select role" />
+          </Form.Item>
+          <Form.Item name="is_active" label="Status" rules={[{ required: true, message: 'Please select a status' }]}>
+            <Select options={[{ value: true, label: 'Active' }, { value: false, label: 'Inactive' }]} />
+          </Form.Item>
+          <Form.Item name="password" label="New Password" rules={[{ min: 8, message: 'Use at least 8 characters' }]}>
+            <Input.Password placeholder="Leave blank to keep current password" />
+          </Form.Item>
+          <Form.Item
+            name="password_confirmation"
+            label="Confirm New Password"
+            dependencies={['password']}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!getFieldValue('password') || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Repeat new password" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

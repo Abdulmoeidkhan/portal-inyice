@@ -424,6 +424,110 @@ class FinancialApiTest extends TestCase
         $balance->assertJsonPath('account_type', 'bank');
     }
 
+    public function test_customer_advance_receipt_can_be_recorded_without_invoice(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $response = $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 350,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-21',
+            'reference_number' => 'ADV-001',
+            'narration' => 'Trip deposit before invoice',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('receipt.customer.name', 'Test Customer')
+            ->assertJsonPath('receipt.amount', '350.0000')
+            ->assertJsonPath('receipt.reference_number', 'ADV-001');
+
+        $this->assertDatabaseHas('receipts', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 350,
+            'description' => 'Trip deposit before invoice',
+        ]);
+
+        $this->getJson('/api/v1/receipts/customer')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.settlements', []);
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'receipt',
+                'reference' => $response->json('receipt.receipt_number'),
+                'customer_receipts' => 350,
+            ]);
+    }
+
+    public function test_unattached_customers_and_vendors_can_be_updated_and_deleted(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $customer = $this->postJson('/api/v1/customers', [
+            'name' => 'Draft Customer',
+            'type' => 'B2C',
+            'email' => 'draft-customer@test.local',
+            'phone' => '+92-300-3333333',
+        ])->assertCreated()->json('customer');
+
+        $this->patchJson('/api/v1/customers/' . $customer['uid'], [
+            'name' => 'Edited Customer',
+            'type' => 'B2B',
+            'email' => 'edited-customer@test.local',
+            'phone' => '+92-300-4444444',
+            'address' => 'Edited address',
+            'city' => 'Lahore',
+            'country_code' => 'pk',
+        ])->assertOk()
+            ->assertJsonPath('customer.name', 'Edited Customer')
+            ->assertJsonPath('customer.type', 'B2B')
+            ->assertJsonPath('customer.country_code', 'PK')
+            ->assertJsonPath('customer.can_manage', true);
+
+        $this->deleteJson('/api/v1/customers/' . $customer['uid'])->assertOk();
+        $this->assertDatabaseMissing('customers', ['uid' => $customer['uid']]);
+
+        $vendor = $this->postJson('/api/v1/vendors', [
+            'name' => 'Draft Vendor',
+            'type' => 'B2C',
+            'email' => 'draft-vendor@test.local',
+            'payment_terms' => '7 days',
+        ])->assertCreated()->json('vendor');
+
+        $this->patchJson('/api/v1/vendors/' . $vendor['uid'], [
+            'name' => 'Edited Vendor',
+            'type' => 'B2B',
+            'email' => 'edited-vendor@test.local',
+            'phone' => '+92-300-5555555',
+            'address' => 'Vendor address',
+            'city' => 'Karachi',
+            'country_code' => 'pk',
+            'payment_terms' => '14 days',
+        ])->assertOk()
+            ->assertJsonPath('vendor.name', 'Edited Vendor')
+            ->assertJsonPath('vendor.payment_terms', '14 days')
+            ->assertJsonPath('vendor.can_manage', true);
+
+        $this->deleteJson('/api/v1/vendors/' . $vendor['uid'])->assertOk();
+        $this->assertDatabaseMissing('vendors', ['uid' => $vendor['uid']]);
+
+        $this->patchJson('/api/v1/customers/' . $ctx['customer']->uid, [
+            'name' => 'Blocked Customer',
+            'type' => 'B2C',
+        ])->assertStatus(422);
+        $this->deleteJson('/api/v1/customers/' . $ctx['customer']->uid)->assertStatus(422);
+
+        $this->patchJson('/api/v1/vendors/' . $ctx['vendor']->uid, [
+            'name' => 'Blocked Vendor',
+            'type' => 'B2B',
+        ])->assertStatus(422);
+        $this->deleteJson('/api/v1/vendors/' . $ctx['vendor']->uid)->assertStatus(422);
+    }
+
     public function test_bulk_payment_allocates_one_receipt_across_same_customer_invoices(): void
     {
         $ctx = $this->seedTenantContext();

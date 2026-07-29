@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Card, Form, Space, Steps, Tabs, Typography } from 'antd';
+import { Button, Card, Form, Space, Steps, Tabs, Typography, Grid } from 'antd';
+import { SaveOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { createOrderFromVoucherApi, listVendorsApi } from '../services/salesFlowApi';
 import {
@@ -67,6 +68,8 @@ export default function SalesFlow() {
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [vendors, setVendors] = useState([]);
   const canViewCostProfit = currentUserCanViewCostProfit();
+  const screens = Grid.useBreakpoint();
+  const compactActions = !screens.sm;
 
   const parsedHint = useMemo(() => {
     if (!parseResult) {
@@ -237,7 +240,7 @@ export default function SalesFlow() {
       });
 
       setCreatedOrder(data.order);
-      message.success('Order created from voucher data');
+      message.success(`${values.status === 'quote' ? 'Quotation' : 'Order'} created from voucher data`);
     } catch (error) {
       message.error(error.message || 'Order creation failed');
     } finally {
@@ -248,9 +251,9 @@ export default function SalesFlow() {
   return (
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Create Order</Title>
+        <Title level={2} style={{ margin: 0 }}>Create Order / Quotation</Title>
         <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-          Parse GDS when available, complete the voucher fields, then create an order.
+          Parse GDS when available, complete the voucher fields, then create an order or quotation.
         </Paragraph>
       </div>
 
@@ -259,8 +262,8 @@ export default function SalesFlow() {
           current={1}
           items={[
             { title: 'Parse GDS', content: 'Extract flights and passengers' },
-            { title: 'Complete Order', content: 'Confirm order, passenger, and service details' },
-            { title: 'Create Order', content: 'Submit the completed order' },
+            { title: 'Complete Details', content: 'Confirm quotation, order, passenger, and service details' },
+            { title: 'Create', content: 'Submit the completed document' },
           ]}
         />
       </Card>
@@ -316,8 +319,8 @@ export default function SalesFlow() {
 
                 <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
                   <Space>
-                    <Button type="primary" loading={loadingOrder} onClick={() => orderForm.submit()}>
-                      Create Order
+                    <Button type="primary" icon={<SaveOutlined />} loading={loadingOrder} onClick={() => orderForm.submit()}>
+                      {compactActions ? null : 'Create Order / Quotation'}
                     </Button>
                   </Space>
                 </Card>

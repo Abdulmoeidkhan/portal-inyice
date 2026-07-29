@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Form, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, RollbackOutlined } from '@ant-design/icons';
+import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, FileSearchOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -395,7 +395,7 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 250,
+      width: 360,
       fixed:'right',
       render: (_, record) => (
         <Space>
@@ -427,6 +427,13 @@ export default function OrderList() {
             onClick={() => navigate(`/orders/${record.uid}/voucher`)}
           >
             Voucher
+          </Button>
+          <Button
+            size="small"
+            icon={<FileSearchOutlined />}
+            onClick={() => navigate(`/orders/${record.uid}/quotation`)}
+          >
+            Quotation
           </Button>
           {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
             <Button

@@ -62,6 +62,48 @@ class CompanyUserApiTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_admin_can_update_and_delete_non_owner_company_user(): void
+    {
+        $ctx = $this->seedCompanyContext('admin');
+        Sanctum::actingAs($ctx['user']);
+
+        $managedUser = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $ctx['roles']['sales']->id,
+            'name' => 'Managed User',
+            'email' => 'managed-user@test.local',
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        $this->patchJson('/api/v1/company-users/' . $managedUser->uid, [
+            'name' => 'Managed Accounts',
+            'email' => 'managed-accounts@test.local',
+            'role' => 'accounts',
+            'is_active' => false,
+            'password' => 'new-password123',
+            'password_confirmation' => 'new-password123',
+        ])->assertOk()
+            ->assertJsonPath('user.name', 'Managed Accounts')
+            ->assertJsonPath('user.email', 'managed-accounts@test.local')
+            ->assertJsonPath('user.role', 'accounts')
+            ->assertJsonPath('user.is_active', false);
+
+        $this->assertDatabaseHas('users', [
+            'uid' => $managedUser->uid,
+            'email' => 'managed-accounts@test.local',
+            'is_active' => false,
+        ]);
+
+        $this->deleteJson('/api/v1/company-users/' . $managedUser->uid)
+            ->assertOk()
+            ->assertJsonPath('limits.remaining', 1);
+
+        $this->assertDatabaseMissing('users', ['uid' => $managedUser->uid]);
+    }
+
     /**
      * @return array<string, mixed>
      */

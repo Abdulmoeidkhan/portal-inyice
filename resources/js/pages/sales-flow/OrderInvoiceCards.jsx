@@ -16,6 +16,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
     value: customer.id,
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
   }));
+  const createdDocumentLabel = createdOrder?.status === 'quote' ? 'Quotation' : 'Order';
 
   const loadCustomers = async (search = '') => {
     try {
@@ -48,7 +49,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
   };
 
   return (
-    <Card className="border-beam-aurora" title="Order Details">
+    <Card className="border-beam-aurora" title="Order / Quotation Details">
       <Form layout="vertical" form={form} onFinish={onCreateOrder} initialValues={{ currency_code: 'PKR' }}>
         <Row gutter={12}>
           <Col xs={24} md={8}>
@@ -74,13 +75,13 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
             </Form.Item>
           </Col>
           <Col xs={24} md={4}>
-            <Form.Item name="status" label="Order Status" initialValue="order">
+            <Form.Item name="status" label="Document Type" initialValue="order">
               <Select
                 options={[
                   {
-                    label: 'Order Section',
+                    label: 'Create as',
                     options: [
-                      { value: 'quote', label: 'Quote' },
+                      { value: 'quote', label: 'Quotation' },
                       { value: 'order', label: 'Order' },
                       { value: 'cancel', label: 'Cancel' },
                     ],
@@ -98,13 +99,13 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
 
         <Row gutter={12}>
           <Col xs={24}>
-            <Form.Item name="notes" label="Order Notes">
+            <Form.Item name="notes" label="Notes">
               <TextArea rows={3} placeholder="Internal notes" />
             </Form.Item>
           </Col>
         </Row>
 
-        {showSubmit && <Button type="primary" htmlType="submit" loading={loading}>Create Order</Button>}
+        {showSubmit && <Button type="primary" htmlType="submit" loading={loading}>Create Order / Quotation</Button>}
       </Form>
 
       <Modal
@@ -138,7 +139,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
           style={{ marginTop: 16 }}
           type="success"
           showIcon
-          message={`Order ${createdOrder.order_number} created`}
+          message={`${createdDocumentLabel} ${createdOrder.order_number} created`}
           description={
             <Space orientation="vertical">
               <Text>Order ID: {createdOrder.id}</Text>

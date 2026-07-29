@@ -41,6 +41,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::prefix('company-users')->controller(CompanyUserController::class)->group(function () {
         Route::get('/', 'index')->middleware('role:owner,admin')->name('companyUsers.list');
         Route::post('/', 'store')->middleware(['role:owner,admin', 'throttle:sensitive-write'])->name('companyUsers.create');
+        Route::patch('/{uid}', 'update')->middleware(['role:owner,admin', 'throttle:sensitive-write'])->name('companyUsers.update');
+        Route::delete('/{uid}', 'destroy')->middleware(['role:owner,admin', 'throttle:sensitive-write'])->name('companyUsers.delete');
     });
 
     Route::get('/company-profile', [CompanyProfileController::class, 'show'])->name('companyProfile.show');
@@ -93,8 +95,12 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::controller(MasterDataController::class)->group(function () {
         Route::get('/customers', 'customers')->name('customers.list');
         Route::post('/customers', 'storeCustomer')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('customers.create');
+        Route::patch('/customers/{uid}', 'updateCustomer')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('customers.update');
+        Route::delete('/customers/{uid}', 'deleteCustomer')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('customers.delete');
         Route::get('/vendors', 'vendors')->name('vendors.list');
         Route::post('/vendors', 'storeVendor')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('vendors.create');
+        Route::patch('/vendors/{uid}', 'updateVendor')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('vendors.update');
+        Route::delete('/vendors/{uid}', 'deleteVendor')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('vendors.delete');
         Route::get('/staff', 'staff')->name('staff.list');
     });
 

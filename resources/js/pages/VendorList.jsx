@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import { Button, Card, Form, Grid, Input, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
-import { createVendorApi, listVendorsApi } from '../services/salesFlowApi';
+import { createVendorApi, deleteVendorApi, listVendorsApi, updateVendorApi } from '../services/salesFlowApi';
 
 const { Title, Paragraph } = Typography;
 
@@ -11,7 +12,10 @@ export default function VendorList() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const compactActions = !screens.sm;
 
   const loadVendors = async (value = search) => {
     setLoading(true);
@@ -28,18 +32,59 @@ export default function VendorList() {
     loadVendors('');
   }, []);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditing(null);
+    form.resetFields();
+    form.setFieldsValue({ type: 'B2C' });
+    setModalOpen(true);
+  };
+
+  const openEdit = (vendor) => {
+    setEditing(vendor);
+    form.setFieldsValue({
+      name: vendor.name,
+      type: vendor.type || 'B2C',
+      email: vendor.email,
+      phone: vendor.phone,
+      address: vendor.address,
+      city: vendor.city,
+      country_code: vendor.country_code,
+      currency_code: vendor.currency_code,
+      payment_terms: vendor.payment_terms,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
       const values = await form.validateFields();
-      await createVendorApi(values);
+      if (editing) {
+        await updateVendorApi(editing.uid, values);
+      } else {
+        await createVendorApi(values);
+      }
       form.resetFields();
+      setEditing(null);
       setModalOpen(false);
-      message.success('Vendor created');
+      message.success(`Vendor ${editing ? 'updated' : 'created'}`);
       loadVendors();
     } catch (error) {
       if (error?.errorFields) return;
-      message.error(error.message || 'Vendor creation failed');
+      message.error(error.message || `Vendor ${editing ? 'update' : 'creation'} failed`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (vendor) => {
+    setSaving(true);
+    try {
+      await deleteVendorApi(vendor.uid);
+      message.success('Vendor deleted');
+      loadVendors();
+    } catch (error) {
+      message.error(error.message || 'Vendor delete failed');
     } finally {
       setSaving(false);
     }
@@ -51,6 +96,31 @@ export default function VendorList() {
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
     { title: 'Currency', dataIndex: 'currency_code', key: 'currency_code', width: 110 },
     { title: 'Payment Terms', dataIndex: 'payment_terms', key: 'payment_terms' },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 132,
+      fixed: 'right',
+      render: (_, vendor) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} disabled={!vendor.can_manage} onClick={() => openEdit(vendor)}>
+            {compactActions ? null : 'Edit'}
+          </Button>
+          <Popconfirm
+            title="Delete this vendor?"
+            description="Only vendors without financial activity can be deleted."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            disabled={!vendor.can_manage}
+            onConfirm={() => handleDelete(vendor)}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />} disabled={!vendor.can_manage}>
+              {compactActions ? null : 'Delete'}
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -73,18 +143,19 @@ export default function VendorList() {
             onChange={(e) => setSearch(e.target.value)}
             onSearch={loadVendors}
           />
-          <Button type="primary" onClick={() => setModalOpen(true)}>Add Vendor</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{compactActions ? null : 'Add Vendor'}</Button>
         </Space>
 
         <Table rowKey="id" loading={loading} columns={columns} dataSource={vendors} pagination={{ pageSize: 20 }} scroll={{ x: 'max-content' }} />
       </Card>
 
       <Modal
-        title="Add Vendor"
+        title={editing ? 'Edit Vendor' : 'Add Vendor'}
         open={modalOpen}
-        onOk={handleCreate}
-        onCancel={() => setModalOpen(false)}
+        onOk={handleSave}
+        onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }}
         confirmLoading={saving}
+        okText={editing ? 'Save changes' : 'Create vendor'}
       >
         <Form layout="vertical" form={form} initialValues={{ type: 'B2C' }}>
           <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Vendor name required' }]}>

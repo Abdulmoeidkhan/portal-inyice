@@ -690,7 +690,7 @@ class OrderController extends Controller
                     'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
                     'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
                     'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? $order->booking_reference,
-                    'status' => 'order',
+                    'status' => $validated['status'] === 'quote' ? 'quote' : 'order',
                     'currency_code' => strtoupper($validated['currency_code']),
                     'total_amount' => 0,
                     'notes' => $validated['notes'] ?? null,

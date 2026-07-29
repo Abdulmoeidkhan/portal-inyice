@@ -322,6 +322,40 @@ class PaymentService
         });
     }
 
+    public function recordCustomerAdvanceReceipt(
+        \App\Models\Customer $customer,
+        float $amount,
+        string $paymentMethod,
+        ?int $accountId,
+        ?string $referenceNumber,
+        ?string $description,
+        ?string $receiptDate,
+        ?int $createdByUserId = null
+    ): Receipt {
+        return DB::transaction(function () use ($customer, $amount, $paymentMethod, $accountId, $referenceNumber, $description, $receiptDate, $createdByUserId): Receipt {
+            $receipt = Receipt::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $customer->tenant_id,
+                'company_id' => $customer->company_id,
+                'customer_id' => $customer->id,
+                'receipt_number' => $this->generateReceiptNumber($customer->company_id),
+                'receipt_date' => $receiptDate ?: now()->toDateString(),
+                'amount' => $amount,
+                'currency_code' => $customer->currency_code ?: $customer->company->base_currency_code,
+                'payment_method' => $paymentMethod,
+                'account_id' => $accountId,
+                'account_type' => $accountId ? ($paymentMethod === 'cash' ? 'cash' : 'bank') : null,
+                'reference_number' => $referenceNumber,
+                'description' => $description ?: 'Customer advance receipt',
+                'created_by_user_id' => $createdByUserId ?? Auth::id() ?? 1,
+            ]);
+
+            $this->recordReceiptLedger($receipt);
+
+            return $receipt->fresh('customer:id,name');
+        });
+    }
+
     public function updateReceipt(Receipt $receipt, Collection $invoices, array $data): Receipt
     {
         return DB::transaction(function () use ($receipt, $invoices, $data): Receipt {

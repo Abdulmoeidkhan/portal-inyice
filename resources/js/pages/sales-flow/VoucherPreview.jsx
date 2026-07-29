@@ -242,6 +242,7 @@ export default function VoucherPreview({ order }) {
   const contactLine = [companyAddress, [companyEmail, companyPhone].filter(Boolean).join(' | ')].filter(Boolean).join('\n');
   const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(order.notes) || hasValue(company.footer_logo_url);
   const showInyiceWatermark = company && company.is_paid === false;
+  const documentLabel = order.status === 'quote' ? 'Quotation' : 'Voucher';
 
   return (
     <div className="voucher-preview">
@@ -254,6 +255,7 @@ export default function VoucherPreview({ order }) {
         <header className="voucher-preview-header">
           <div>
             <Title level={3}>{companyName}</Title>
+            <Text className="voucher-preview-document-title">{documentLabel}</Text>
             {contactLine && <Text type="secondary">{contactLine}</Text>}
           </div>
           {company.logo_url && (
@@ -265,7 +267,7 @@ export default function VoucherPreview({ order }) {
           <div className="voucher-reference-table voucher-reference-table-primary">
             {primaryReferenceItems.map(([label, value]) => (
               <div className="voucher-reference-cell" key={label}>
-                <Text type="secondary">{label}</Text>
+                <Text type="secondary">{label === 'Voucher' ? documentLabel : label}</Text>
                 <Text strong>{value}</Text>
               </div>
             ))}

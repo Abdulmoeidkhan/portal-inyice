@@ -47,6 +47,17 @@ export const createCustomerApi = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const updateCustomerApi = (uid, payload) =>
+  apiCall(`/customers/${uid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+export const deleteCustomerApi = (uid) =>
+  apiCall(`/customers/${uid}`, {
+    method: 'DELETE',
+  });
+
 export const listVendorsApi = (search = '') =>
   apiCall(`/vendors${search ? `?search=${encodeURIComponent(search)}` : ''}`);
 
@@ -54,4 +65,15 @@ export const createVendorApi = (payload) =>
   apiCall('/vendors', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+
+export const updateVendorApi = (uid, payload) =>
+  apiCall(`/vendors/${uid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+export const deleteVendorApi = (uid) =>
+  apiCall(`/vendors/${uid}`, {
+    method: 'DELETE',
   });

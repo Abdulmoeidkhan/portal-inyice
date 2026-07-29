@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import { Button, Card, Form, Grid, Input, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
-import { createCustomerApi, listCustomersApi } from '../services/salesFlowApi';
+import { createCustomerApi, deleteCustomerApi, listCustomersApi, updateCustomerApi } from '../services/salesFlowApi';
 
 const { Title, Paragraph } = Typography;
 
@@ -11,7 +12,10 @@ export default function CustomerList() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const compactActions = !screens.sm;
 
   const loadCustomers = async (value = search) => {
     setLoading(true);
@@ -28,18 +32,58 @@ export default function CustomerList() {
     loadCustomers('');
   }, []);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditing(null);
+    form.resetFields();
+    form.setFieldsValue({ type: 'B2C' });
+    setModalOpen(true);
+  };
+
+  const openEdit = (customer) => {
+    setEditing(customer);
+    form.setFieldsValue({
+      name: customer.name,
+      type: customer.type || 'B2C',
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+      city: customer.city,
+      country_code: customer.country_code,
+      currency_code: customer.currency_code,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
       const values = await form.validateFields();
-      await createCustomerApi(values);
+      if (editing) {
+        await updateCustomerApi(editing.uid, values);
+      } else {
+        await createCustomerApi(values);
+      }
       form.resetFields();
+      setEditing(null);
       setModalOpen(false);
-      message.success('Customer created');
+      message.success(`Customer ${editing ? 'updated' : 'created'}`);
       loadCustomers();
     } catch (error) {
       if (error?.errorFields) return;
-      message.error(error.message || 'Customer creation failed');
+      message.error(error.message || `Customer ${editing ? 'update' : 'creation'} failed`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (customer) => {
+    setSaving(true);
+    try {
+      await deleteCustomerApi(customer.uid);
+      message.success('Customer deleted');
+      loadCustomers();
+    } catch (error) {
+      message.error(error.message || 'Customer delete failed');
     } finally {
       setSaving(false);
     }
@@ -50,6 +94,31 @@ export default function CustomerList() {
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
     { title: 'Currency', dataIndex: 'currency_code', key: 'currency_code', width: 110 },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 132,
+      fixed: 'right',
+      render: (_, customer) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} disabled={!customer.can_manage} onClick={() => openEdit(customer)}>
+            {compactActions ? null : 'Edit'}
+          </Button>
+          <Popconfirm
+            title="Delete this customer?"
+            description="Only customers without financial activity can be deleted."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            disabled={!customer.can_manage}
+            onConfirm={() => handleDelete(customer)}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />} disabled={!customer.can_manage}>
+              {compactActions ? null : 'Delete'}
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -72,18 +141,19 @@ export default function CustomerList() {
             onChange={(e) => setSearch(e.target.value)}
             onSearch={loadCustomers}
           />
-          <Button type="primary" onClick={() => setModalOpen(true)}>Add Customer</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{compactActions ? null : 'Add Customer'}</Button>
         </Space>
 
         <Table rowKey="id" loading={loading} columns={columns} dataSource={customers} pagination={{ pageSize: 20 }} scroll={{ x: 'max-content' }} />
       </Card>
 
       <Modal
-        title="Add Customer"
+        title={editing ? 'Edit Customer' : 'Add Customer'}
         open={modalOpen}
-        onOk={handleCreate}
-        onCancel={() => setModalOpen(false)}
+        onOk={handleSave}
+        onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }}
         confirmLoading={saving}
+        okText={editing ? 'Save changes' : 'Create customer'}
       >
         <Form layout="vertical" form={form} initialValues={{ type: 'B2C' }}>
           <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Customer name required' }]}>

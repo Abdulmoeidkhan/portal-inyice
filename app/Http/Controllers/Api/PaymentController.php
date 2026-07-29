@@ -59,6 +59,7 @@ class PaymentController extends Controller
     {
         $query = Receipt::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
+            ->whereNotNull('customer_id')
             ->with(['customer:id,name', 'settlements.invoice:id,invoice_number']);
 
         if ($request->filled('customer_id')) {
@@ -584,11 +585,43 @@ class PaymentController extends Controller
     public function recordAdvance(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'invoice_uid' => 'required|exists:invoices,uid',
+            'invoice_uid' => 'required_without:customer_id|exists:invoices,uid',
+            'customer_id' => 'required_without:invoice_uid|integer|exists:customers,id',
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:cash,bank_transfer,check,card',
             'account_id' => 'nullable|integer',
+            'payment_date' => 'nullable|date',
+            'reference_number' => 'nullable|string|max:100',
+            'narration' => 'nullable|string|max:1000',
         ]);
+
+        if (!empty($validated['customer_id'])) {
+            $customer = Customer::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
+                ->with('company')
+                ->findOrFail((int) $validated['customer_id']);
+            $currency = $customer->currency_code ?: $customer->company->base_currency_code;
+
+            if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $customer->company_id, $currency)) {
+                return response()->json(['error' => 'The selected account is unavailable for this customer advance receipt.'], 422);
+            }
+
+            $receipt = $this->paymentService->recordCustomerAdvanceReceipt(
+                customer: $customer,
+                amount: (float) $validated['amount'],
+                paymentMethod: $validated['payment_method'],
+                accountId: $validated['account_id'] ?? null,
+                referenceNumber: $validated['reference_number'] ?? null,
+                description: $validated['narration'] ?? null,
+                receiptDate: $validated['payment_date'] ?? null,
+                createdByUserId: auth()->id()
+            );
+
+            return response()->json([
+                'success' => true,
+                'receipt' => $receipt,
+            ], 201);
+        }
 
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)

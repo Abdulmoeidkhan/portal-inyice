@@ -78,6 +78,78 @@ class CompanyUserController extends Controller
         ], 201);
     }
 
+    public function update(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $companyUser = $this->companyUser($uid, $user);
+        $roles = $this->availableRoles((int) $user->tenant_id);
+
+        if ($companyUser->hasRole('owner')) {
+            return response()->json(['error' => 'Owner users cannot be edited here.'], 422);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+            'email' => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($companyUser->id)],
+            'role' => ['required', Rule::in($roles->pluck('code')->all())],
+            'is_active' => ['required', 'boolean'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $role = Role::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('code', $validated['role'])
+            ->firstOrFail();
+
+        $companyUser->fill([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'role_id' => $role->id,
+            'is_active' => (bool) $validated['is_active'],
+        ]);
+
+        if (!empty($validated['password'])) {
+            $companyUser->password = $validated['password'];
+            $companyUser->tokens()->delete();
+        }
+
+        if (!$companyUser->is_active) {
+            $companyUser->tokens()->delete();
+        }
+
+        $companyUser->save();
+        $companyUser->load('role:id,code,name');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Company user updated successfully.',
+            'user' => $this->serializeUser($companyUser),
+        ]);
+    }
+
+    public function destroy(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $companyUser = $this->companyUser($uid, $user);
+
+        if ($companyUser->id === $user->id) {
+            return response()->json(['error' => 'You cannot delete your own user account.'], 422);
+        }
+
+        if ($companyUser->hasRole('owner')) {
+            return response()->json(['error' => 'Owner users cannot be deleted.'], 422);
+        }
+
+        $companyUser->tokens()->delete();
+        $companyUser->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Company user deleted successfully.',
+            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit)),
+        ]);
+    }
+
     private function effectiveUserLimit(?int $configuredLimit): int
     {
         return min((int) ($configuredLimit ?: 2), 2);
@@ -104,6 +176,16 @@ class CompanyUserController extends Controller
             'max' => $maxUsers,
             'remaining' => max($maxUsers - $current, 0),
         ];
+    }
+
+    private function companyUser(string $uid, User $user): User
+    {
+        return User::query()
+            ->with('role:id,code,name')
+            ->where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
     }
 
     private function serializeUser(User $user): array

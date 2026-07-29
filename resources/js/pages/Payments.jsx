@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   BankOutlined,
   CheckCircleOutlined,
+  CheckSquareOutlined,
+  ClearOutlined,
   CreditCardOutlined,
   DollarOutlined,
   ReloadOutlined,
@@ -9,7 +11,7 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Col, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { useSearchParams } from 'react-router-dom';
 
@@ -30,10 +32,12 @@ export default function Payments() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editInvoices, setEditInvoices] = useState([]);
-  const [form, setForm] = useState({ date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '' });
+  const [form, setForm] = useState({ mode: 'allocate', date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '', advance_amount: null });
+  const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
   const customer = customers.find((item) => item.id === customerId);
+  const compactActions = !screens.sm;
 
   const loadBaseData = async () => {
     setLoading(true);
@@ -96,6 +100,7 @@ export default function Payments() {
   const selectedInvoices = useMemo(() => invoices.filter((invoice) => selectedKeys.includes(invoice.id)), [invoices, selectedKeys]);
   const totalOutstanding = invoices.reduce((sum, invoice) => sum + Number(invoice.outstanding_amount || 0), 0);
   const allocationTotal = selectedInvoices.reduce((sum, invoice) => sum + Number(allocations[invoice.id] || 0), 0);
+  const receiptTotal = form.mode === 'advance' ? Number(form.advance_amount || 0) : allocationTotal;
 
   const updateSelection = (keys) => {
     const next = { ...allocations };
@@ -110,8 +115,8 @@ export default function Payments() {
 
   const activeAccounts = form.method === 'cash' ? accounts.cash : accounts.bank;
   const submitReceipt = async () => {
-    if (!customerId || selectedInvoices.length === 0 || allocationTotal <= 0 || !form.date) {
-      message.error('Select a customer and allocate a positive amount to at least one invoice');
+    if (!customerId || receiptTotal <= 0 || !form.date || (form.mode === 'allocate' && selectedInvoices.length === 0)) {
+      message.error(form.mode === 'advance' ? 'Select a customer and enter an advance amount' : 'Select a customer and allocate a positive amount to at least one invoice');
       return;
     }
     if (form.method !== 'card' && form.account_id && !activeAccounts.some((account) => account.id === form.account_id)) {
@@ -119,7 +124,7 @@ export default function Payments() {
       return;
     }
     const payload = {
-      amount: allocationTotal,
+      amount: receiptTotal,
       payment_method: form.method,
       payment_date: form.date,
       account_id: form.account_id,
@@ -127,20 +132,28 @@ export default function Payments() {
       narration: form.narration.trim() || null,
     };
     const isBulk = selectedInvoices.length > 1;
-    if (isBulk) payload.allocations = selectedInvoices.map((invoice) => ({ invoice_uid: invoice.uid, amount: Number(allocations[invoice.id]) }));
-    else payload.invoice_uid = selectedInvoices[0].uid;
+    let endpoint = '/api/v1/receipts/customer/record';
+    if (form.mode === 'advance') {
+      endpoint = '/api/v1/receipts/customer/advance';
+      payload.customer_id = customerId;
+    } else if (isBulk) {
+      endpoint = '/api/v1/receipts/customer/record-bulk';
+      payload.allocations = selectedInvoices.map((invoice) => ({ invoice_uid: invoice.uid, amount: Number(allocations[invoice.id]) }));
+    } else {
+      payload.invoice_uid = selectedInvoices[0].uid;
+    }
 
     setSaving(true);
     try {
-      const response = await fetch(isBulk ? '/api/v1/receipts/customer/record-bulk' : '/api/v1/receipts/customer/record', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Could not record receipt');
-      message.success(`${isBulk ? 'Bulk receipt' : 'Receipt'} recorded successfully`);
-      setForm((previous) => ({ ...previous, reference: '', narration: '' }));
+      message.success(`${form.mode === 'advance' ? 'Advance receipt' : isBulk ? 'Bulk receipt' : 'Receipt'} recorded successfully`);
+      setForm((previous) => ({ ...previous, reference: '', narration: '', advance_amount: null }));
       await Promise.all([selectCustomer(customerId), loadBaseData()]);
     } catch (error) {
       message.error(error.message);
@@ -215,7 +228,7 @@ export default function Payments() {
     { title: 'Customer', dataIndex: ['customer', 'name'], width: 210 },
     { title: 'Method', dataIndex: 'payment_method', width: 145, render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference_number', width: 180, ellipsis: true, render: (value) => value || '—' },
-    { title: 'Invoices', dataIndex: 'settlements', width: 260, ellipsis: true, render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || '—' },
+    { title: 'Invoices', dataIndex: 'settlements', width: 260, ellipsis: true, render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || 'Advance' },
     { title: 'Amount', dataIndex: 'amount', width: 145, align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
     { title: 'Actions', key: 'actions', fixed: 'right', width: 125, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
@@ -251,6 +264,19 @@ export default function Payments() {
             </Radio.Group>
           </Col>
           <Col xs={24} md={8}>
+            <Text strong>Receipt type</Text>
+            <Radio.Group value={form.mode} buttonStyle="solid" onChange={(event) => { setSelectedKeys([]); setAllocations({}); setForm((previous) => ({ ...previous, mode: event.target.value })); }}>
+              <Radio.Button value="allocate">Allocate to invoices</Radio.Button>
+              <Radio.Button value="advance">Advance</Radio.Button>
+            </Radio.Group>
+          </Col>
+          {form.mode === 'advance' && (
+            <Col xs={24} md={8}>
+              <Text strong>Advance amount</Text>
+              <InputNumber min={0.01} precision={2} value={form.advance_amount} onChange={(value) => setForm((previous) => ({ ...previous, advance_amount: value }))} />
+            </Col>
+          )}
+          <Col xs={24} md={8}>
             <Text strong>Cash / bank account</Text>
             <Select allowClear disabled={form.method === 'card' || form.method === 'check'} placeholder="Optional account" value={form.account_id} onChange={(value) => setForm((previous) => ({ ...previous, account_id: value }))} options={activeAccounts.filter((item) => !customer?.currency_code || item.currency_code === customer.currency_code).map((item) => ({ value: item.id, label: item.account_name || `${item.bank_name} · ${item.account_number}` }))} />
           </Col>
@@ -259,25 +285,29 @@ export default function Payments() {
         </Row>
 
         <div className="financial-entry-toolbar">
+          {form.mode === 'allocate' ? (
+            <Space wrap>
+              <Button icon={<CheckSquareOutlined />} onClick={() => updateSelection(invoices.map((invoice) => invoice.id))} disabled={!invoices.length}>{compactActions ? null : 'Select all'}</Button>
+              <Button icon={<ClearOutlined />} onClick={() => updateSelection([])} disabled={!selectedKeys.length}>{compactActions ? null : 'Clear'}</Button>
+              <Text type="secondary">{selectedKeys.length} invoice{selectedKeys.length === 1 ? '' : 's'} selected</Text>
+            </Space>
+          ) : <Text type="secondary">Advance receipts stay unallocated until applied from the customer statement workflow.</Text>}
           <Space wrap>
-            <Button onClick={() => updateSelection(invoices.map((invoice) => invoice.id))} disabled={!invoices.length}>Select all</Button>
-            <Button onClick={() => updateSelection([])} disabled={!selectedKeys.length}>Clear</Button>
-            <Text type="secondary">{selectedKeys.length} invoice{selectedKeys.length === 1 ? '' : 's'} selected</Text>
-          </Space>
-          <Space wrap>
-            <div className="allocation-total"><span>Receipt total</span><strong>{customer?.currency_code || ''} {money(allocationTotal)}</strong></div>
-            <Button type="primary" size="large" icon={<SaveOutlined />} loading={saving} disabled={!selectedKeys.length} onClick={submitReceipt}>Record receipt</Button>
+            <div className="allocation-total"><span>Receipt total</span><strong>{customer?.currency_code || ''} {money(receiptTotal)}</strong></div>
+            <Button type="primary" size="large" icon={<SaveOutlined />} loading={saving} disabled={form.mode === 'advance' ? !customerId || receiptTotal <= 0 : !selectedKeys.length} onClick={submitReceipt}>{compactActions ? null : form.mode === 'advance' ? 'Record advance' : 'Record receipt'}</Button>
           </Space>
         </div>
-        <Row justify="center" align="middle" className="financial-table-row">
-          <Col span={24} className="financial-table-column">
-            <Table rowKey="id" loading={loading} columns={invoiceColumns} dataSource={invoices} pagination={false} tableLayout="fixed" scroll={{ x: 1255, ...(invoices.length > 6 ? { y: 410 } : {}) }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: customerId ? 'No open invoices for this customer' : 'Select a customer to load open invoices' }} />
-          </Col>
-        </Row>
+        {form.mode === 'allocate' && (
+          <Row justify="center" align="middle" className="financial-table-row">
+            <Col span={24} className="financial-table-column">
+              <Table rowKey="id" loading={loading} columns={invoiceColumns} dataSource={invoices} pagination={false} tableLayout="fixed" scroll={{ x: 1255, ...(invoices.length > 6 ? { y: 410 } : {}) }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: customerId ? 'No open invoices for this customer' : 'Select a customer to load open invoices' }} />
+            </Col>
+          </Row>
+        )}
       </Card>
 
       <Card className="financial-history-card">
-        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1345 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} />
+        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1345 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>{compactActions ? null : 'Refresh'}</Button>} />
       </Card>
       <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
