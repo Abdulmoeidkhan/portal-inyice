@@ -2,6 +2,7 @@ import React from 'react';
 import { Checkbox, Col, Input, InputNumber, Row, Select, Tabs, Typography } from 'antd';
 import { getAirportLabel } from './airportLookup';
 import RowGroupCard from './RowGroupCard';
+import { stripUtcMidnightSuffix } from '../../services/dateFormat';
 import {
   blankCityTour,
   blankFlight,
@@ -117,7 +118,7 @@ const toNumber = (value) => {
 };
 
 const dateOnlyMs = (value) => {
-  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const match = stripUtcMidnightSuffix(value, '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) {
     return null;
   }

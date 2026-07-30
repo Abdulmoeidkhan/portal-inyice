@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DeleteOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Input, InputNumber, Popconfirm, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -77,7 +78,7 @@ export default function CounterpartyTransaction({ direction, partyType }) {
       <Col xs={24} md={4}><Space.Compact block><Button block type="primary" icon={<SaveOutlined />} loading={loading} onClick={save}>{editingUid ? 'Update' : 'Record'}</Button>{editingUid && <Button onClick={() => { setEditingUid(null); setForm((current) => ({ ...current, amount: null, reference: '', description: '' })); }}>Cancel</Button>}</Space.Compact></Col>
     </Row></Card>
     <Card className="financial-history-card" title={`${transactionLabel} history`}><Table rowKey="id" loading={loading} dataSource={records} scroll={{ x: 850 }} columns={[
-      { title: `${transactionLabel} #`, dataIndex: numberField }, { title: 'Date', dataIndex: dateField, render: (value) => String(value || '').slice(0, 10) },
+      { title: `${transactionLabel} #`, dataIndex: numberField }, { title: 'Date', dataIndex: dateField, render: dateOnly },
       { title: partyLabel, dataIndex: [partyType, 'name'] }, { title: 'Method', dataIndex: 'payment_method', render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
       { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' }, { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
       { title: '', width: 100, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => edit(row)} /><Popconfirm title={`Delete this ${transactionLabel.toLowerCase()}?`} onConfirm={() => remove(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },

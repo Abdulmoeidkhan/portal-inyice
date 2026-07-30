@@ -37,6 +37,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 import VoucherPreview from './sales-flow/VoucherPreview';
 import CancelledReport from './CancelledReport';
 
@@ -517,7 +518,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     ],
     invoices: [
       { title: 'Invoice', dataIndex: 'invoice_number' },
-      { title: 'Date', dataIndex: 'invoice_date' },
+      { title: 'Date', dataIndex: 'invoice_date', render: dateOnly },
       { title: 'Status', dataIndex: 'status', render: (value) => <Tag>{value}</Tag> },
       { title: 'Total', render: (_, row) => money(row.total_amount, row.currency_code) },
       { title: 'Outstanding', render: (_, row) => money(row.outstanding_amount, row.currency_code) },
@@ -525,13 +526,13 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     ],
     payments: [
       { title: 'Payment', dataIndex: 'payment_number' },
-      { title: 'Date', dataIndex: 'payment_date' },
+      { title: 'Date', dataIndex: 'payment_date', render: dateOnly },
       { title: 'Method', dataIndex: 'payment_method' },
       { title: 'Amount', render: (_, row) => money(row.amount, row.currency_code) },
     ],
     receipts: [
       { title: 'Receipt', dataIndex: 'receipt_number' },
-      { title: 'Date', dataIndex: 'receipt_date' },
+      { title: 'Date', dataIndex: 'receipt_date', render: dateOnly },
       { title: 'Method', dataIndex: 'payment_method' },
       { title: 'Amount', render: (_, row) => money(row.amount, row.currency_code) },
     ],
@@ -916,7 +917,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                 { key: 'company', label: 'Company', children: recordModal.data.company?.display_name || '-' },
                 { key: 'customer', label: 'Customer', children: recordModal.data.customer?.name || '-' },
                 { key: 'invoice', label: 'Invoice', children: recordModal.data.invoice_number || '-' },
-                { key: 'date', label: 'Date', children: String(recordModal.data.invoice_date || '').slice(0, 10) },
+                { key: 'date', label: 'Date', children: dateOnly(recordModal.data.invoice_date) },
                 { key: 'status', label: 'Status', children: <Tag>{recordModal.data.status}</Tag> },
                 { key: 'outstanding', label: 'Outstanding', children: money(recordModal.data.outstanding_amount, recordModal.data.currency_code) },
               ]}

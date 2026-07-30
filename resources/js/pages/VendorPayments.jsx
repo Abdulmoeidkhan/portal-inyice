@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BankOutlined, CheckCircleOutlined, CreditCardOutlined, DeleteOutlined, DollarOutlined, EditOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -156,7 +157,7 @@ export default function VendorPayments() {
 
   const payableColumns = [
     { title: 'Order no.', dataIndex: 'order_number', width: 150 },
-    { title: 'Order date', dataIndex: 'date', width: 120 },
+    { title: 'Order date', dataIndex: 'date', width: 120, render: dateOnly },
     { title: 'Booking / folder', dataIndex: 'booking_reference', width: 150, render: (value) => value || '—' },
     { title: 'Net payable', dataIndex: 'net_amount', width: 130, align: 'right', render: money },
     { title: 'Paid', dataIndex: 'paid_amount', width: 120, align: 'right', render: money },
@@ -170,7 +171,7 @@ export default function VendorPayments() {
 
   const historyColumns = [
     { title: 'Payment #', dataIndex: 'payment_number', width: 160 },
-    { title: 'Date', dataIndex: 'payment_date', width: 120, render: (value) => String(value || '').slice(0, 10) },
+    { title: 'Date', dataIndex: 'payment_date', width: 120, render: dateOnly },
     { title: 'Vendor', dataIndex: ['vendor', 'name'] },
     { title: 'Method', dataIndex: 'payment_method', render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' },

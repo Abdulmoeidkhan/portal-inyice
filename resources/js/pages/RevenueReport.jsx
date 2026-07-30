@@ -3,8 +3,7 @@ import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, Skeleton, Empt
 import { message } from '../services/feedback';
 import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
-
-const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
+import { dateOnly } from '../services/dateFormat';
 
 export default function RevenueReport() {
   const [report, setReport] = useState(null);

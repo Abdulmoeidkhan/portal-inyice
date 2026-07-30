@@ -116,8 +116,21 @@ export default function VoucherSummaryCard({ voucher, canViewCostProfit = true }
   const data = buildVoucherSummaryRows(voucher);
   const grandTotal = data.reduce((sum, row) => sum + row.total, 0);
   const grandProfit = data.reduce((sum, row) => sum + row.profit, 0);
+  const passengerNameColumnWidth = 140;
+  const passengerNameColumnStyle = {
+    minWidth: passengerNameColumnWidth,
+    width: passengerNameColumnWidth,
+  };
   const columns = [
-    { title: 'Passenger Name', dataIndex: 'passenger_name', key: 'passenger_name', fixed: 'left', width: 180 },
+    {
+      title: 'Passenger Name',
+      dataIndex: 'passenger_name',
+      key: 'passenger_name',
+      fixed: 'left',
+      width: passengerNameColumnWidth,
+      onCell: () => ({ style: passengerNameColumnStyle }),
+      onHeaderCell: () => ({ style: passengerNameColumnStyle }),
+    },
     { title: 'Flights', dataIndex: 'flights', key: 'flights', align: 'right', render: money },
     { title: 'Visa', dataIndex: 'visa', key: 'visa', align: 'right', render: money },
     { title: 'Transfer', dataIndex: 'transfer', key: 'transfer', align: 'right', render: money },

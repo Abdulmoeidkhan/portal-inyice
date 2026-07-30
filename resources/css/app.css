@@ -1227,6 +1227,7 @@ body {
 
 .list-toolbar {
   display: flex;
+  gap: 10px;
   width: 100%;
   margin-bottom: 16px;
 }
@@ -2108,6 +2109,11 @@ body {
   .responsive-search,
   .responsive-control {
     width: 100% !important;
+  }
+
+  .list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .responsive-summary-grid {

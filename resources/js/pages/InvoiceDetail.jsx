@@ -3,6 +3,7 @@ import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined 
 import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Text, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toFixed(2);
@@ -13,7 +14,7 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const isDiscountLine = (line) => toNumber(line?.total_price) < 0 || /^discount\b/i.test(String(line?.description || '').trim());
-const formatDate = (value) => String(value || '').slice(0, 10) || '-';
+const formatDate = dateOnly;
 const documentForSettlement = (settlement) => settlement.reference_document || settlement.referenceDocument || null;
 const stripVendorDetails = (value) => String(value || '')
   .replace(/\s+Vendor:\s+.+$/i, '')

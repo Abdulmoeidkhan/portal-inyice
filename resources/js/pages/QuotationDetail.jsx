@@ -3,6 +3,7 @@ import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined 
 import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Typography, Watermark } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -13,7 +14,7 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const firstFilled = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '') || '';
-const formatDate = (value) => String(value || '').slice(0, 10) || '-';
+const formatDate = dateOnly;
 const stripVendorDetails = (value) => String(value || '')
   .replace(/\s+Vendor:\s+.+$/i, '')
   .replace(/\s+\((?:vendor|supplier)[^)]+\)/gi, '')

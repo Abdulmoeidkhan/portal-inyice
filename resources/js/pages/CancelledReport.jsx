@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Empty, Input, Row, Statistic, Table, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
 const firstOfMonth = () => { const date = new Date(); date.setDate(1); return dateString(date); };
 const money = (value) => Number(value || 0).toFixed(2);
 

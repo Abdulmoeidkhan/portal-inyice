@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Form, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, FileSearchOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
@@ -96,6 +96,8 @@ export default function OrderList() {
   const [statusFilter, setStatusFilter] = useState('');
   const [invoicingOrderId, setInvoicingOrderId] = useState(null);
   const [refundRequestOrderId, setRefundRequestOrderId] = useState(null);
+  const screens = Grid.useBreakpoint();
+  const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
   const isSalesUser = currentUserIsSales();
 
@@ -336,7 +338,7 @@ export default function OrderList() {
       title: 'Order #',
       dataIndex: 'order_number',
       key: 'order_number',
-      width: 240,
+      width: compactActions ? 170 : 240,
       render: (value, record) => (
         <a onClick={() => fetchOrderDetail(record)}>{value}</a>
       ),
@@ -395,10 +397,11 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 360,
-      fixed:'right',
+      width: compactActions ? 144 : 360,
+      align: compactActions ? 'center' : undefined,
+      fixed: compactActions ? undefined : 'right',
       render: (_, record) => (
-        <Space>
+        <Space size={compactActions ? 6 : 8} wrap={false}>
           {record.status === 'invoice' && !record.invoice && (
             <Button
               type="primary"
@@ -407,7 +410,7 @@ export default function OrderList() {
               loading={invoicingOrderId === record.id}
               onClick={() => createInvoice(record)}
             >
-              Create Invoice
+              {compactActions ? null : 'Create Invoice'}
             </Button>
           )}
           {invoiceSectionStatuses.includes(record.status) && record.invoice && (
@@ -418,7 +421,7 @@ export default function OrderList() {
               loading={refundRequestOrderId === record.id}
               onClick={() => createRefundRequest(record)}
             >
-              Refund Request
+              {compactActions ? null : 'Refund Request'}
             </Button>
           )}
           <Button
@@ -426,14 +429,14 @@ export default function OrderList() {
             icon={<EyeOutlined />}
             onClick={() => navigate(`/orders/${record.uid}/voucher`)}
           >
-            Voucher
+            {compactActions ? null : 'Voucher'}
           </Button>
           <Button
             size="small"
             icon={<FileSearchOutlined />}
             onClick={() => navigate(`/orders/${record.uid}/quotation`)}
           >
-            Quotation
+            {compactActions ? null : 'Quotation'}
           </Button>
           {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
             <Button
@@ -441,7 +444,7 @@ export default function OrderList() {
               icon={<EditOutlined />}
               onClick={() => openEditDrawer(record)}
             >
-              Edit
+              {compactActions ? null : 'Edit'}
             </Button>
           )}
           <Popconfirm
@@ -452,7 +455,7 @@ export default function OrderList() {
             onConfirm={() => handleDelete(record)}
           >
             <Button danger size="small" icon={<DeleteOutlined />}>
-              Delete
+              {compactActions ? null : 'Delete'}
             </Button>
           </Popconfirm>
         </Space>

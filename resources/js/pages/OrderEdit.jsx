@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Sp
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -205,7 +206,7 @@ export default function OrderEdit() {
       title: 'Date',
       dataIndex: 'invoice_date',
       width: 120,
-      render: (value) => String(value || '').slice(0, 10),
+      render: dateOnly,
     },
     {
       title: 'Status',

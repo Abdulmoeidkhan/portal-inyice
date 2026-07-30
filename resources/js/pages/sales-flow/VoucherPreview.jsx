@@ -2,6 +2,7 @@ import React from 'react';
 import { Empty, Table, Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
 import { getAirportCity } from './airportLookup';
+import { stripUtcMidnightSuffix } from '../../services/dateFormat';
 
 const { Text, Title } = Typography;
 
@@ -12,7 +13,7 @@ const dayMs = 24 * 60 * 60 * 1000;
 const cleanRows = (rows, keys) => (Array.isArray(rows) ? rows.filter((row) => keys.some((key) => firstFilled(row?.[key]))) : []);
 
 const dateOnlyMs = (value) => {
-  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const match = stripUtcMidnightSuffix(value, '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) {
     return null;
   }
@@ -75,7 +76,7 @@ const buildPassengerRows = (passengers, visaRows) => {
 };
 
 const formatDate = (value) => {
-  const raw = String(value || '').trim();
+  const raw = stripUtcMidnightSuffix(value, '');
   if (!raw) {
     return '';
   }

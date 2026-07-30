@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Dropdown, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Dropdown, Grid, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toFixed(2);
@@ -32,8 +33,10 @@ export default function InvoiceList() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteInvoiceNumber, setDeleteInvoiceNumber] = useState('');
   const [actionLoadingKey, setActionLoadingKey] = useState('');
+  const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const canEditInvoices = canEditInvoiceOrder();
+  const compactActions = !screens.sm;
 
   const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
     setLoading(true);
@@ -230,30 +233,41 @@ export default function InvoiceList() {
       dataIndex: 'invoice_date',
       key: 'invoice_date',
       width: 130,
+      render: dateOnly,
     },
     {
       title: 'Due Date',
       dataIndex: 'due_date',
       key: 'due_date',
       width: 130,
-      render: (value) => value || '-',
+      render: dateOnly,
     },
     {
       title: 'Action',
       key: 'action',
-      fixed: 'right',
+      width: compactActions ? 172 : 330,
+      align: compactActions ? 'center' : undefined,
+      fixed: compactActions ? undefined : 'right',
       render: (_, invoice) => (
-        <Space>
+        <Space size={compactActions ? 6 : 8} wrap={false}>
           {invoice.is_refund_order ? (
-            <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>Open Order</Button>
+            <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
+              {compactActions ? null : 'Open Order'}
+            </Button>
           ) : (
             <>
-              <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>Invoice</Button>
-              <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>Detailed</Button>
+              <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
+                {compactActions ? null : 'Invoice'}
+              </Button>
+              <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
+                {compactActions ? null : 'Detailed'}
+              </Button>
             </>
           )}
           {invoice.order?.uid && (
-            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>Voucher</Button>
+            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
+              {compactActions ? null : 'Voucher'}
+            </Button>
           )}
           {!invoice.is_refund_order && <Dropdown menu={{ items: [
             { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void', onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
@@ -269,9 +283,11 @@ export default function InvoiceList() {
             ] : []),
             { type: 'divider' },
             { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
-          ] }}><Button size="small" loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>Actions <DownOutlined /></Button></Dropdown>}
+          ] }}><Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>{compactActions ? null : 'Actions'}</Button></Dropdown>}
           {invoice.is_refund_order && canEditInvoices && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>Edit</Button>
+            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
+              {compactActions ? null : 'Edit'}
+            </Button>
           )}
         </Space>
       ),

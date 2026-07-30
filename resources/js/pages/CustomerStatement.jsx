@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
-const dateOnly = (value) => String(value || '').slice(0, 10) || '-';
 const money = (value) => Number(value || 0).toFixed(2);
 const statementTotals = (rows = []) => ({
   debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),

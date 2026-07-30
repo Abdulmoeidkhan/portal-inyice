@@ -11,9 +11,11 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Col, Form, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { useSearchParams } from 'react-router-dom';
+import { createCustomerApi } from '../services/salesFlowApi';
+import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -30,8 +32,11 @@ export default function Payments() {
   const [allocations, setAllocations] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editInvoices, setEditInvoices] = useState([]);
+  const [customerForm] = Form.useForm();
   const [form, setForm] = useState({ mode: 'allocate', date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '', advance_amount: null });
   const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -94,6 +99,29 @@ export default function Payments() {
       message.error(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateCustomer = async () => {
+    setSavingCustomer(true);
+    try {
+      const values = await customerForm.validateFields();
+      const data = await createCustomerApi(values);
+      const createdCustomer = data.customer;
+      setCustomers((current) => {
+        const exists = current.some((item) => item.id === createdCustomer.id);
+        return exists ? current : [...current, createdCustomer].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      customerForm.resetFields();
+      setCustomerModalOpen(false);
+      await selectCustomer(createdCustomer.id);
+      await loadBaseData();
+      message.success('Customer created');
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(error.message || 'Customer creation failed');
+    } finally {
+      setSavingCustomer(false);
     }
   };
 
@@ -201,7 +229,7 @@ export default function Payments() {
 
   const invoiceColumns = [
     { title: 'Invoice no.', dataIndex: 'invoice_number', width: 150 },
-    { title: 'Invoice date', dataIndex: 'invoice_date', width: 125, render: (value) => String(value || '').slice(0, 10) },
+    { title: 'Invoice date', dataIndex: 'invoice_date', width: 125, render: dateOnly },
     { title: 'Booking / folder', dataIndex: ['order', 'booking_reference'], width: 150, render: (value) => value || '—' },
     { title: 'Net amount', dataIndex: 'total_amount', width: 130, align: 'right', render: (value) => money(value) },
     { title: 'Balance', dataIndex: 'outstanding_amount', width: 130, align: 'right', render: (value) => <Text strong>{money(value)}</Text> },
@@ -224,7 +252,7 @@ export default function Payments() {
 
   const historyColumns = [
     { title: 'Receipt #', dataIndex: 'receipt_number', width: 160 },
-    { title: 'Date', dataIndex: 'receipt_date', width: 120, render: (value) => String(value || '').slice(0, 10) },
+    { title: 'Date', dataIndex: 'receipt_date', width: 120, render: dateOnly },
     { title: 'Customer', dataIndex: ['customer', 'name'], width: 210 },
     { title: 'Method', dataIndex: 'payment_method', width: 145, render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference_number', width: 180, ellipsis: true, render: (value) => value || '—' },
@@ -250,7 +278,21 @@ export default function Payments() {
         <Row gutter={[16, 14]} align="bottom">
           <Col xs={24} md={10} lg={7}>
             <Text strong>Customer</Text>
-            <Select showSearch allowClear optionFilterProp="label" placeholder="Select customer" value={customerId} onChange={selectCustomer} options={customers.map((item) => ({ value: item.id, label: item.name }))} />
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder="Select customer"
+              value={customerId}
+              onChange={selectCustomer}
+              options={customers.map((item) => ({ value: item.id, label: `${item.name}${item.phone ? ` - ${item.phone}` : ''}` }))}
+              dropdownRender={(menu) => (
+                <>
+                  {menu}
+                  <Button type="link" block onClick={() => setCustomerModalOpen(true)}>+ Add Customer</Button>
+                </>
+              )}
+            />
           </Col>
           <Col xs={12} md={7} lg={4}><Text strong>Receipt date</Text><Input type="date" value={form.date} onChange={(event) => setForm((previous) => ({ ...previous, date: event.target.value }))} /></Col>
           <Col xs={12} md={7} lg={3}><Text strong>Currency</Text><Input readOnly value={customer?.currency_code || '—'} /></Col>
@@ -309,6 +351,31 @@ export default function Payments() {
       <Card className="financial-history-card">
         <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1345 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>{compactActions ? null : 'Refresh'}</Button>} />
       </Card>
+      <Modal
+        title="Add Customer"
+        open={customerModalOpen}
+        onOk={handleCreateCustomer}
+        onCancel={() => setCustomerModalOpen(false)}
+        confirmLoading={savingCustomer}
+      >
+        <Form layout="vertical" form={customerForm} initialValues={{ type: 'B2C' }}>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Customer name required' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label="Type">
+            <Select options={[{ value: 'B2C', label: 'B2C' }, { value: 'B2B', label: 'B2B' }]} />
+          </Form.Item>
+          <Form.Item name="email" label="Email">
+            <Input />
+          </Form.Item>
+          <Form.Item name="phone" label="Phone">
+            <Input />
+          </Form.Item>
+          <Form.Item name="currency_code" label="Currency Code">
+            <Input placeholder="PKR" maxLength={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
       <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
           <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} /></Col>
