@@ -94,7 +94,8 @@ class ReportService
                 'tenant:id,name,code',
                 'company:id,tenant_id,display_name,legal_name',
                 'customer:id,name',
-                'order:id,order_number,booking_reference',
+                'order:id,uid,order_number,booking_reference,meta,updated_by_user_id',
+                'order.updatedBy:id,name',
             ])
             ->when(!$allTenants, fn ($q) => $q->where('tenant_id', $tenantId)->where('company_id', $companyId))
             ->when($search, function ($q, $search) {
@@ -107,21 +108,81 @@ class ReportService
                 });
             });
 
-        $records = $query->orderByDesc('invoice_date')->orderByDesc('id')->get()->map(fn (Invoice $invoice) => [
+        $invoiceRecords = $query->orderByDesc('invoice_date')->orderByDesc('id')->get()->map(fn (Invoice $invoice) => [
             'uid' => $invoice->uid,
+            'document_type' => 'Invoice',
             'invoice_number' => $invoice->invoice_number,
             'invoice_date' => $invoice->invoice_date?->toDateString(),
             'due_date' => $invoice->due_date?->toDateString(),
             'tenant_name' => $invoice->tenant?->name,
             'company_name' => $invoice->company?->display_name ?: $invoice->company?->legal_name,
             'customer_name' => $invoice->customer?->name,
+            'order_uid' => $invoice->order?->uid,
             'order_number' => $invoice->order?->order_number,
             'booking_reference' => $invoice->order?->booking_reference,
             'currency_code' => $invoice->currency_code,
             'total_amount' => (float) $invoice->total_amount,
             'outstanding_amount' => (float) $invoice->outstanding_amount,
+            'cancelled_by' => $invoice->order?->meta['cancel_approval']['signed_by_name'] ?? $invoice->order?->meta['cancel_signature']['signed_by_name'] ?? $invoice->order?->updatedBy?->name,
+            'cancelled_by_user_id' => $invoice->order?->meta['cancel_approval']['signed_by_user_id'] ?? $invoice->order?->meta['cancel_signature']['signed_by_user_id'] ?? $invoice->order?->updated_by_user_id,
+            'linked_new_order_number' => $invoice->order?->meta['cancel_approval']['new_order_number'] ?? $invoice->order?->meta['cancel_signature']['new_order_number'] ?? null,
             'notes' => $invoice->notes,
         ]);
+
+        $orderQuery = ($allTenants ? Order::withoutGlobalScopes() : Order::query())
+            ->where('status', 'cancel')
+            ->with([
+                'tenant:id,name,code',
+                'company:id,tenant_id,display_name,legal_name',
+                'customer:id,name',
+                'updatedBy:id,name',
+            ])
+            ->whereDoesntHave('invoice', fn ($invoice) => $invoice->where('status', 'cancel'))
+            ->where(function ($dateQuery) use ($fromDate, $toDate) {
+                $dateQuery->whereBetween('issue_date', [$fromDate, $toDate])
+                    ->orWhere(function ($fallbackDateQuery) use ($fromDate, $toDate) {
+                        $fallbackDateQuery->whereNull('issue_date')
+                            ->whereDate('created_at', '>=', $fromDate)
+                            ->whereDate('created_at', '<=', $toDate);
+                    });
+            })
+            ->when(!$allTenants, fn ($q) => $q->where('tenant_id', $tenantId)->where('company_id', $companyId))
+            ->when($search, function ($q, $search) {
+                $q->where(function ($nested) use ($search) {
+                    $nested->where('order_number', 'like', "%{$search}%")
+                        ->orWhere('booking_reference', 'like', "%{$search}%")
+                        ->orWhere('voucher_no', 'like', "%{$search}%")
+                        ->orWhere('notes', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('company', fn ($company) => $company->where('display_name', 'like', "%{$search}%")->orWhere('legal_name', 'like', "%{$search}%"));
+                });
+            });
+
+        $orderRecords = $orderQuery->orderByDesc('issue_date')->orderByDesc('id')->get()->map(fn (Order $order) => [
+            'uid' => $order->uid,
+            'document_type' => 'Order',
+            'invoice_number' => null,
+            'invoice_date' => $order->issue_date?->toDateString() ?: $order->created_at?->toDateString(),
+            'due_date' => null,
+            'tenant_name' => $order->tenant?->name,
+            'company_name' => $order->company?->display_name ?: $order->company?->legal_name,
+            'customer_name' => $order->customer?->name,
+            'order_uid' => $order->uid,
+            'order_number' => $order->order_number,
+            'booking_reference' => $order->booking_reference,
+            'currency_code' => $order->currency_code,
+            'total_amount' => (float) $order->total_amount,
+            'outstanding_amount' => 0.0,
+            'cancelled_by' => $order->meta['cancel_approval']['signed_by_name'] ?? $order->meta['cancel_signature']['signed_by_name'] ?? $order->updatedBy?->name,
+            'cancelled_by_user_id' => $order->meta['cancel_approval']['signed_by_user_id'] ?? $order->meta['cancel_signature']['signed_by_user_id'] ?? $order->updated_by_user_id,
+            'linked_new_order_number' => $order->meta['cancel_approval']['new_order_number'] ?? $order->meta['cancel_signature']['new_order_number'] ?? null,
+            'notes' => $order->notes,
+        ]);
+
+        $records = $invoiceRecords
+            ->concat($orderRecords)
+            ->sortByDesc(fn (array $record) => ($record['invoice_date'] ?? '') . '|' . $record['uid'])
+            ->values();
 
         return [
             'report_date' => now()->toDateString(),

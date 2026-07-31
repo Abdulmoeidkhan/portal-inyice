@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, FileSearchOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
@@ -44,7 +44,6 @@ const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', '
 const statusFilterOptions = [
   { label: 'Quote', value: 'quote' },
   { label: 'Order', value: 'order' },
-  { label: 'Cancel', value: 'cancel' },
   { label: 'Refund Request', value: 'refund_request' },
 ];
 
@@ -52,6 +51,15 @@ const currentUserIsSales = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return user.role === 'sales';
+  } catch {
+    return false;
+  }
+};
+
+const currentUserCanDeleteOrders = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return ['admin', 'owner'].includes(user.role);
   } catch {
     return false;
   }
@@ -96,10 +104,14 @@ export default function OrderList() {
   const [statusFilter, setStatusFilter] = useState('');
   const [invoicingOrderId, setInvoicingOrderId] = useState(null);
   const [refundRequestOrderId, setRefundRequestOrderId] = useState(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [pendingCancelValues, setPendingCancelValues] = useState(null);
+  const [cancelPassword, setCancelPassword] = useState('');
   const screens = Grid.useBreakpoint();
   const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
   const isSalesUser = currentUserIsSales();
+  const canDeleteOrders = currentUserCanDeleteOrders();
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -271,22 +283,30 @@ export default function OrderList() {
 
   const closeEditDrawer = () => {
     setEditingOrder(null);
+    setCancelConfirmOpen(false);
+    setPendingCancelValues(null);
+    setCancelPassword('');
     form.resetFields();
   };
 
-  const handleEdit = async () => {
+  const saveEditedOrder = async (values, password = null) => {
     if (!editingOrder) {
       return;
     }
 
     setSaving(true);
     try {
-      const values = await form.validateFields();
+      const payload = { ...values };
+      if (payload.status === 'cancel' && editingOrder.status !== 'cancel') {
+        payload.cancel_password = password;
+      } else {
+        delete payload.cancel_password;
+      }
 
       const response = await fetch(`/api/v1/orders/${editingOrder.uid}`, {
         method: 'PATCH',
         headers: authHeaders(true),
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -308,6 +328,37 @@ export default function OrderList() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEdit = async () => {
+    if (!editingOrder) {
+      return;
+    }
+
+    try {
+      const values = await form.validateFields();
+      if (values.status === 'cancel' && editingOrder.status !== 'cancel') {
+        setPendingCancelValues(values);
+        setCancelPassword('');
+        setCancelConfirmOpen(true);
+        return;
+      }
+
+      saveEditedOrder(values);
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error.message || 'Failed to update order');
+      }
+    }
+  };
+
+  const confirmCancelOrder = () => {
+    if (!cancelPassword) {
+      message.error('Enter your login password to cancel this order');
+      return;
+    }
+
+    saveEditedOrder(pendingCancelValues, cancelPassword);
   };
 
   const handleDelete = async (order) => {
@@ -447,17 +498,19 @@ export default function OrderList() {
               {compactActions ? null : 'Edit'}
             </Button>
           )}
-          <Popconfirm
-            title="Delete order?"
-            description="This removes the order if no invoice exists for it."
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button danger size="small" icon={<DeleteOutlined />}>
-              {compactActions ? null : 'Delete'}
-            </Button>
-          </Popconfirm>
+          {canDeleteOrders && (
+            <Popconfirm
+              title="Delete order?"
+              description="This removes the order if no invoice exists for it."
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button danger size="small" icon={<DeleteOutlined />}>
+                {compactActions ? null : 'Delete'}
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -639,6 +692,30 @@ export default function OrderList() {
           </Space>
         </Card>
       </Drawer>
+
+      <Modal
+        title="Confirm Order Cancellation"
+        open={cancelConfirmOpen}
+        okText="Cancel Order"
+        okButtonProps={{ danger: true, loading: saving }}
+        confirmLoading={saving}
+        onOk={confirmCancelOrder}
+        onCancel={() => {
+          setCancelConfirmOpen(false);
+          setPendingCancelValues(null);
+          setCancelPassword('');
+        }}
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text type="secondary">Enter your login password to confirm this cancellation.</Text>
+          <Input.Password
+            autoComplete="current-password"
+            value={cancelPassword}
+            onChange={(event) => setCancelPassword(event.target.value)}
+            onPressEnter={confirmCancelOrder}
+          />
+        </Space>
+      </Modal>
     </div>
   );
 }

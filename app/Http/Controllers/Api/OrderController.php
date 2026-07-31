@@ -15,6 +15,7 @@ use App\Services\OrderNumberService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -75,6 +76,16 @@ class OrderController extends Controller
     ];
 
     private const INVOICE_SECTION_STATUSES = [
+        'invoice',
+        'void',
+        'refund',
+        'partial_refund',
+        'paid',
+        'partial_paid',
+    ];
+
+    private const ORDER_TABLE_EXCLUDED_STATUSES = [
+        'cancel',
         'invoice',
         'void',
         'refund',
@@ -146,6 +157,7 @@ class OrderController extends Controller
             'customer_id' => 'required|integer|exists:customers,id',
             'currency_code' => 'nullable|string|size:3',
             'status' => ['nullable', Rule::in(self::ORDER_STATUSES)],
+            'cancel_password' => 'nullable|string',
             'notes' => 'nullable|string',
             'voucher' => 'required|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
@@ -279,6 +291,14 @@ class OrderController extends Controller
 
         $voucher = $this->voucherForUserWrite($validated['voucher'], null, $user);
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
+        $status = $validated['status'] ?? 'order';
+
+        if ($status === 'cancel') {
+            $passwordResponse = $this->validateCancelPassword($user, $validated['cancel_password'] ?? null);
+            if ($passwordResponse) {
+                return $passwordResponse;
+            }
+        }
 
         $profileContact = array_filter([
             'company_name' => $company->display_name,
@@ -295,7 +315,28 @@ class OrderController extends Controller
 
         $voucher['contact'] = array_merge($profileContact, $voucherContact);
 
-        $order = DB::transaction(function () use ($validated, $voucher, $user, $tenantId, $companyId, $currencyCode, $customer) {
+        $order = DB::transaction(function () use ($validated, $voucher, $user, $tenantId, $companyId, $currencyCode, $customer, $status) {
+            $meta = [
+                'voucher_no' => $voucher['voucher_no'] ?? null,
+                'issue_date' => $voucher['issue_date'] ?? null,
+                'package_type' => $voucher['package_type'] ?? null,
+                'emergency_contact' => $voucher['emergency_contact'] ?? null,
+                'contact' => $voucher['contact'] ?? [],
+                'active_sections' => $voucher['active_sections'] ?? [],
+                'flights' => $voucher['flights'] ?? [],
+                'passengers' => $voucher['passengers'] ?? [],
+                'pricing' => $voucher['pricing'] ?? [],
+                'hotels' => $voucher['hotels'] ?? [],
+                'transfers' => $voucher['transfers'] ?? [],
+                'city_tours' => $voucher['city_tours'] ?? [],
+                'visa' => $voucher['visa'] ?? [],
+                'other_services' => $voucher['other_services'] ?? [],
+            ];
+
+            if ($status === 'cancel') {
+                $meta = $this->metaWithCancelApproval($meta, $user);
+            }
+
             $order = Order::create([
                 'tenant_id' => $tenantId,
                 'uid' => (string) Str::ulid(),
@@ -310,28 +351,13 @@ class OrderController extends Controller
                 'active_sections' => $voucher['active_sections'] ?? [],
                 'emergency_contact' => $voucher['emergency_contact'] ?? null,
                 'booking_reference' => $voucher['booking_reference'] ?? null,
-                'status' => $validated['status'] ?? 'order',
+                'status' => $status,
                 'currency_code' => $currencyCode,
                 'total_amount' => 0,
                 'notes' => $validated['notes'] ?? null,
                 'gds_source' => $voucher['gds_source'] ?? null,
                 'gds_parsed_record_id' => $voucher['gds_parsed_record_id'] ?? null,
-                'meta' => [
-                    'voucher_no' => $voucher['voucher_no'] ?? null,
-                    'issue_date' => $voucher['issue_date'] ?? null,
-                    'package_type' => $voucher['package_type'] ?? null,
-                    'emergency_contact' => $voucher['emergency_contact'] ?? null,
-                    'contact' => $voucher['contact'] ?? [],
-                    'active_sections' => $voucher['active_sections'] ?? [],
-                    'flights' => $voucher['flights'] ?? [],
-                    'passengers' => $voucher['passengers'] ?? [],
-                    'pricing' => $voucher['pricing'] ?? [],
-                    'hotels' => $voucher['hotels'] ?? [],
-                    'transfers' => $voucher['transfers'] ?? [],
-                    'city_tours' => $voucher['city_tours'] ?? [],
-                    'visa' => $voucher['visa'] ?? [],
-                    'other_services' => $voucher['other_services'] ?? [],
-                ],
+                'meta' => $meta,
             ]);
 
             $items = $this->buildVoucherOrderItems($voucher, $order->id, $tenantId);
@@ -365,10 +391,10 @@ class OrderController extends Controller
             ->where('company_id', $user->company_id)
             ->with(['customer:id,name', 'items:id,order_id,description,total_price', 'invoice:id,order_id,uid,invoice_number,status,outstanding_amount'])
             ->when(!is_string($status) || $status === '', function ($query) {
-                $query->whereNotIn('status', self::INVOICE_SECTION_STATUSES);
+                $query->whereNotIn('status', self::ORDER_TABLE_EXCLUDED_STATUSES);
             })
             ->when(is_string($status) && $status !== '', function ($query) use ($status) {
-                if (in_array($status, self::INVOICE_SECTION_STATUSES, true)) {
+                if (in_array($status, self::ORDER_TABLE_EXCLUDED_STATUSES, true)) {
                     $query->whereRaw('1 = 0');
                     return;
                 }
@@ -489,6 +515,7 @@ class OrderController extends Controller
             'currency_code' => 'required|string|size:3|exists:currencies,code',
             'total_amount' => 'nullable|numeric',
             'notes' => 'nullable|string',
+            'cancel_password' => 'nullable|string',
             'confirm_invoice_revision' => 'nullable|boolean',
             'voucher' => 'nullable|array',
             'voucher.voucher_no' => 'nullable|string|max:100',
@@ -635,8 +662,16 @@ class OrderController extends Controller
             ->latest('id')
             ->first();
         $previousStatus = (string) $order->status;
+        $isCancellingOrder = $validated['status'] === 'cancel' && $previousStatus !== 'cancel';
 
-        if ($activeInvoice && !$request->boolean('confirm_invoice_revision')) {
+        if ($isCancellingOrder) {
+            $passwordResponse = $this->validateCancelPassword($user, $validated['cancel_password'] ?? null);
+            if ($passwordResponse) {
+                return $passwordResponse;
+            }
+        }
+
+        if ($activeInvoice && !$isCancellingOrder && !$request->boolean('confirm_invoice_revision')) {
             return response()->json([
                 'error' => 'This order already has an invoice. Saving changes will cancel the current invoice and create a new order that can be invoiced manually.',
                 'requires_invoice_revision' => true,
@@ -648,7 +683,7 @@ class OrderController extends Controller
         $createdInvoice = null;
         $voidedInvoice = null;
 
-        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $companyId, $activeInvoice, $previousStatus, &$createdOrder, &$createdInvoice, &$voidedInvoice): void {
+        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $companyId, $activeInvoice, $previousStatus, $isCancellingOrder, &$createdOrder, &$createdInvoice, &$voidedInvoice): void {
             $voucher = isset($validated['voucher'])
                 ? $this->voucherForUserWrite($validated['voucher'], $order->meta ?? [], $user)
                 : null;
@@ -686,6 +721,29 @@ class OrderController extends Controller
                     'visa' => $voucher['visa'] ?? [],
                     'other_services' => $voucher['other_services'] ?? [],
                 ]);
+            }
+
+            if ($activeInvoice && $isCancellingOrder) {
+                $voidedInvoice = $this->cancelInvoiceForCancelledOrder($activeInvoice, $order, $user);
+                $order->update([
+                    'customer_id' => $customer->id,
+                    'voucher_no' => $voucher['voucher_no'] ?? $order->voucher_no,
+                    'issue_date' => $voucher['issue_date'] ?? $order->issue_date,
+                    'package_type' => $voucher['package_type'] ?? $order->package_type,
+                    'active_sections' => $voucher['active_sections'] ?? $order->active_sections,
+                    'emergency_contact' => $voucher['emergency_contact'] ?? $order->emergency_contact,
+                    'booking_reference' => $validated['booking_reference'] ?? $voucher['booking_reference'] ?? $order->booking_reference,
+                    'status' => 'cancel',
+                    'currency_code' => strtoupper($validated['currency_code']),
+                    'total_amount' => $totalAmount,
+                    'notes' => $validated['notes'] ?? null,
+                    'gds_source' => $voucher['gds_source'] ?? $order->gds_source,
+                    'gds_parsed_record_id' => $voucher['gds_parsed_record_id'] ?? $order->gds_parsed_record_id,
+                    'meta' => $this->metaWithCancelApproval($meta, $user),
+                    'updated_by_user_id' => (int) $user->id,
+                ]);
+
+                return;
             }
 
             if ($activeInvoice) {
@@ -731,6 +789,7 @@ class OrderController extends Controller
                 $voidedInvoice = $this->voidInvoiceForEditedOrder($activeInvoice, $createdOrder);
                 $order->update([
                     'status' => 'cancel',
+                    'meta' => $this->metaWithCancelApproval($order->meta ?? [], $user, $createdOrder),
                     'updated_by_user_id' => (int) $user->id,
                 ]);
 
@@ -751,7 +810,9 @@ class OrderController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'gds_source' => $voucher['gds_source'] ?? $order->gds_source,
                 'gds_parsed_record_id' => $voucher['gds_parsed_record_id'] ?? $order->gds_parsed_record_id,
-                'meta' => $meta,
+                'meta' => $isCancellingOrder
+                    ? $this->metaWithCancelApproval($meta, $user)
+                    : $meta,
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
@@ -773,6 +834,92 @@ class OrderController extends Controller
             'invoice_revised' => false,
             'original_order_uid' => $activeInvoice ? $order->uid : null,
         ]);
+    }
+
+    public function recreateCancelled(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
+
+        $sourceOrder = Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('uid', $uid)
+            ->where('status', 'cancel')
+            ->firstOrFail();
+
+        $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
+        if (!empty($sourceMeta['cancel_approval']['new_order_uid']) || !empty($sourceMeta['cancel_signature']['new_order_uid'])) {
+            return response()->json([
+                'error' => 'A new order has already been created from this cancelled order.',
+            ], 422);
+        }
+
+        $newOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
+            $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
+            $newMeta = $sourceMeta;
+            $newMeta['recreated_from_cancelled_order'] = [
+                'order_id' => $sourceOrder->id,
+                'order_uid' => $sourceOrder->uid,
+                'order_number' => $sourceOrder->order_number,
+                'recreated_by_user_id' => (int) $user->id,
+                'recreated_by_name' => $user->name,
+                'recreated_by_role' => $user->role?->code,
+                'recreated_at' => now()->toDateTimeString(),
+            ];
+
+            $newOrder = Order::create([
+                'tenant_id' => $tenantId,
+                'uid' => (string) Str::ulid(),
+                'company_id' => $companyId,
+                'customer_id' => $sourceOrder->customer_id,
+                'vendor_id' => $sourceOrder->vendor_id,
+                'created_by_user_id' => (int) $user->id,
+                'updated_by_user_id' => (int) $user->id,
+                'order_number' => $this->orderNumberService->generateOrderNumber($companyId, $tenantId),
+                'voucher_no' => $sourceOrder->voucher_no,
+                'issue_date' => now()->toDateString(),
+                'package_type' => $sourceOrder->package_type,
+                'active_sections' => $sourceOrder->active_sections,
+                'emergency_contact' => $sourceOrder->emergency_contact,
+                'booking_reference' => $sourceOrder->booking_reference,
+                'status' => 'order',
+                'currency_code' => $sourceOrder->currency_code,
+                'total_amount' => 0,
+                'notes' => trim("Recreated from cancelled order {$sourceOrder->order_number}.\n" . (string) $sourceOrder->notes),
+                'gds_source' => $sourceOrder->gds_source,
+                'gds_parsed_record_id' => $sourceOrder->gds_parsed_record_id,
+                'meta' => $newMeta,
+            ]);
+
+            $this->copyOrderItems($sourceOrder, $newOrder);
+            $newOrder->syncVendorCostsFromVoucher($newMeta);
+            $newOrder->update([
+                'total_amount' => OrderItem::where('order_id', $newOrder->id)->sum('total_price') ?: (float) $sourceOrder->total_amount,
+            ]);
+
+            $sourceMeta['cancel_approval'] = $sourceMeta['cancel_approval'] ?? ($sourceMeta['cancel_signature'] ?? []);
+            unset($sourceMeta['cancel_approval']['signature']);
+            unset($sourceMeta['cancel_signature']);
+            $sourceMeta['cancel_approval']['new_order_id'] = $newOrder->id;
+            $sourceMeta['cancel_approval']['new_order_uid'] = $newOrder->uid;
+            $sourceMeta['cancel_approval']['new_order_number'] = $newOrder->order_number;
+
+            $sourceOrder->update([
+                'meta' => $sourceMeta,
+                'updated_by_user_id' => (int) $user->id,
+            ]);
+
+            return $newOrder;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "New order {$newOrder->order_number} created from cancelled order {$sourceOrder->order_number}.",
+            'order' => $this->orderForUser($newOrder->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']), $user),
+            'original_order_uid' => $sourceOrder->uid,
+            'original_order_number' => $sourceOrder->order_number,
+        ], 201);
     }
 
     public function createRefundRequest(string $uid, Request $request): JsonResponse
@@ -991,6 +1138,31 @@ class OrderController extends Controller
             'advance_balance' => 0,
             'status' => 'cancel',
             'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $voidNote : $voidNote,
+        ]);
+
+        return $invoice->fresh(['lines']);
+    }
+
+    private function cancelInvoiceForCancelledOrder(Invoice $invoice, Order $order, $user): Invoice
+    {
+        $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+        $timestamp = now()->format('Y-m-d H:i:s');
+        $existingNotes = trim((string) $invoice->notes);
+        $cancelNote = "Canceled on {$timestamp} because order {$order->order_number} was cancelled by {$user->name}.";
+
+        $invoice->lines()->update([
+            'unit_price' => 0,
+            'total_price' => 0,
+        ]);
+
+        $invoice->update([
+            'subtotal' => 0,
+            'tax_amount' => 0,
+            'total_amount' => 0,
+            'outstanding_amount' => 0,
+            'advance_balance' => 0,
+            'status' => 'cancel',
+            'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote,
         ]);
 
         return $invoice->fresh(['lines']);
@@ -1420,6 +1592,49 @@ class OrderController extends Controller
     private function isSalesStaff($user): bool
     {
         return $user?->hasRole('sales') === true;
+    }
+
+    private function validateCancelPassword($user, ?string $password): ?JsonResponse
+    {
+        if (!is_string($password) || $password === '') {
+            return response()->json([
+                'message' => 'Your login password is required to cancel an order.',
+                'errors' => [
+                    'cancel_password' => ['Your login password is required to cancel an order.'],
+                ],
+            ], 422);
+        }
+
+        if (!Hash::check($password, (string) $user->password)) {
+            return response()->json([
+                'message' => 'The password is incorrect.',
+                'errors' => [
+                    'cancel_password' => ['The password is incorrect.'],
+                ],
+            ], 422);
+        }
+
+        return null;
+    }
+
+    private function metaWithCancelApproval(array $meta, $user, ?Order $newOrder = null): array
+    {
+        unset($meta['cancel_signature']);
+
+        $meta['cancel_approval'] = [
+            'signed_by_user_id' => (int) $user->id,
+            'signed_by_name' => $user->name,
+            'signed_by_role' => $user->role?->code,
+            'signed_at' => now()->toDateTimeString(),
+        ];
+
+        if ($newOrder) {
+            $meta['cancel_approval']['new_order_id'] = $newOrder->id;
+            $meta['cancel_approval']['new_order_uid'] = $newOrder->uid;
+            $meta['cancel_approval']['new_order_number'] = $newOrder->order_number;
+        }
+
+        return $meta;
     }
 
     private function isInvoiceSectionStatus(string $status): bool

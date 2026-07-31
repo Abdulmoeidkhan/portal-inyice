@@ -183,6 +183,9 @@ export default function OrderEdit() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [pendingCancelSubmit, setPendingCancelSubmit] = useState(null);
+  const [cancelPassword, setCancelPassword] = useState('');
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
 
@@ -390,16 +393,32 @@ export default function OrderEdit() {
     }));
   };
 
-  const submitOrder = async (confirmInvoiceRevision = false) => {
+  const submitOrder = async (confirmInvoiceRevision = false, password = null) => {
     setSaving(true);
     try {
       const values = await form.validateFields();
       const voucherPayload = sanitizeVoucherForSubmit(voucher);
+      const isCancellingOrder = values.status === 'cancel' && order?.status !== 'cancel';
+
+      if (isCancellingOrder && !password) {
+        setPendingCancelSubmit({ confirmInvoiceRevision });
+        setCancelPassword('');
+        setCancelConfirmOpen(true);
+        return;
+      }
+
+      const payload = { ...values };
+      if (isCancellingOrder) {
+        payload.cancel_password = password;
+      } else {
+        delete payload.cancel_password;
+      }
+
       const response = await fetch(`/api/v1/orders/${uid}`, {
         method: 'PATCH',
         headers: authHeaders(true),
         body: JSON.stringify({
-          ...values,
+          ...payload,
           booking_reference: voucherPayload.booking_reference || null,
           voucher: voucherPayload,
           confirm_invoice_revision: confirmInvoiceRevision,
@@ -435,6 +454,9 @@ export default function OrderEdit() {
       } else {
         message.success('Order updated');
       }
+      setCancelConfirmOpen(false);
+      setPendingCancelSubmit(null);
+      setCancelPassword('');
       navigate('/orders');
     } catch (error) {
       if (!error?.errorFields) {
@@ -443,6 +465,15 @@ export default function OrderEdit() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmCancelOrder = () => {
+    if (!cancelPassword) {
+      message.error('Enter your login password to cancel this order');
+      return;
+    }
+
+    submitOrder(pendingCancelSubmit?.confirmInvoiceRevision || false, cancelPassword);
   };
 
   const handleSave = () => submitOrder(false);
@@ -558,6 +589,30 @@ export default function OrderEdit() {
           </Space>
         </Card>
       </Spin>
+
+      <Modal
+        title="Confirm Order Cancellation"
+        open={cancelConfirmOpen}
+        okText="Cancel Order"
+        okButtonProps={{ danger: true, loading: saving }}
+        confirmLoading={saving}
+        onOk={confirmCancelOrder}
+        onCancel={() => {
+          setCancelConfirmOpen(false);
+          setPendingCancelSubmit(null);
+          setCancelPassword('');
+        }}
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text type="secondary">Enter your login password to confirm this cancellation.</Text>
+          <Input.Password
+            autoComplete="current-password"
+            value={cancelPassword}
+            onChange={(event) => setCancelPassword(event.target.value)}
+            onPressEnter={confirmCancelOrder}
+          />
+        </Space>
+      </Modal>
     </div>
   );
 }
