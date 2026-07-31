@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Dropdown, Grid, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 const money = (value) => Number(value || 0).toFixed(2);
 const canEditInvoiceOrder = () => {
   try {
@@ -33,6 +33,7 @@ export default function InvoiceList() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteInvoiceNumber, setDeleteInvoiceNumber] = useState('');
   const [actionLoadingKey, setActionLoadingKey] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const canEditInvoices = canEditInvoiceOrder();
@@ -186,6 +187,56 @@ export default function InvoiceList() {
     }
   };
 
+  const renderInvoiceActions = (invoice, { showLabels = !compactActions } = {}) => (
+    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
+      {invoice.is_refund_order ? (
+        <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
+          {showLabels ? 'Open Order' : null}
+        </Button>
+      ) : (
+        <>
+          <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
+            {showLabels ? 'Invoice' : null}
+          </Button>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
+            {showLabels ? 'Detailed' : null}
+          </Button>
+        </>
+      )}
+      {invoice.order?.uid && (
+        <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
+          {showLabels ? 'Voucher' : null}
+        </Button>
+      )}
+      {!invoice.is_refund_order && (
+        <Dropdown menu={{ items: [
+          { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void', onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
+          { key: 'discount', icon: <PercentageOutlined />, label: 'Add discount', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['paid', 'void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
+          { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
+          { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
+          { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
+          { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
+          ...(canEditInvoices ? [
+            { type: 'divider' },
+            { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => navigate(`/orders/${invoice.order.uid}/edit`) },
+            { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
+          ] : []),
+          { type: 'divider' },
+          { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
+        ] }}>
+          <Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>
+            {showLabels ? 'Actions' : null}
+          </Button>
+        </Dropdown>
+      )}
+      {invoice.is_refund_order && canEditInvoices && (
+        <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
+          {showLabels ? 'Edit' : null}
+        </Button>
+      )}
+    </Space>
+  );
+
   const columns = [
     {
       title: 'Invoice #',
@@ -248,49 +299,8 @@ export default function InvoiceList() {
       width: compactActions ? 172 : 330,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
-      render: (_, invoice) => (
-        <Space size={compactActions ? 6 : 8} wrap={false}>
-          {invoice.is_refund_order ? (
-            <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
-              {compactActions ? null : 'Open Order'}
-            </Button>
-          ) : (
-            <>
-              <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
-                {compactActions ? null : 'Invoice'}
-              </Button>
-              <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
-                {compactActions ? null : 'Detailed'}
-              </Button>
-            </>
-          )}
-          {invoice.order?.uid && (
-            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
-              {compactActions ? null : 'Voucher'}
-            </Button>
-          )}
-          {!invoice.is_refund_order && <Dropdown menu={{ items: [
-            { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || invoice.status === 'void', onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
-            { key: 'discount', icon: <PercentageOutlined />, label: 'Add discount', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['paid', 'void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
-            { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
-            { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
-            { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
-            { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
-            ...(canEditInvoices ? [
-              { type: 'divider' },
-              { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => navigate(`/orders/${invoice.order.uid}/edit`) },
-              { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
-            ] : []),
-            { type: 'divider' },
-            { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
-          ] }}><Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>{compactActions ? null : 'Actions'}</Button></Dropdown>}
-          {invoice.is_refund_order && canEditInvoices && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
-              {compactActions ? null : 'Edit'}
-            </Button>
-          )}
-        </Space>
-      ),
+      onCell: () => ({ onClick: (event) => event.stopPropagation() }),
+      render: (_, invoice) => renderInvoiceActions(invoice),
     },
   ];
 
@@ -339,6 +349,10 @@ export default function InvoiceList() {
             columns={columns}
             dataSource={invoices}
             rowKey="id"
+            onRow={(invoice) => compactActions ? {
+              className: 'mobile-row-clickable',
+              onClick: () => setSelectedInvoice(invoice),
+            } : {}}
             pagination={{
               current: pagination.current,
               pageSize: pagination.pageSize,
@@ -348,6 +362,37 @@ export default function InvoiceList() {
           />
         </Spin>
       </Card>
+      <Drawer
+        title={selectedInvoice?.invoice_number || 'Invoice Detail'}
+        open={Boolean(selectedInvoice)}
+        onClose={() => setSelectedInvoice(null)}
+        size="large"
+      >
+        {selectedInvoice && (
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Descriptions bordered column={1} size="small">
+              <Descriptions.Item label="Invoice #">{selectedInvoice.invoice_number || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Customer">{selectedInvoice.customer?.name || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Order #">{selectedInvoice.order?.order_number || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Status">
+                <Tag color={getStatusColor(selectedInvoice.status)}>{String(selectedInvoice.status || '-').toUpperCase()}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Total">
+                <Text>{selectedInvoice.currency_code || ''} {money(selectedInvoice.total_amount)}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Outstanding">
+                <Text>{selectedInvoice.currency_code || ''} {money(selectedInvoice.outstanding_amount)}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Invoice Date">{dateOnly(selectedInvoice.invoice_date)}</Descriptions.Item>
+              <Descriptions.Item label="Due Date">{dateOnly(selectedInvoice.due_date)}</Descriptions.Item>
+            </Descriptions>
+            <div>
+              <Title level={4}>Actions</Title>
+              {renderInvoiceActions(selectedInvoice, { showLabels: true })}
+            </div>
+          </Space>
+        )}
+      </Drawer>
       <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoadingKey === `${refundInvoice?.uid}:refund`} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
         <Typography.Paragraph>Refundable: {refundInvoice?.currency_code} {money(Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))}</Typography.Paragraph>
         <Typography.Text strong>Amount</Typography.Text>

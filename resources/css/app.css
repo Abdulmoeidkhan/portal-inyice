@@ -441,6 +441,33 @@ body {
   max-width: 100%;
 }
 
+.voucher-section-mobile-affix {
+  position: relative;
+  --beam-angle: 0deg;
+  z-index: 12;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background:
+    linear-gradient(color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%), color-mix(in srgb, var(--app-surface) 96%, var(--app-primary) 4%)) padding-box,
+    conic-gradient(from var(--beam-angle), var(--aurora-a), var(--aurora-b), var(--aurora-c), var(--aurora-a)) border-box;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--app-text) 12%, transparent);
+  animation: auroraRotate 4.8s linear infinite;
+}
+
+.voucher-section-mobile-affix .ant-select-selector {
+  border-color: color-mix(in srgb, var(--app-primary) 36%, var(--app-border)) !important;
+}
+
+.voucher-section-mobile-affix .ant-select-selection-item,
+.voucher-section-mobile-affix .ant-select-arrow {
+  color: var(--app-primary) !important;
+  font-weight: 700;
+}
+
 .dashboard-page {
   display: grid;
   gap: 16px;
@@ -1186,6 +1213,26 @@ body {
   min-width: max-content;
 }
 
+.mobile-row-clickable {
+  cursor: pointer;
+}
+
+.mobile-row-clickable:active > td {
+  background: color-mix(in srgb, var(--app-primary) 10%, var(--app-surface)) !important;
+}
+
+.mobile-detail-actions {
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 8px !important;
+}
+
+.mobile-detail-actions .ant-space-item,
+.mobile-detail-actions .ant-btn {
+  width: 100%;
+}
+
 .revenue-summary-card {
   height: 100%;
 }
@@ -1696,14 +1743,29 @@ body {
 }
 
 .app-utility-float {
-  right: 24px;
+  right: 24px !important;
+  bottom: 92px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-move-top-float {
+  right: 24px !important;
   bottom: 24px;
   opacity: 1;
   transform: translateY(0);
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
-.app-utility-float.is-idle-hidden {
+.app-utility-float .ant-float-btn,
+.app-move-top-float.ant-float-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.app-utility-float.is-idle-hidden,
+.app-move-top-float.is-idle-hidden {
   pointer-events: none;
   opacity: 0;
   transform: translateY(10px);
@@ -1788,7 +1850,12 @@ body {
 
 @media (max-width: 720px) {
   .app-utility-float {
-    right: 16px;
+    right: 16px !important;
+    bottom: 96px;
+  }
+
+  .app-move-top-float {
+    right: 16px !important;
     bottom: 18px;
   }
 
@@ -1835,6 +1902,54 @@ body {
   object-fit: contain;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.company-users-card .ant-table {
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+}
+
+.company-users-card .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.company-user-identity {
+  min-width: 170px;
+}
+
+.company-user-identity .ant-typography {
+  max-width: 190px;
+  line-height: 1.4;
+}
+
+.company-user-identity .ant-typography-secondary {
+  overflow-wrap: anywhere;
+}
+
+.company-user-icon-badge {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 15px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.company-user-icon-badge.is-owner {
+  color: #d99a00;
+}
+
+.company-user-icon-badge.is-user {
+  color: var(--app-primary);
+}
+
+.company-user-icon-badge.is-active {
+  color: #16a34a;
+}
+
+.company-user-icon-badge.is-inactive {
+  color: var(--app-muted);
 }
 
 .auth-wrap {

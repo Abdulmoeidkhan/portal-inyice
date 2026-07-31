@@ -358,6 +358,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [floatControlsVisible, setFloatControlsVisible] = useState(true);
+  const [showMoveTop, setShowMoveTop] = useState(false);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [canUseCalculator, setCanUseCalculator] = useState(() => {
     const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -394,6 +395,21 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
       });
     };
   }, []);
+
+  useEffect(() => {
+    const content = document.querySelector('.app-content');
+    const scrollTarget = content || window;
+
+    const getScrollTop = () => content?.scrollTop || window.scrollY || document.documentElement.scrollTop || 0;
+    const handleScroll = () => setShowMoveTop(getScrollTop() > 120);
+
+    handleScroll();
+    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      scrollTarget.removeEventListener('scroll', handleScroll);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     const token = useAuthToken();
@@ -568,14 +584,6 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             icon={<MenuOutlined />}
           >
             <FloatButton
-              icon={<VerticalAlignTopOutlined />}
-              tooltip="Move to top"
-              onClick={() => {
-                document.querySelector('.app-content')?.scrollTo({ top: 0, behavior: 'smooth' });
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-            />
-            <FloatButton
               icon={compactTheme ? <ExpandOutlined /> : <CompressOutlined />}
               tooltip={compactTheme ? 'Comfortable theme' : 'Compact theme'}
               type="default"
@@ -589,6 +597,18 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               />
             )}
           </FloatButton.Group>
+          {showMoveTop && (
+            <FloatButton
+              className={`app-move-top-float${floatControlsVisible ? '' : ' is-idle-hidden'}`}
+              icon={<VerticalAlignTopOutlined />}
+              type="primary"
+              tooltip="Move to top"
+              onClick={() => {
+                document.querySelector('.app-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          )}
           {canUseCalculator && <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />}
         </Content>
       </Layout>

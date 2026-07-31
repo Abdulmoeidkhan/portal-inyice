@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, Grid } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, TeamOutlined } from '@ant-design/icons';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, Grid } from 'antd';
+import { CheckCircleOutlined, CrownOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, StopOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
 const { Title, Paragraph, Text } = Typography;
@@ -33,6 +33,7 @@ export default function CompanyUsers() {
 
   const canCreate = limits.remaining > 0;
   const compactActions = !screens.sm;
+  const compactUserTable = !screens.md;
 
   const fetchCompanyUsers = async () => {
     setLoading(true);
@@ -157,24 +158,46 @@ export default function CompanyUsers() {
       title: 'Name',
       dataIndex: 'name',
       key: 'name',
+      width: compactUserTable ? 210 : undefined,
       render: (name, record) => (
-        <Space direction="vertical" size={0}>
+        <Space className="company-user-identity" direction="vertical" size={0}>
           <Text strong>{name}</Text>
           <Text type="secondary">{record.email}</Text>
         </Space>
       ),
     },
     {
-      title: 'Role',
+      title: compactUserTable ? <UserOutlined /> : 'Role',
       dataIndex: 'role_name',
       key: 'role',
-      render: (roleName, record) => <Tag color={record.role === 'owner' ? 'gold' : 'blue'}>{roleName || record.role}</Tag>,
+      width: compactUserTable ? 58 : 120,
+      align: 'center',
+      render: (roleName, record) => {
+        const label = roleName || record.role;
+        const isOwner = record.role === 'owner';
+
+        return (
+          <Tooltip title={label}>
+            <span className={`company-user-icon-badge ${isOwner ? 'is-owner' : 'is-user'}`} aria-label={`Role: ${label}`}>
+              {isOwner ? <CrownOutlined /> : <UserOutlined />}
+            </span>
+          </Tooltip>
+        );
+      },
     },
     {
-      title: 'Status',
+      title: compactUserTable ? <CheckCircleOutlined /> : 'Status',
       dataIndex: 'is_active',
       key: 'status',
-      render: (isActive) => <Tag color={isActive ? 'success' : 'default'}>{isActive ? 'Active' : 'Inactive'}</Tag>,
+      width: compactUserTable ? 58 : 120,
+      align: 'center',
+      render: (isActive) => (
+        <Tooltip title={isActive ? 'Active' : 'Inactive'}>
+          <span className={`company-user-icon-badge ${isActive ? 'is-active' : 'is-inactive'}`} aria-label={isActive ? 'Status: Active' : 'Status: Inactive'}>
+            {isActive ? <CheckCircleOutlined /> : <StopOutlined />}
+          </span>
+        </Tooltip>
+      ),
     },
     {
       title: 'Actions',
@@ -229,7 +252,7 @@ export default function CompanyUsers() {
       </div>
 
       <Card
-        className="border-beam-aurora"
+        className="border-beam-aurora company-users-card"
         title={(
           <Space>
             <TeamOutlined />
@@ -245,7 +268,7 @@ export default function CompanyUsers() {
           dataSource={users}
           loading={loading}
           pagination={false}
-          scroll={{ x: true }}
+          scroll={{ x: compactUserTable ? 520 : true }}
         />
       </Card>
 

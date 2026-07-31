@@ -1,5 +1,5 @@
-import React from 'react';
-import { Checkbox, Col, Input, InputNumber, Row, Select, Tabs, Typography } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Affix, Checkbox, Col, Grid, Input, InputNumber, Row, Select, Tabs, Typography } from 'antd';
 import { getAirportLabel } from './airportLookup';
 import RowGroupCard from './RowGroupCard';
 import { stripUtcMidnightSuffix } from '../../services/dateFormat';
@@ -15,6 +15,7 @@ import {
 } from './defaults';
 
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 const visaTypeOptions = [
   { value: 'visit', label: 'Visit' },
@@ -169,6 +170,9 @@ export default function VoucherRowsSections({
   onSetHotelLeadPassenger,
   canViewCostProfit = true,
 }) {
+  const screens = useBreakpoint();
+  const useMobileSectionSelect = !screens.md;
+  const [activeTabKey, setActiveTabKey] = useState('passengers');
   const vendorOptions = vendors.map((vendor) => ({
     value: vendor.id,
     label: `${vendor.name}${vendor.phone ? ` - ${vendor.phone}` : ''}`,
@@ -561,13 +565,45 @@ export default function VoucherRowsSections({
       ),
     },
   ].filter(Boolean);
+  const activeTab = tabItems.find((item) => item.key === activeTabKey) || tabItems[0];
+  const sectionOptions = tabItems.map(({ key, label }) => ({ value: key, label }));
+
+  useEffect(() => {
+    if (tabItems.length && !tabItems.some((item) => item.key === activeTabKey)) {
+      setActiveTabKey(tabItems[0].key);
+    }
+  }, [activeTabKey, tabItems]);
 
   return (
-    <Tabs
-      size="small"
-      type="card"
-      items={tabItems}
-      destroyOnHidden={false}
-    />
+    <>
+      {useMobileSectionSelect ? (
+        <>
+          <br />
+          <Affix offsetTop={10} target={() => document.querySelector('.app-content')}>
+            <div className="voucher-section-mobile-affix">
+              <Select
+                className="voucher-section-mobile-select"
+                value={activeTab?.key}
+                options={sectionOptions}
+                onChange={setActiveTabKey}
+                size="large"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Affix>
+          <br />
+          {activeTab?.children}
+        </>
+      ) : (
+        <Tabs
+          activeKey={activeTab?.key}
+          size="small"
+          type="card"
+          items={tabItems}
+          destroyOnHidden={false}
+          onChange={setActiveTabKey}
+        />
+      )}
+    </>
   );
 }

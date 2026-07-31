@@ -10,7 +10,6 @@ import {
   ReloadOutlined,
   RocketOutlined,
   RiseOutlined,
-  SettingOutlined,
   SwapOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
@@ -297,9 +296,6 @@ export default function Dashboard() {
 
         <div className="dashboard-insights-head">
           <Title level={2}>Insights for you</Title>
-          <Button size="small" icon={<SettingOutlined />} onClick={() => navigate('/reports/profit')}>
-            Customize
-          </Button>
         </div>
 
         {finance && (

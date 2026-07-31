@@ -384,6 +384,69 @@ export default function OrderList() {
     }
   };
 
+  const renderOrderActions = (record, { showLabels = !compactActions } = {}) => (
+    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
+      {record.status === 'invoice' && !record.invoice && (
+        <Button
+          type="primary"
+          size="small"
+          icon={<FileDoneOutlined />}
+          loading={invoicingOrderId === record.id}
+          onClick={() => createInvoice(record)}
+        >
+          {showLabels ? 'Create Invoice' : null}
+        </Button>
+      )}
+      {invoiceSectionStatuses.includes(record.status) && record.invoice && (
+        <Button
+          danger
+          size="small"
+          icon={<RollbackOutlined />}
+          loading={refundRequestOrderId === record.id}
+          onClick={() => createRefundRequest(record)}
+        >
+          {showLabels ? 'Refund Request' : null}
+        </Button>
+      )}
+      <Button
+        size="small"
+        icon={<EyeOutlined />}
+        onClick={() => navigate(`/orders/${record.uid}/voucher`)}
+      >
+        {showLabels ? 'Voucher' : null}
+      </Button>
+      <Button
+        size="small"
+        icon={<FileSearchOutlined />}
+        onClick={() => navigate(`/orders/${record.uid}/quotation`)}
+      >
+        {showLabels ? 'Quotation' : null}
+      </Button>
+      {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
+        <Button
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => openEditDrawer(record)}
+        >
+          {showLabels ? 'Edit' : null}
+        </Button>
+      )}
+      {canDeleteOrders && (
+        <Popconfirm
+          title="Delete order?"
+          description="This removes the order if no invoice exists for it."
+          okText="Delete"
+          okButtonProps={{ danger: true }}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button danger size="small" icon={<DeleteOutlined />}>
+            {showLabels ? 'Delete' : null}
+          </Button>
+        </Popconfirm>
+      )}
+    </Space>
+  );
+
   const columns = [
     {
       title: 'Order #',
@@ -451,68 +514,8 @@ export default function OrderList() {
       width: compactActions ? 144 : 360,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
-      render: (_, record) => (
-        <Space size={compactActions ? 6 : 8} wrap={false}>
-          {record.status === 'invoice' && !record.invoice && (
-            <Button
-              type="primary"
-              size="small"
-              icon={<FileDoneOutlined />}
-              loading={invoicingOrderId === record.id}
-              onClick={() => createInvoice(record)}
-            >
-              {compactActions ? null : 'Create Invoice'}
-            </Button>
-          )}
-          {invoiceSectionStatuses.includes(record.status) && record.invoice && (
-            <Button
-              danger
-              size="small"
-              icon={<RollbackOutlined />}
-              loading={refundRequestOrderId === record.id}
-              onClick={() => createRefundRequest(record)}
-            >
-              {compactActions ? null : 'Refund Request'}
-            </Button>
-          )}
-          <Button
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/orders/${record.uid}/voucher`)}
-          >
-            {compactActions ? null : 'Voucher'}
-          </Button>
-          <Button
-            size="small"
-            icon={<FileSearchOutlined />}
-            onClick={() => navigate(`/orders/${record.uid}/quotation`)}
-          >
-            {compactActions ? null : 'Quotation'}
-          </Button>
-          {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEditDrawer(record)}
-            >
-              {compactActions ? null : 'Edit'}
-            </Button>
-          )}
-          {canDeleteOrders && (
-            <Popconfirm
-              title="Delete order?"
-              description="This removes the order if no invoice exists for it."
-              okText="Delete"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button danger size="small" icon={<DeleteOutlined />}>
-                {compactActions ? null : 'Delete'}
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+      onCell: () => ({ onClick: (event) => event.stopPropagation() }),
+      render: (_, record) => renderOrderActions(record),
     },
   ];
 
@@ -551,6 +554,10 @@ export default function OrderList() {
             columns={columns}
             dataSource={orders}
             rowKey="id"
+            onRow={(record) => compactActions ? {
+              className: 'mobile-row-clickable',
+              onClick: () => fetchOrderDetail(record),
+            } : {}}
             pagination={{
               current: pagination.current,
               pageSize: pagination.pageSize,
@@ -573,6 +580,7 @@ export default function OrderList() {
               <Descriptions bordered column={1} size="small">
                 <Descriptions.Item label="Customer">{selectedOrder.customer?.name || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Vendor">{selectedOrder.vendor?.name || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Passenger">{getFirstPassengerName(selectedOrder)}</Descriptions.Item>
                 <Descriptions.Item label="Booking Ref">{selectedOrder.booking_reference || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Status">
                   <Tag color={getStatusColor(selectedOrder.status)}>{formatStatus(selectedOrder.status)}</Tag>
@@ -582,6 +590,8 @@ export default function OrderList() {
                     {selectedOrder.currency_code || ''} {Number(selectedOrder.total_amount || 0).toFixed(2)}
                   </Text>
                 </Descriptions.Item>
+                <Descriptions.Item label="Items">{getVoucherItemCount(selectedOrder)}</Descriptions.Item>
+                <Descriptions.Item label="Created">{selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Notes">{selectedOrder.notes || '-'}</Descriptions.Item>
               </Descriptions>
 
@@ -598,6 +608,12 @@ export default function OrderList() {
                   ))}
                 </Space>
               </div>
+              {compactActions && (
+                <div>
+                  <Title level={4}>Actions</Title>
+                  {renderOrderActions(selectedOrder, { showLabels: true })}
+                </div>
+              )}
             </Space>
           )}
         </Spin>
