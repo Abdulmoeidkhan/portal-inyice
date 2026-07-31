@@ -1303,7 +1303,7 @@ body {
 
 .voucher-preview-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-columns: minmax(0, 1fr) 150px;
   gap: 18px;
   align-items: center;
   padding: 18px 18px 16px;
@@ -1338,10 +1338,10 @@ body {
 
 .voucher-preview-logo {
   justify-self: end;
-  width: 86px;
-  height: 86px;
+  width: 280px;
+  height: 220px;
   object-fit: contain;
-  padding: 8px;
+  padding: 4px;
   border: 1px solid rgba(15, 27, 45, 0.14);
   border-radius: 10px;
   background: #ffffff;
@@ -2199,8 +2199,8 @@ body {
 
   .voucher-preview-logo {
     justify-self: start;
-    width: 76px;
-    height: 76px;
+    width: 132px;
+    height: 96px;
   }
 
   .voucher-reference-table-primary,
@@ -2476,9 +2476,9 @@ body {
   }
 
   .voucher-preview-logo {
-    width: 58px !important;
-    height: 58px !important;
-    padding: 4px !important;
+    width: 104px !important;
+    height: 76px !important;
+    padding: 3px !important;
   }
 
   .voucher-reference-table {

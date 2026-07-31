@@ -541,6 +541,18 @@ export default function VoucherRowsSections({
           {(row, idx) => (
             <Row gutter={8}>
               <Col xs={24} sm={12} md={8} lg={4} xl={12}><Text>Description</Text><Input value={row.description} onChange={(e) => setRowField('other_services', idx, 'description', e.target.value)} /></Col>
+              <Col xs={24} sm={12} md={8} lg={4} xl={6}>
+                <Text>Qty</Text>
+                <InputNumber
+                  min={1}
+                  precision={0}
+                  stringMode
+                  controls={false}
+                  value={row.quantity === '' || row.quantity === null || row.quantity === undefined ? '1' : row.quantity}
+                  onChange={(value) => setRowField('other_services', idx, 'quantity', value ?? '1')}
+                  style={{ width: '100%' }}
+                />
+              </Col>
               {serviceVendorSelect('other_services', idx, row)}
               {serviceMoneyInputs('other_services', idx, row)}
             </Row>

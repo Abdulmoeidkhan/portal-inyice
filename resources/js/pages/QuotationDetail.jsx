@@ -84,10 +84,14 @@ const quotationRows = (order) => {
   toArray(order?.items)
     .filter((item) => toNumber(item.total_price) > 0)
     .forEach((item) => {
-      const key = classifyLine(item);
+      const serviceKey = classifyLine(item);
+      const description = serviceKey === 'other_services'
+        ? (stripVendorDetails(item.description) || 'Other Service')
+        : serviceLabels[serviceKey] || stripVendorDetails(item.description) || 'Service';
+      const key = serviceKey === 'other_services' ? `${serviceKey}:${description.toUpperCase()}` : serviceKey;
       const current = grouped.get(key) || {
         id: key,
-        description: serviceLabels[key] || stripVendorDetails(item.description) || 'Service',
+        description,
         quantity: 0,
         amount: 0,
       };

@@ -169,6 +169,7 @@ export const blankOtherService = () => ({
   vendor_id: null,
   vendor_name: '',
   description: '',
+  quantity: '1',
   cost: '',
   profit: '',
   sales: '',

@@ -59,7 +59,7 @@ const sectionValueKeys = {
   transfers: ['vendor_id', 'vendor_name', 'tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'cost', 'profit', 'sales', 'amount'],
   city_tours: ['vendor_id', 'vendor_name', 'city', 'title', 'attractions', 'date', 'notes', 'cost', 'profit', 'sales', 'amount'],
   visa: ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
-  other_services: ['vendor_id', 'vendor_name', 'description', 'cost', 'profit', 'sales', 'amount'],
+  other_services: ['vendor_id', 'vendor_name', 'description', 'quantity', 'cost', 'profit', 'sales', 'amount'],
 };
 
 const normalizeRows = (rows, factory) => (Array.isArray(rows) && rows.length ? rows : [factory()]);

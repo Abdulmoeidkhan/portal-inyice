@@ -115,6 +115,31 @@ const buildServiceRows = (invoice) => {
       const serviceTotal = serviceLines.reduce((sum, line) => sum + toNumber(line.total_price), 0);
       const metaRows = toArray(meta[service.metaKey]).filter((row) => hasRowValue(row, service.fields));
       const pricedLines = serviceLines.filter((line) => toNumber(line.total_price) > 0);
+
+      if (service.key === 'other_services') {
+        const otherRows = metaRows.length ? metaRows : serviceLines;
+
+        return otherRows
+          .map((row, index) => {
+            const total = toNumber(firstFilled(row.sales, row.amount, row.total_price));
+            const quantity = Math.max(1, Math.round(toNumber(firstFilled(row.quantity, 1))));
+            const description = stripVendorDetails(firstFilled(row.description)) || 'Other Service';
+
+            if (total <= 0 && !description) {
+              return null;
+            }
+
+            return {
+              key: `${service.key}-${index}`,
+              service: description,
+              quantity,
+              unit_price: total / quantity,
+              total_price: total,
+            };
+          })
+          .filter(Boolean);
+      }
+
       const quantity = metaRows.length || pricedLines.length || serviceLines.length;
 
       if (!quantity && serviceTotal <= 0) {
@@ -129,6 +154,7 @@ const buildServiceRows = (invoice) => {
         total_price: serviceTotal,
       };
     })
+    .flat()
     .filter(Boolean);
 };
 

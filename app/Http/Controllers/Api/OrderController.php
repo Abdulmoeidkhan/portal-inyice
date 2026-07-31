@@ -277,6 +277,7 @@ class OrderController extends Controller
             'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
+            'voucher.other_services.*.quantity' => 'nullable|integer|min:1',
             'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
@@ -635,6 +636,7 @@ class OrderController extends Controller
             'voucher.other_services.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
+            'voucher.other_services.*.quantity' => 'nullable|integer|min:1',
             'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
@@ -1262,14 +1264,16 @@ class OrderController extends Controller
     {
         $items = [];
 
-        $pushItem = function (string $description, float $amount, array $payload = []) use (&$items, $orderId, $tenantId): void {
+        $pushItem = function (string $description, float $amount, array $payload = [], int $quantity = 1) use (&$items, $orderId, $tenantId): void {
+            $quantity = max(1, $quantity);
+
             $items[] = [
                 'uid' => (string) Str::ulid(),
                 'tenant_id' => $tenantId,
                 'order_id' => $orderId,
                 'description' => $description,
-                'quantity' => 1,
-                'unit_price' => round($amount, 4),
+                'quantity' => $quantity,
+                'unit_price' => round($amount / $quantity, 4),
                 'total_price' => round($amount, 4),
                 'gds_data' => empty($payload) ? null : json_encode($payload, JSON_UNESCAPED_UNICODE),
                 'created_at' => now(),
@@ -1421,7 +1425,8 @@ class OrderController extends Controller
                 }
 
                 $description = trim((string) ($otherService['description'] ?? 'Other Service') . $this->vendorDescription($otherService));
-                $pushItem($description, $amount, ['type' => 'other_service', 'row' => $otherService]);
+                $quantity = max(1, (int) ($otherService['quantity'] ?? 1));
+                $pushItem($description, $amount, ['type' => 'other_service', 'row' => $otherService], $quantity);
             }
         }
 
@@ -1669,7 +1674,7 @@ class OrderController extends Controller
             'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
             'city_tours' => ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
             'visa' => ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
-            'other_services' => ['description', 'vendor_id', 'vendor_name', 'cost', 'profit', 'sales', 'amount'],
+            'other_services' => ['description', 'quantity', 'vendor_id', 'vendor_name', 'cost', 'profit', 'sales', 'amount'],
         ];
 
         foreach ($serviceRows as $section => $keys) {
