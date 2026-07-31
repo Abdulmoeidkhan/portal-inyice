@@ -152,7 +152,7 @@ class CompanyUserController extends Controller
 
     private function effectiveUserLimit(?int $configuredLimit): int
     {
-        return min((int) ($configuredLimit ?: 2), 2);
+        return max((int) ($configuredLimit ?: 2), 1);
     }
 
     private function availableRoles(int $tenantId)

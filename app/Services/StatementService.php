@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\ExchangeRate;
 use App\Models\Order;
@@ -20,25 +21,28 @@ class StatementService
     public function customerStatement(
         int $tenantId,
         int $companyId,
-        int $customerId,
+        ?int $customerId,
         ?string $fromDate = null,
         ?string $toDate = null
     ): array {
-        $customer = Customer::where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->findOrFail($customerId);
+        $customer = $customerId
+            ? Customer::where('tenant_id', $tenantId)->where('company_id', $companyId)->findOrFail($customerId)
+            : null;
 
-        $baseCurrency = $customer->company->base_currency_code;
-        $customCurrency = $customer->currency_code ?? $baseCurrency;
+        $baseCurrency = $customer?->company?->base_currency_code
+            ?? Company::query()->where('tenant_id', $tenantId)->findOrFail($companyId)->base_currency_code;
+        $customCurrency = $customer?->currency_code ?? $baseCurrency;
+        $isAllCustomers = $customerId === null;
 
         $fromDate = $fromDate ? Carbon::parse($fromDate)->toDateString() : null;
         $toDate = $toDate ? Carbon::parse($toDate)->toDateString() : null;
 
         $invoices = Invoice::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->where('customer_id', $customerId)
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->where('status', '!=', 'void')
             ->whereHas('order')
+            ->with('customer:id,name')
             ->when($fromDate, fn($q) => $q->where('invoice_date', '>=', $fromDate))
             ->when($toDate, fn($q) => $q->where('invoice_date', '<=', $toDate))
             ->orderBy('invoice_date')
@@ -55,6 +59,7 @@ class StatementService
                 'invoice_number' => $invoice->invoice_number,
                 'invoice_date' => $invoice->invoice_date,
                 'due_date' => $invoice->due_date,
+                'customer_name' => $invoice->customer?->name,
                 'status' => $invoice->status,
                 'amount' => $invoice->total_amount,
                 'currency' => $invoice->currency_code,
@@ -66,7 +71,7 @@ class StatementService
             $baseCurrencyInvoices->push($record);
 
             // Convert to customer preferred currency for external statement
-            if ($invoice->currency_code !== $customCurrency) {
+            if (!$isAllCustomers && $invoice->currency_code !== $customCurrency) {
                 $fxRate = ExchangeRate::getRate(
                     $tenantId,
                     $invoice->currency_code,
@@ -88,25 +93,31 @@ class StatementService
         $cashTransactions = collect();
         foreach ($invoices as $invoice) {
             $amount = (float) $invoice->total_amount;
-            $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'description' => 'Customer invoice', 'sales' => $amount, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => $amount, 'credit' => 0, 'sort_order' => 1]);
+            $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'customer_name' => $invoice->customer?->name, 'description' => 'Customer invoice', 'sales' => $amount, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => $amount, 'credit' => 0, 'sort_order' => 1]);
         }
-        Order::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+        Order::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
             ->where('total_amount', '<', 0)
+            ->with('customer:id,name')
             ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))->get()
             ->each(function (Order $order) use ($cashTransactions): void {
                 $amount = abs((float) $order->total_amount);
-                $cashTransactions->push(['id' => 'refund-order-' . $order->id, 'date' => $order->created_at->toDateString(), 'type' => 'refund', 'reference' => $order->order_number, 'description' => $order->notes ?: 'Customer refund request', 'sales' => 0, 'refunds' => $amount, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => 0, 'credit' => $amount, 'sort_order' => 2]);
+                $cashTransactions->push(['id' => 'refund-order-' . $order->id, 'date' => $order->created_at->toDateString(), 'type' => 'refund', 'reference' => $order->order_number, 'customer_name' => $order->customer?->name, 'description' => $order->notes ?: 'Customer refund request', 'sales' => 0, 'refunds' => $amount, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => 0, 'credit' => $amount, 'sort_order' => 2]);
             });
-        Receipt::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+        Receipt::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
+            ->with('customer:id,name')
             ->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get()
-            ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => (float) $receipt->amount, 'customer_payments' => 0, 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 3]));
-        Payment::where('tenant_id', $tenantId)->where('customer_id', $customerId)
+            ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'customer_name' => $receipt->customer?->name, 'description' => $receipt->description ?: 'Receipt from customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => (float) $receipt->amount, 'customer_payments' => 0, 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 3]));
+        Payment::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
+            ->with('customer:id,name')
             ->when($fromDate, fn ($q) => $q->where('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('payment_date', '<=', $toDate))->get()
-            ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'description' => $payment->description ?: 'Payment to customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => (float) $payment->amount, 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 4]));
+            ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'customer_name' => $payment->customer?->name, 'description' => $payment->description ?: 'Payment to customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => (float) $payment->amount, 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 4]));
         $runningCustomerBalance = 0;
         $cashTransactions = $cashTransactions->sortBy([['date', 'asc'], ['sort_order', 'asc']])->values()->map(function ($row) use (&$runningCustomerBalance) {
             $runningCustomerBalance += $row['debit'] - $row['credit']; $row['balance'] = $runningCustomerBalance; unset($row['sort_order']); return $row;
@@ -114,11 +125,12 @@ class StatementService
 
         return [
             'customer' => [
-                'uid' => $customer->uid,
-                'name' => $customer->name,
-                'email' => $customer->email,
-                'phone' => $customer->phone,
-                'billing_address' => $customer->address,
+                'uid' => $customer?->uid,
+                'name' => $customer?->name ?? 'All Customers',
+                'email' => $customer?->email,
+                'phone' => $customer?->phone,
+                'billing_address' => $customer?->address,
+                'is_all' => $isAllCustomers,
             ],
             'statement_date' => now()->toDateString(),
             'period' => [

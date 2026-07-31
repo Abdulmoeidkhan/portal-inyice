@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderVendorCost;
 use App\Models\Payment;
 use App\Models\Receipt;
+use App\Models\Vendor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -690,6 +691,7 @@ class ReportService
 
         $revenue = (float) $invoice->invoiced;
         $profit = $revenue - (float) $cost;
+        $outstanding = $this->dashboardOutstandingBalances($tenantId, $companyId);
 
         return [
             'period' => ['from' => $from, 'to' => $to],
@@ -714,6 +716,127 @@ class ReportService
                 ['type' => 'Cash Out', 'value' => round((float) $cashOut, 2)],
             ],
             'cashflow' => $cashflow->all(),
+            'outstanding' => $outstanding,
+        ];
+    }
+
+    private function dashboardOutstandingBalances(int $tenantId, int $companyId): array
+    {
+        $customers = Invoice::query()
+            ->join('customers', 'customers.id', '=', 'invoices.customer_id')
+            ->where('invoices.tenant_id', $tenantId)
+            ->where('invoices.company_id', $companyId)
+            ->where('invoices.outstanding_amount', '>', 0)
+            ->whereNotIn('invoices.status', ['void', 'cancel'])
+            ->selectRaw('customers.id as id, customers.name as name, invoices.currency_code as currency_code')
+            ->selectRaw('COALESCE(SUM(invoices.outstanding_amount), 0) as amount')
+            ->groupBy('customers.id', 'customers.name', 'invoices.currency_code')
+            ->orderByDesc('amount')
+            ->limit(6)
+            ->get()
+            ->map(fn ($row) => [
+                'type' => 'Customer',
+                'id' => (int) $row->id,
+                'name' => $row->name ?: 'Unnamed customer',
+                'currency_code' => $row->currency_code,
+                'amount' => round((float) $row->amount, 2),
+            ])
+            ->values();
+
+        $customerTotal = Invoice::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('outstanding_amount', '>', 0)
+            ->whereNotIn('status', ['void', 'cancel'])
+            ->sum('outstanding_amount');
+
+        $vendorBalances = $this->dashboardVendorOutstandingBalances($tenantId, $companyId);
+
+        return [
+            'customers' => $customers->all(),
+            'vendors' => $vendorBalances['vendors'],
+            'chart' => $customers->concat($vendorBalances['vendors'])->values()->all(),
+            'summary' => [
+                'customer_total' => round((float) $customerTotal, 2),
+                'vendor_total' => round((float) $vendorBalances['total'], 2),
+            ],
+        ];
+    }
+
+    private function dashboardVendorOutstandingBalances(int $tenantId, int $companyId): array
+    {
+        $orders = Order::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where(function ($query): void {
+                $query->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
+                    ->orWhereIn('status', ['refund_request', 'partial_refund', 'refund']);
+            })
+            ->with(['vendorCosts.vendor:id,name', 'vendor:id,name'])
+            ->get();
+
+        $payables = [];
+
+        foreach ($orders as $order) {
+            if ($order->vendorCosts->isNotEmpty()) {
+                foreach ($order->vendorCosts->groupBy('vendor_id') as $vendorId => $costs) {
+                    $vendor = $costs->first()?->vendor;
+                    $key = (int) $vendorId;
+                    $payables[$key]['name'] ??= $vendor?->name ?: 'Unnamed vendor';
+                    $payables[$key]['amount'] = ($payables[$key]['amount'] ?? 0) + (float) $costs->sum('amount');
+                }
+
+                continue;
+            }
+
+            if ($order->vendor_id) {
+                $key = (int) $order->vendor_id;
+                $payables[$key]['name'] ??= $order->vendor?->name ?: 'Unnamed vendor';
+                $payables[$key]['amount'] = ($payables[$key]['amount'] ?? 0) + $order->vendorPayableAmountFor($key);
+            }
+        }
+
+        $payments = Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('vendor_id')
+            ->selectRaw('vendor_id, COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('vendor_id')
+            ->pluck('amount', 'vendor_id');
+
+        $receipts = Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('vendor_id')
+            ->selectRaw('vendor_id, COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('vendor_id')
+            ->pluck('amount', 'vendor_id');
+
+        $vendorNames = Vendor::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereIn('id', collect(array_keys($payables))->merge($payments->keys())->merge($receipts->keys())->unique()->values())
+            ->pluck('name', 'id');
+
+        $balances = collect($payables)
+            ->map(function (array $row, int $vendorId) use ($payments, $receipts, $vendorNames) {
+                $amount = (float) ($row['amount'] ?? 0) - (float) ($payments[$vendorId] ?? 0) + (float) ($receipts[$vendorId] ?? 0);
+
+                return [
+                    'type' => 'Vendor',
+                    'id' => $vendorId,
+                    'name' => $vendorNames[$vendorId] ?? $row['name'] ?? 'Unnamed vendor',
+                    'currency_code' => null,
+                    'amount' => round(max(0, $amount), 2),
+                ];
+            })
+            ->filter(fn (array $row) => $row['amount'] > 0)
+            ->sortByDesc('amount')
+            ->values();
+
+        return [
+            'vendors' => $balances->take(6)->values()->all(),
+            'total' => $balances->sum('amount'),
         ];
     }
 

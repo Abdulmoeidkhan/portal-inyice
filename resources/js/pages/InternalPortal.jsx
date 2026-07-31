@@ -7,6 +7,7 @@ import {
   Divider,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -55,6 +56,7 @@ const authHeaders = (json = false) => {
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
 const limitLabel = (value) => value ?? 'Unlimited';
+const seatLimit = (company) => Math.max(Number(company?.counts?.users || 1), 1);
 
 function RecordTable({ data, columns }) {
   return (
@@ -198,7 +200,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         throw new Error(data.error || 'Unable to update status');
       }
 
-      message.success('Company status updated');
+      message.success('Company limits updated');
       setDetail(data.company);
       await fetchCompanies();
     } catch (error) {
@@ -695,7 +697,21 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                               onChange={savePaidStatus}
                             />
                           </Form.Item>
-                          <Button type="primary" htmlType="submit" loading={savingLimits}>Update Status</Button>
+                          <Form.Item
+                            name="user_limit"
+                            label="Users"
+                            rules={[{ required: true, message: 'Enter user limit' }]}
+                          >
+                            <InputNumber
+                              min={seatLimit(detail)}
+                              max={500}
+                              step={1}
+                              precision={0}
+                              disabled={savingLimits}
+                              style={{ width: 120 }}
+                            />
+                          </Form.Item>
+                          <Button type="primary" htmlType="submit" loading={savingLimits}>Update Limits</Button>
                         </Form>
                       </>
                     ) : (

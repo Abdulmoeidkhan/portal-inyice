@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Badge, Button, Card, Col, Empty, Layout, Row, Skeleton, Space, Statistic, Tag, Typography } from 'antd';
+import { Badge, Button, Card, Col, Empty, Grid, Layout, Row, Skeleton, Space, Statistic, Tag, Typography, theme } from 'antd';
 import {
   ArrowRightOutlined,
   DollarOutlined,
@@ -14,7 +14,7 @@ import {
   SwapOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
-import { Pie } from '@ant-design/plots';
+import { Column, Pie } from '@ant-design/plots';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 
@@ -139,6 +139,8 @@ function EventListCard({ type, events, loading, onOpen }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
+  const { token: themeToken } = theme.useToken();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
 
@@ -168,6 +170,7 @@ export default function Dashboard() {
   }, []);
 
   const finance = report?.finance;
+  const outstanding = finance?.outstanding;
   const user = storedUser();
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
   const expenses = (finance?.expenses?.length ? finance.expenses : finance?.mix || [])
@@ -202,6 +205,64 @@ export default function Dashboard() {
       items: [{ field: 'value', name: 'Amount', valueFormatter: (value) => money(value) }],
     },
   };
+  const customerOutstandingData = (outstanding?.customers || [])
+    .filter((item) => Number(item.amount) > 0)
+    .map((item) => ({
+      ...item,
+      label: item.name,
+      amount: Number(item.amount || 0),
+    }));
+  const vendorOutstandingData = (outstanding?.vendors || [])
+    .filter((item) => Number(item.amount) > 0)
+    .map((item) => ({
+      ...item,
+      label: item.name,
+      amount: Number(item.amount || 0),
+    }));
+  const outstandingChartConfig = (data, color) => ({
+    data,
+    autoFit: true,
+    xField: 'label',
+    yField: 'amount',
+    height: screens.md ? 260 : 230,
+    padding: screens.md ? 'auto' : [20, 16, 84, 44],
+    color,
+    axis: {
+      x: {
+        title: false,
+        labelFill: themeToken.colorTextSecondary,
+        labelFontSize: screens.md ? 12 : 11,
+        labelAutoHide: true,
+        labelAutoRotate: false,
+      },
+      y: {
+        title: false,
+        labelFill: themeToken.colorTextSecondary,
+        labelFontSize: screens.md ? 12 : 11,
+        grid: true,
+        gridStroke: themeToken.colorSplit,
+        gridLineDash: [4, 4],
+      },
+    },
+    legend: false,
+    label: {
+      position: 'top',
+      text: (item) => money(item.amount),
+      fill: themeToken.colorText,
+      fontSize: screens.md ? 12 : 11,
+      fontWeight: 600,
+    },
+    tooltip: {
+      title: (item) => item.name,
+      items: [{ field: 'amount', name: 'Outstanding', valueFormatter: (value) => money(value) }],
+    },
+    theme: {
+      view: {
+        viewFill: 'transparent',
+        plotFill: 'transparent',
+      },
+    },
+  });
 
   const openVoucher = (event) => {
     if (event?.order_uid) {
@@ -243,6 +304,52 @@ export default function Dashboard() {
 
         {finance && (
           <>
+            <Row gutter={[18, 18]} className="dashboard-outstanding-row">
+              <Col xs={24} xl={12}>
+                <Card
+                  className="dashboard-insight-card dashboard-outstanding-card"
+                  title="Customer outstanding"
+                  extra={<Button size="small" onClick={() => navigate('/statements/customers')}>View statement</Button>}
+                >
+                  {customerOutstandingData.length ? (
+                    <>
+                      <Statistic
+                        className="dashboard-outstanding-total"
+                        title="Total receivable"
+                        value={outstanding?.summary?.customer_total || 0}
+                        formatter={(value) => money(value)}
+                        prefix={<WalletOutlined />}
+                      />
+                      <Column {...outstandingChartConfig(customerOutstandingData, '#2f7d62')} />
+                    </>
+                  ) : (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No customer outstanding" />
+                  )}
+                </Card>
+              </Col>
+              <Col xs={24} xl={12}>
+                <Card
+                  className="dashboard-insight-card dashboard-outstanding-card"
+                  title="Vendor outstanding"
+                  extra={<Button size="small" onClick={() => navigate('/statements/vendors')}>View statement</Button>}
+                >
+                  {vendorOutstandingData.length ? (
+                    <>
+                      <Statistic
+                        className="dashboard-outstanding-total"
+                        title="Total payable"
+                        value={outstanding?.summary?.vendor_total || 0}
+                        formatter={(value) => money(value)}
+                        prefix={<DollarOutlined />}
+                      />
+                      <Column {...outstandingChartConfig(vendorOutstandingData, '#c25c2b')} />
+                    </>
+                  ) : (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No vendor outstanding" />
+                  )}
+                </Card>
+              </Col>
+            </Row>
             <Row gutter={[18, 18]} className="dashboard-insights-grid">
               <Col xs={24} xl={12}>
                 <Card
@@ -307,7 +414,6 @@ export default function Dashboard() {
                 </Card>
               </Col>
             </Row>
-
             <Row gutter={[14, 14]} className="dashboard-finance-pill-row">
               <Col xs={24} md={8}>
                 <Statistic title="Invoiced this month" value={finance.summary.invoiced} formatter={(value) => money(value)} prefix={<DollarOutlined />} />

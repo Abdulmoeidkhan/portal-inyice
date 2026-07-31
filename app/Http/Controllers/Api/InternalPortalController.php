@@ -74,13 +74,24 @@ class InternalPortalController extends Controller
         $validated = $request->validate([
             'monthly_invoice_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
             'order_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
-            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:2'],
+            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
             'is_paid' => ['sometimes', 'boolean'],
         ]);
 
         $validated['monthly_invoice_limit'] = null;
         $validated['order_limit'] = null;
-        $validated['user_limit'] = 2;
+
+        if (array_key_exists('user_limit', $validated)) {
+            $currentUsers = User::withoutGlobalScopes()
+                ->where('company_id', $company->id)
+                ->count();
+
+            if ((int) $validated['user_limit'] < $currentUsers) {
+                return response()->json([
+                    'error' => "User limit cannot be lower than the company's current {$currentUsers} users.",
+                ], 422);
+            }
+        }
 
         $company->update($validated);
 

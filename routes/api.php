@@ -170,6 +170,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
 
     // ========== STATEMENTS ==========
     Route::prefix('statements')->controller(StatementController::class)->middleware('role:admin,accounts')->group(function () {
+        Route::get('/customers', 'allCustomerStatement')->name('statements.customers');
         Route::get('/customer/{customerId}', 'customerStatement')->name('statements.customer');
         Route::get('/vendor/{vendorId}', 'vendorStatement')->name('statements.vendor');
     });

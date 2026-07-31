@@ -11,10 +11,15 @@ const statementTotals = (rows = []) => ({
   credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),
   balance: Number(rows.at(-1)?.balance || 0),
 });
+const invoiceTotals = (rows = []) => ({
+  amount: rows.reduce((sum, row) => sum + Number(row.amount_in_client_currency ?? row.amount ?? 0), 0),
+  paid: rows.reduce((sum, row) => sum + (Number(row.amount || 0) - Number(row.outstanding || 0)), 0),
+  outstanding: rows.reduce((sum, row) => sum + Number(row.outstanding || 0), 0),
+});
 
 export default function CustomerStatement() {
   const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState('all');
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fromDate, setFromDate] = useState('');
@@ -39,7 +44,10 @@ export default function CustomerStatement() {
       const params = new URLSearchParams();
       if (fromDate) params.set('from_date', fromDate);
       if (toDate) params.set('to_date', toDate);
-      const response = await fetch(`/api/v1/statements/customer/${selectedCustomer}?${params}`, {
+      const path = selectedCustomer === 'all'
+        ? '/api/v1/statements/customers'
+        : `/api/v1/statements/customer/${selectedCustomer}`;
+      const response = await fetch(`${path}?${params}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
       const data = await response.json();
@@ -52,17 +60,20 @@ export default function CustomerStatement() {
     }
   };
 
+  const isAllCustomers = Boolean(statement?.customer?.is_all);
   const columns = [
+    ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name', key: 'customer_name' }] : []),
     { title: 'Invoice', dataIndex: 'invoice_number', key: 'invoice_number' },
     { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date', render: dateOnly },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: dateOnly },
-    { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: money },
+    { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: (value, row) => money(value ?? row.amount) },
     { title: 'Paid', key: 'paid', align: 'right', render: (_, row) => money(Number(row.amount || 0) - Number(row.outstanding || 0)) },
     { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: money },
     { title: 'Status', dataIndex: 'status', render: (value) => <Tag>{String(value || '').toUpperCase()}</Tag> },
   ];
   const transactionColumns = [
     { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
+    ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name' }] : []),
     { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description' },
     { title: 'Sales', dataIndex: 'sales', align: 'right', render: money },
     { title: 'Refunds', dataIndex: 'refunds', align: 'right', render: money },
@@ -73,6 +84,7 @@ export default function CustomerStatement() {
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
   const totals = statementTotals(statement?.transactions || []);
+  const invoiceSummary = invoiceTotals(statement?.customer_currency_invoices || []);
 
   return (
     <div className="page-shell page-fade-up">
@@ -89,7 +101,10 @@ export default function CustomerStatement() {
             placeholder="Select customer"
             value={selectedCustomer}
             onChange={(value) => { setSelectedCustomer(value); setStatement(null); }}
-            options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+            options={[
+              { value: 'all', label: 'All Customers' },
+              ...customers.map((customer) => ({ value: customer.id, label: customer.name })),
+            ]}
             style={{ width: 300 }}
             className="responsive-control"
           />
@@ -104,7 +119,7 @@ export default function CustomerStatement() {
           <>
             <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
               <Title level={4} style={{ marginTop: 0 }}>{statement.customer.name}</Title>
-              <Paragraph type="secondary">{statement.customer.email || '-'} · {statement.customer.phone || '-'}</Paragraph>
+              {!isAllCustomers && <Paragraph type="secondary">{statement.customer.email || '-'} · {statement.customer.phone || '-'}</Paragraph>}
               <Row gutter={[16, 16]}>
                 <Col xs={12} lg={6}><Statistic title="Invoices" value={statement.summary.total_invoices} /></Col>
                 <Col xs={12} lg={6}><Statistic title="Total" value={Number(statement.summary.total_amount)} precision={2} prefix={statement.customer_currency} /></Col>
@@ -113,7 +128,22 @@ export default function CustomerStatement() {
               </Row>
             </Card>
             <Card className="border-beam-aurora" title="Invoice Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
-              <Table scroll={{ x: 'max-content' }} columns={columns} dataSource={statement.customer_currency_invoices} rowKey="invoice_uid" pagination={false} />
+              <Table
+                scroll={{ x: 'max-content' }}
+                columns={columns}
+                dataSource={statement.customer_currency_invoices}
+                rowKey="invoice_uid"
+                pagination={false}
+                summary={() => (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 4 : 3}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 4 : 3} align="right"><Text strong>{money(invoiceSummary.amount)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 5 : 4} align="right"><Text strong>{money(invoiceSummary.paid)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(invoiceSummary.outstanding)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} />
+                  </Table.Summary.Row>
+                )}
+              />
             </Card>
             <Card className="border-beam-aurora" title="Receipts and Payments" style={{ marginTop: 16 }}>
               <Table
@@ -124,10 +154,10 @@ export default function CustomerStatement() {
                 pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={8}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 9 : 8}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 9 : 8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 10 : 9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 11 : 10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
                   </Table.Summary.Row>
                 )}
               />
