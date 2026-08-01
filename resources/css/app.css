@@ -237,6 +237,9 @@ body {
 
 .route-transition {
   animation: routeFade 0.35s ease;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .profile-btn {
@@ -264,6 +267,15 @@ body {
 
 .page-shell {
   min-height: calc(100vh - 126px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.page-shell,
+.page-shell *,
+.page-shell *::before,
+.page-shell *::after {
   min-width: 0;
 }
 
@@ -1197,12 +1209,49 @@ body {
 }
 
 .page-shell .ant-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-shell .ant-table,
+.page-shell .ant-table-container {
   max-width: 100%;
 }
 
 .page-shell .ant-table-content {
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch;
+}
+
+.page-shell .ant-card,
+.page-shell .ant-card-body,
+.page-shell .ant-form,
+.page-shell .ant-row,
+.page-shell .ant-col {
+  max-width: 100%;
+}
+
+.page-shell .ant-input-group-wrapper,
+.page-shell .ant-input-search,
+.page-shell .ant-select,
+.page-shell .ant-picker,
+.page-shell .ant-input-number {
+  max-width: 100%;
+}
+
+.page-shell .ant-input-search .ant-input-group,
+.page-shell .ant-input-search .ant-input-wrapper {
+  display: flex;
+  width: 100%;
+}
+
+.page-shell .ant-input-search .ant-input-affix-wrapper,
+.page-shell .ant-input-search .ant-input,
+.page-shell .ant-input-search .ant-input-group-addon {
+  min-width: 0;
 }
 
 .page-shell .ant-tabs-nav-wrap {
@@ -2191,6 +2240,16 @@ body {
 
   .app-content {
     padding: 12px;
+  }
+
+  .app-utility-float,
+  .app-move-top-float {
+    right: 12px !important;
+  }
+
+  .app-utility-float .ant-float-btn-tooltip,
+  .app-move-top-float .ant-float-btn-tooltip {
+    display: none;
   }
 
   .page-shell {
