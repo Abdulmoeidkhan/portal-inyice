@@ -4,6 +4,7 @@ import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Typogra
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import { printDocument } from '../services/printDocument';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -192,8 +193,8 @@ export default function QuotationDetail({ shared = false }) {
     <div className="page-shell page-fade-up invoice-document quotation-document">
       <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>Back</Button>}
-        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-        <Button icon={<DownloadOutlined />} onClick={() => window.print()}>Download PDF</Button>
+        <Button icon={<PrinterOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Print</Button>
+        <Button icon={<DownloadOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareQuotation}>Copy share link</Button>
       </Space>
       <Card className="invoice-paper">

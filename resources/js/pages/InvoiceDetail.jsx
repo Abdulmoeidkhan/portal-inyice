@@ -4,6 +4,7 @@ import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Ty
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import { printDocument } from '../services/printDocument';
 
 const { Title, Text, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toFixed(2);
@@ -82,7 +83,7 @@ const breakupForLine = (line) => {
   return 'Service';
 };
 
-const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line)).map((line, index) => ({
+const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line) && toNumber(line.total_price) > 0).map((line, index) => ({
   ...line,
   id: line.id || `line-${index}`,
   public_description: stripVendorDetails(line.description),
@@ -220,8 +221,8 @@ export default function InvoiceDetail({ shared = false }) {
     <div className="page-shell page-fade-up invoice-document">
       <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/invoices')}>Back</Button>}
-        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-        <Button icon={<DownloadOutlined />} onClick={() => window.print()}>Download PDF</Button>
+        <Button icon={<PrinterOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Print</Button>
+        <Button icon={<DownloadOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Download PDF</Button>
         {!shared && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
       </Space>
       <Card className="invoice-paper">

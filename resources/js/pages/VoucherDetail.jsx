@@ -3,6 +3,7 @@ import { Button, Card, Result, Skeleton, Space } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { printDocument } from '../services/printDocument';
 import VoucherPreview from './sales-flow/VoucherPreview';
 
 const authHeaders = () => {
@@ -104,8 +105,8 @@ export default function VoucherDetail({ shared = false }) {
     <div className="page-shell page-fade-up voucher-detail-page">
       <Space className="voucher-screen-actions">
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>Back</Button>}
-        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-        <Button icon={<DownloadOutlined />} onClick={() => window.print()}>Download PDF</Button>
+        <Button icon={<PrinterOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Print</Button>
+        <Button icon={<DownloadOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareVoucher}>
           Copy share link
         </Button>

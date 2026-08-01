@@ -1540,7 +1540,18 @@ body {
 
 .voucher-preview-section .ant-table-container,
 .voucher-preview-section .ant-table-content {
+  overflow: visible !important;
   background: #ffffff;
+}
+
+.voucher-preview .ant-table-wrapper,
+.voucher-preview .ant-table-container,
+.voucher-preview .ant-table-content,
+.invoice-paper .ant-table-wrapper,
+.invoice-paper .ant-table-container,
+.invoice-paper .ant-table-content {
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 .voucher-preview-section .ant-table-thead > tr > th {
@@ -2499,8 +2510,14 @@ body {
   body,
   #root {
     width: auto !important;
+    height: auto !important;
     min-height: auto !important;
+    overflow: visible !important;
     background: #ffffff !important;
+  }
+
+  body {
+    overflow: visible !important;
   }
 
   .app-sider,
@@ -2511,10 +2528,27 @@ body {
     display: none !important;
   }
 
+  .app-shell,
+  .app-main,
   .app-content,
+  .route-transition,
+  .page-shell,
+  .invoice-document,
   .voucher-detail-page {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .app-content {
+    flex: none !important;
+    max-width: none !important;
   }
 
   .invoice-document {
@@ -2533,6 +2567,7 @@ body {
 
   .invoice-document .ant-card-body {
     padding: 0 !important;
+    overflow: visible !important;
   }
 
   .invoice-header,
@@ -2557,7 +2592,11 @@ body {
   }
 
   .invoice-document .ant-table,
+  .invoice-document .ant-table-wrapper,
+  .invoice-document .ant-table-container,
+  .invoice-document .ant-table-content,
   .invoice-document .ant-descriptions {
+    overflow: visible !important;
     page-break-inside: auto;
   }
 
@@ -2633,6 +2672,13 @@ body {
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .voucher-preview .ant-table-wrapper,
+  .voucher-preview .ant-table-container,
+  .voucher-preview .ant-table-content {
+    overflow: visible !important;
   }
 
   .voucher-preview-header {
