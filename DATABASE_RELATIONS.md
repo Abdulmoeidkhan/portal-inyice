@@ -60,7 +60,7 @@ Usage:
 
 - Monthly invoice limits are enforced during invoice creation.
 - User limits are enforced during company user creation.
-- Internal portal users can update limits and block/unblock non-internal companies.
+- Internal portal users can update status and block/unblock non-internal companies.
 
 ### roles
 

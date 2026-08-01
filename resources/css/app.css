@@ -571,7 +571,9 @@ body {
 
 [data-theme='dark'] .dashboard-action:hover,
 [data-theme='dark'] .dashboard-action:focus-visible {
-  color: #07111f !important;
+  color: #f8fbff !important;
+  background: #111827 !important;
+  border-color: rgba(248, 251, 255, 0.4) !important;
 }
 
 [data-theme='dark'] .dashboard-insights-head .ant-btn,
