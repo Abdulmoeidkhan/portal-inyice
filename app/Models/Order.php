@@ -44,11 +44,33 @@ class Order extends Model
     protected $casts = [
         'total_amount' => 'decimal:4',
         'issue_date' => 'date:Y-m-d',
-        'active_sections' => 'array',
-        'meta' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function getActiveSectionsAttribute(mixed $value): array
+    {
+        return self::decodeMeta($value);
+    }
+
+    public function setActiveSectionsAttribute(mixed $value): void
+    {
+        $this->attributes['active_sections'] = is_array($value)
+            ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+            : $value;
+    }
+
+    public function getMetaAttribute(mixed $value): array
+    {
+        return self::decodeMeta($value);
+    }
+
+    public function setMetaAttribute(mixed $value): void
+    {
+        $this->attributes['meta'] = is_array($value)
+            ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+            : $value;
+    }
 
     /**
      * Get the tenant this order belongs to
@@ -256,9 +278,29 @@ class Order extends Model
             return [];
         }
 
-        $decoded = json_decode($meta, true);
+        $candidate = $meta;
 
-        return is_array($decoded) ? $decoded : [];
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $decoded = json_decode($candidate, true);
+
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+
+            if (is_string($decoded)) {
+                $candidate = $decoded;
+                continue;
+            }
+
+            $unescaped = stripslashes($candidate);
+            if ($unescaped === $candidate) {
+                break;
+            }
+
+            $candidate = $unescaped;
+        }
+
+        return [];
     }
 
     public function syncVendorCostsFromVoucher(array $voucher): void

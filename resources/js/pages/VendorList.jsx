@@ -6,6 +6,17 @@ import { createVendorApi, deleteVendorApi, listVendorsApi, updateVendorApi } fro
 
 const { Title, Paragraph } = Typography;
 
+const formatName = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase());
+
+const formatMoney = (value = 0) =>
+  Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 export default function VendorList() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -90,11 +101,22 @@ export default function VendorList() {
     }
   };
 
+  const showOutstanding = vendors.some((vendor) => Object.prototype.hasOwnProperty.call(vendor, 'outstanding_balance'));
+
   const columns = [
-    { title: 'Name', dataIndex: 'name', key: 'name' },
+    { title: 'Name', dataIndex: 'name', key: 'name', render: formatName },
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
     { title: 'Currency', dataIndex: 'currency_code', key: 'currency_code', width: 110 },
+    ...(showOutstanding
+      ? [{
+        title: 'Outstanding',
+        dataIndex: 'outstanding_balance',
+        key: 'outstanding_balance',
+        align: 'right',
+        render: (value, vendor) => `${vendor.currency_code || ''} ${formatMoney(value)}`.trim(),
+      }]
+      : []),
     { title: 'Payment Terms', dataIndex: 'payment_terms', key: 'payment_terms' },
     {
       title: 'Actions',

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, FileSearchOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { ArrowsAltOutlined, EditOutlined, EyeOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -39,6 +39,8 @@ const getStatusColor = (status) => {
   return colors[status] || 'default';
 };
 
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const formatStatus = (status) => String(status || 'order').replace(/_/g, ' ').toUpperCase();
 const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'];
 const statusFilterOptions = [
@@ -51,15 +53,6 @@ const currentUserIsSales = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return user.role === 'sales';
-  } catch {
-    return false;
-  }
-};
-
-const currentUserCanDeleteOrders = () => {
-  try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return ['admin', 'owner'].includes(user.role);
   } catch {
     return false;
   }
@@ -102,16 +95,13 @@ export default function OrderList() {
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [invoicingOrderId, setInvoicingOrderId] = useState(null);
-  const [refundRequestOrderId, setRefundRequestOrderId] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [pendingCancelValues, setPendingCancelValues] = useState(null);
   const [cancelPassword, setCancelPassword] = useState('');
   const screens = Grid.useBreakpoint();
   const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
-  const isSalesUser = currentUserIsSales();
-  const canDeleteOrders = currentUserCanDeleteOrders();
+  const visibleStatusFilterOptions = statusFilterOptions;
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -202,51 +192,6 @@ export default function OrderList() {
     const status = value || '';
     setStatusFilter(status);
     fetchOrders(1, searchTerm, status);
-  };
-
-  const createInvoice = async (order) => {
-    setInvoicingOrderId(order.id);
-    try {
-      const response = await fetch('/api/v1/invoices/create-from-order', {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify({ order_id: order.id }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to create invoice');
-      }
-
-      message.success(`Invoice ${data.invoice.invoice_number} is ready for payment`);
-      fetchOrders(pagination.current);
-    } catch (error) {
-      message.error(error.message || 'Failed to create invoice');
-    } finally {
-      setInvoicingOrderId(null);
-    }
-  };
-
-  const createRefundRequest = async (order) => {
-    setRefundRequestOrderId(order.id);
-    try {
-      const response = await fetch(`/api/v1/orders/${order.uid}/refund-request`, {
-        method: 'POST',
-        headers: authHeaders(true),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to create refund request');
-      }
-
-      message.success(`Refund request ${data.order.order_number} created`);
-      fetchOrders(pagination.current, searchTerm, statusFilter);
-    } catch (error) {
-      message.error(error.message || 'Failed to create refund request');
-    } finally {
-      setRefundRequestOrderId(null);
-    }
   };
 
   useEffect(() => {
@@ -361,59 +306,14 @@ export default function OrderList() {
     saveEditedOrder(pendingCancelValues, cancelPassword);
   };
 
-  const handleDelete = async (order) => {
-    try {
-      const response = await fetch(`/api/v1/orders/${order.uid}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to delete order');
-      }
-
-      message.success('Order deleted');
-      if (selectedOrder?.uid === order.uid) {
-        setSelectedOrder(null);
-      }
-      fetchOrders(pagination.current);
-    } catch (error) {
-      message.error(error.message || 'Failed to delete order');
-    }
-  };
-
   const renderOrderActions = (record, { showLabels = !compactActions } = {}) => (
-    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
-      {record.status === 'invoice' && !record.invoice && (
-        <Button
-          type="primary"
-          size="small"
-          icon={<FileDoneOutlined />}
-          loading={invoicingOrderId === record.id}
-          onClick={() => createInvoice(record)}
-        >
-          {showLabels ? 'Create Invoice' : null}
-        </Button>
-      )}
-      {invoiceSectionStatuses.includes(record.status) && record.invoice && (
-        <Button
-          danger
-          size="small"
-          icon={<RollbackOutlined />}
-          loading={refundRequestOrderId === record.id}
-          onClick={() => createRefundRequest(record)}
-        >
-          {showLabels ? 'Refund Request' : null}
-        </Button>
-      )}
+    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={false}>
       <Button
         size="small"
-        icon={<EyeOutlined />}
-        onClick={() => navigate(`/orders/${record.uid}/voucher`)}
+        icon={<EditOutlined />}
+        onClick={() => openEditDrawer(record)}
       >
-        {showLabels ? 'Voucher' : null}
+        {showLabels ? 'Edit' : null}
       </Button>
       <Button
         size="small"
@@ -422,28 +322,13 @@ export default function OrderList() {
       >
         {showLabels ? 'Quotation' : null}
       </Button>
-      {!(isSalesUser && invoiceSectionStatuses.includes(record.status)) && (
-        <Button
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => openEditDrawer(record)}
-        >
-          {showLabels ? 'Edit' : null}
-        </Button>
-      )}
-      {canDeleteOrders && (
-        <Popconfirm
-          title="Delete order?"
-          description="This removes the order if no invoice exists for it."
-          okText="Delete"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => handleDelete(record)}
-        >
-          <Button danger size="small" icon={<DeleteOutlined />}>
-            {showLabels ? 'Delete' : null}
-          </Button>
-        </Popconfirm>
-      )}
+      <Button
+        size="small"
+        icon={<EyeOutlined />}
+        onClick={() => navigate(`/orders/${record.uid}/voucher`)}
+      >
+        {showLabels ? 'Voucher' : null}
+      </Button>
     </Space>
   );
 
@@ -491,7 +376,7 @@ export default function OrderList() {
       align: 'right',
       render: (amount, record) => {
         const value = Number(amount || 0);
-        return <Text type={value < 0 ? 'danger' : undefined}>{record.currency_code || ''} {value.toFixed(2)}</Text>;
+        return <Text type={value < 0 ? 'danger' : undefined}>{record.currency_code || ''} {money(value)}</Text>;
       },
     },
     {
@@ -511,7 +396,7 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: compactActions ? 144 : 360,
+      width: compactActions ? 132 : 250,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
       onCell: () => ({ onClick: (event) => event.stopPropagation() }),
@@ -543,7 +428,7 @@ export default function OrderList() {
             allowClear
             placeholder="Filter by status"
             value={statusFilter || undefined}
-            options={statusFilterOptions}
+            options={visibleStatusFilterOptions}
             onChange={handleStatusFilter}
             style={{ width: 220 }}
           />
@@ -587,7 +472,7 @@ export default function OrderList() {
                 </Descriptions.Item>
                 <Descriptions.Item label="Total">
                   <Text type={Number(selectedOrder.total_amount || 0) < 0 ? 'danger' : undefined}>
-                    {selectedOrder.currency_code || ''} {Number(selectedOrder.total_amount || 0).toFixed(2)}
+                    {selectedOrder.currency_code || ''} {money(selectedOrder.total_amount)}
                   </Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="Items">{getVoucherItemCount(selectedOrder)}</Descriptions.Item>
@@ -602,7 +487,7 @@ export default function OrderList() {
                     <Card key={item.id} size="small">
                       <Space orientation="vertical">
                         <Text>{item.description}</Text>
-                        <Text type="secondary">{Number(item.total_price || 0).toFixed(2)}</Text>
+                        <Text type="secondary">{money(item.total_price)}</Text>
                       </Space>
                     </Card>
                   ))}

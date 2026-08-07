@@ -6,6 +6,17 @@ import { createCustomerApi, deleteCustomerApi, listCustomersApi, updateCustomerA
 
 const { Title, Paragraph } = Typography;
 
+const formatName = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase());
+
+const formatMoney = (value = 0) =>
+  Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 export default function CustomerList() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -89,11 +100,22 @@ export default function CustomerList() {
     }
   };
 
+  const showOutstanding = customers.some((customer) => Object.prototype.hasOwnProperty.call(customer, 'outstanding_balance'));
+
   const columns = [
-    { title: 'Name', dataIndex: 'name', key: 'name' },
+    { title: 'Name', dataIndex: 'name', key: 'name', render: formatName },
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Phone', dataIndex: 'phone', key: 'phone' },
     { title: 'Currency', dataIndex: 'currency_code', key: 'currency_code', width: 110 },
+    ...(showOutstanding
+      ? [{
+        title: 'Outstanding',
+        dataIndex: 'outstanding_balance',
+        key: 'outstanding_balance',
+        align: 'right',
+        render: (value, customer) => `${customer.currency_code || ''} ${formatMoney(value)}`.trim(),
+      }]
+      : []),
     {
       title: 'Actions',
       key: 'actions',

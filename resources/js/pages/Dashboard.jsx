@@ -9,7 +9,6 @@ import {
   LogoutOutlined,
   ReloadOutlined,
   RocketOutlined,
-  RiseOutlined,
   SwapOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
@@ -171,6 +170,7 @@ export default function Dashboard() {
   const finance = report?.finance;
   const outstanding = finance?.outstanding;
   const user = storedUser();
+  const canAccessPayments = ['owner', 'admin', 'accounts'].includes(user.role);
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
   const expenses = (finance?.expenses?.length ? finance.expenses : finance?.mix || [])
     .filter((item) => Number(item.value) > 0);
@@ -286,12 +286,16 @@ export default function Dashboard() {
           <Button className="dashboard-action dashboard-action-blue" icon={<FileTextOutlined />} onClick={() => navigate('/invoices')}>
             Create invoice
           </Button>
-          <Button className="dashboard-action dashboard-action-purple" icon={<SwapOutlined />} onClick={() => navigate('/payments')}>
-            Add transaction
-          </Button>
-          <Button className="dashboard-action dashboard-action-peach" icon={<DollarOutlined />} onClick={() => navigate('/vendor-payments')}>
-            Add bill
-          </Button>
+          {canAccessPayments && (
+            <>
+              <Button className="dashboard-action dashboard-action-purple" icon={<SwapOutlined />} onClick={() => navigate('/payments')}>
+                Add transaction
+              </Button>
+              <Button className="dashboard-action dashboard-action-peach" icon={<DollarOutlined />} onClick={() => navigate('/vendor-payments')}>
+                Add bill
+              </Button>
+            </>
+          )}
         </div>
 
         <div className="dashboard-insights-head">
@@ -411,14 +415,20 @@ export default function Dashboard() {
               </Col>
             </Row>
             <Row gutter={[14, 14]} className="dashboard-finance-pill-row">
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} xl={5}>
                 <Statistic title="Invoiced this month" value={finance.summary.invoiced} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
               </Col>
-              <Col xs={24} md={8}>
-                <Statistic title="Collected" value={finance.summary.collected} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Collected this month" value={finance.summary.collected} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
               </Col>
-              <Col xs={24} md={8}>
-                <Statistic title="Profit margin" value={finance.summary.margin} precision={2} suffix="%" prefix={<RiseOutlined />} />
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Purchase this month" value={finance.summary.purchase} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={4}>
+                <Statistic title="Refund this month" value={finance.summary.refund} formatter={(value) => money(value)} prefix={<SwapOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={4}>
+                <Statistic title="Paid this month" value={finance.summary.paid} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
               </Col>
             </Row>
           </>

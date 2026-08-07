@@ -408,6 +408,48 @@ class PaymentService
         });
     }
 
+    public function allocateCustomerAdvanceReceipt(Receipt $receipt, Collection $invoices, array $data): Receipt
+    {
+        return DB::transaction(function () use ($receipt, $invoices, $data): Receipt {
+            $receipt = Receipt::whereKey($receipt->id)->lockForUpdate()->firstOrFail();
+            $lockedInvoices = Invoice::whereIn('id', $invoices->modelKeys())->lockForUpdate()->get()->keyBy('id');
+            $allocations = collect($data['allocations']);
+            $total = (float) $allocations->sum('amount');
+            $allocated = (float) $receipt->settlements()->where('status', 'confirmed')->sum('amount_received');
+            $remaining = max(0, (float) $receipt->amount - $allocated);
+
+            if ($total > $remaining) {
+                throw new \InvalidArgumentException('Advance allocation cannot exceed the remaining advance balance.');
+            }
+
+            foreach ($allocations as $allocation) {
+                $invoice = $lockedInvoices[(int) $allocation['invoice_id']] ?? null;
+                if (!$invoice || $invoice->customer_id !== $receipt->customer_id || $invoice->company_id !== $receipt->company_id || $invoice->currency_code !== $receipt->currency_code) {
+                    throw new \InvalidArgumentException('A selected invoice is not available for this advance receipt.');
+                }
+                if ((float) $allocation['amount'] > (float) $invoice->outstanding_amount) {
+                    throw new \InvalidArgumentException('An allocation exceeds the selected invoice balance.');
+                }
+
+                InvoiceSettlement::create([
+                    'uid' => (string) Str::ulid(),
+                    'tenant_id' => $receipt->tenant_id,
+                    'invoice_id' => $invoice->id,
+                    'amount_received' => $allocation['amount'],
+                    'settlement_date' => $data['date'] ?? now()->toDateString(),
+                    'settlement_type' => 'payment',
+                    'reference_document_id' => $receipt->id,
+                    'reference_document_type' => Receipt::class,
+                    'notes' => $data['notes'] ?? 'Applied from advance receipt ' . $receipt->receipt_number,
+                ]);
+
+                $this->recalculateInvoice($invoice);
+            }
+
+            return $receipt->fresh(['customer:id,name', 'settlements.invoice:id,invoice_number']);
+        });
+    }
+
     public function deleteReceipt(Receipt $receipt): void
     {
         DB::transaction(function () use ($receipt): void {

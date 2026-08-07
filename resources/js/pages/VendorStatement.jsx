@@ -5,7 +5,7 @@ import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const statementTotals = (rows = []) => ({
   debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),
   credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),
@@ -65,6 +65,13 @@ export default function VendorStatement() {
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
   const totals = statementTotals(statement?.transactions || []);
+  const summaryStats = statement ? [
+    { title: 'Opening', value: Number(statement.summary.opening_balance), money: true },
+    { title: 'Payables', value: Number(statement.summary.period_payables), money: true },
+    { title: 'Payment', value: Number(statement.summary.period_payments ?? statement.summary.period_paid ?? 0), money: true },
+    { title: 'Receipt', value: Number(statement.summary.period_receipts || 0), money: true },
+    { title: 'Outstanding', value: Number(statement.summary.outstanding_balance), money: true },
+  ] : [];
 
   return (
     <div className="page-shell page-fade-up">
@@ -86,11 +93,12 @@ export default function VendorStatement() {
             <Card className="border-beam-aurora" style={{ marginBottom: 16 }}>
               <Title level={4} style={{ marginTop: 0 }}>{statement.vendor.name}</Title>
               <Paragraph type="secondary">{statement.vendor.email || '-'} · {statement.vendor.phone || '-'}</Paragraph>
-              <Row gutter={[16, 16]}>
-                <Col xs={12} lg={6}><Statistic title="Opening" value={Number(statement.summary.opening_balance)} precision={2} prefix={statement.vendor_currency} /></Col>
-                <Col xs={12} lg={6}><Statistic title="Period Payables" value={Number(statement.summary.period_payables)} precision={2} prefix={statement.vendor_currency} /></Col>
-                <Col xs={12} lg={6}><Statistic title="Period Paid" value={Number(statement.summary.period_paid)} precision={2} prefix={statement.vendor_currency} /></Col>
-                <Col xs={12} lg={6}><Statistic title="Outstanding" value={Number(statement.summary.outstanding_balance)} precision={2} prefix={statement.vendor_currency} /></Col>
+              <Row gutter={[16, 16]} wrap={false} style={{ overflowX: 'auto' }}>
+                {summaryStats.map((item) => (
+                  <Col key={item.title} flex="1 0 160px">
+                    <Statistic title={item.title} value={item.value} precision={item.money ? 2 : 0} prefix={item.money ? statement.vendor_currency : undefined} />
+                  </Col>
+                ))}
               </Row>
             </Card>
             <Card className="border-beam-aurora" title="Vendor Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>

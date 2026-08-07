@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -461,6 +462,150 @@ class FinancialApiTest extends TestCase
                 'reference' => $response->json('receipt.receipt_number'),
                 'customer_receipts' => 350,
             ]);
+    }
+
+    public function test_customer_advance_receipt_can_be_allocated_later(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $advance = $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 350,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-21',
+            'reference_number' => 'ADV-LATER',
+        ])->assertCreated()->json('receipt');
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/receipts/customer/' . $advance['uid'] . '/allocate-advance', [
+            'date' => '2026-06-22',
+            'allocations' => [
+                ['invoice_id' => $invoice['id'], 'amount' => 250],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('receipt.settlements.0.invoice.invoice_number', $invoice['invoice_number']);
+
+        $this->assertDatabaseHas('invoice_settlements', [
+            'invoice_id' => $invoice['id'],
+            'amount_received' => 250,
+            'reference_document_type' => Receipt::class,
+            'reference_document_id' => $advance['id'],
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice['id'],
+            'outstanding_amount' => 750,
+            'status' => 'partial_paid',
+        ]);
+
+        $this->getJson('/api/v1/receipts/customer')
+            ->assertOk()
+            ->assertJsonPath('data.0.remaining_amount', 100);
+    }
+
+    public function test_customer_statement_summary_uses_net_statement_balance(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 200,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/payments/customer', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 50,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('summary.total_amount', 1000)
+            ->assertJsonPath('summary.total_paid', 150)
+            ->assertJsonPath('summary.total_receipts', 200)
+            ->assertJsonPath('summary.total_payments', 50)
+            ->assertJsonPath('summary.total_outstanding', 850);
+
+        $this->getJson('/api/v1/reports/dashboard-upcoming?days=7')
+            ->assertOk()
+            ->assertJsonPath('finance.summary.invoiced', 1000)
+            ->assertJsonPath('finance.summary.refund', 0)
+            ->assertJsonPath('finance.summary.collected', 200)
+            ->assertJsonPath('finance.summary.customer_receipts', 200)
+            ->assertJsonPath('finance.summary.customer_payments', 50)
+            ->assertJsonPath('finance.summary.outstanding', 850)
+            ->assertJsonPath('finance.summary.purchase', 1000)
+            ->assertJsonPath('finance.summary.paid', 50)
+            ->assertJsonPath('finance.outstanding.summary.customer_total', 850);
+    }
+
+    public function test_dashboard_refund_this_month_includes_invoice_refunds(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 300,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/payments/customer/refund', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 100,
+            'reason' => 'Partial service refund',
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/reports/dashboard-upcoming?days=7')
+            ->assertOk()
+            ->assertJsonPath('finance.summary.invoiced', 1000)
+            ->assertJsonPath('finance.summary.refund', 100)
+            ->assertJsonPath('finance.summary.collected', 300)
+            ->assertJsonPath('finance.summary.paid', 100)
+            ->assertJsonPath('finance.summary.purchase', 1000)
+            ->assertJsonPath('finance.outstanding.summary.customer_total', 700);
+    }
+
+    public function test_vendor_statement_summary_splits_payments_and_receipts(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 300,
+            'payment_method' => 'cash',
+            'payment_date' => now()->toDateString(),
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/receipts/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 50,
+            'payment_method' => 'cash',
+            'receipt_date' => now()->toDateString(),
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonPath('summary.period_payables', 1000)
+            ->assertJsonPath('summary.period_paid', 300)
+            ->assertJsonPath('summary.period_payments', 300)
+            ->assertJsonPath('summary.period_receipts', 50)
+            ->assertJsonPath('summary.outstanding_balance', 750);
     }
 
     public function test_unattached_customers_and_vendors_can_be_updated_and_deleted(): void
@@ -1074,6 +1219,257 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('data.0.profit', 395);
     }
 
+    public function test_customer_and_vendor_lists_show_outstanding_except_for_sales_role(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])->assertCreated();
+
+        $customerList = $this->getJson('/api/v1/customers')->assertOk();
+        $this->assertSame(1000.0, (float) $customerList->json('0.outstanding_balance'));
+
+        $vendorList = $this->getJson('/api/v1/vendors')->assertOk();
+        $this->assertSame(1000.0, (float) $vendorList->json('0.outstanding_balance'));
+
+        $salesRole = Role::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'code' => 'sales',
+            'name' => 'Sales',
+            'is_system' => false,
+        ]);
+
+        $salesUser = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $salesRole->id,
+            'name' => 'Sales Tester',
+            'email' => 'sales-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($salesUser);
+
+        $salesCustomers = $this->getJson('/api/v1/customers')->assertOk();
+        $this->assertArrayNotHasKey('outstanding_balance', $salesCustomers->json('0'));
+
+        $salesVendors = $this->getJson('/api/v1/vendors')->assertOk();
+        $this->assertArrayNotHasKey('outstanding_balance', $salesVendors->json('0'));
+    }
+
+    public function test_sales_role_can_view_and_share_invoice_detail_and_voucher_without_payment_rows(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])
+            ->assertCreated()
+            ->json('invoice');
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 100,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        Sanctum::actingAs($this->salesUserForContext($ctx));
+
+        $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonMissing(['uid' => $ctx['order']->uid]);
+
+        $this->getJson('/api/v1/invoices')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $invoice['uid']);
+
+        $this->getJson('/api/v1/invoices/' . $invoice['uid'])
+            ->assertOk()
+            ->assertJsonPath('uid', $invoice['uid'])
+            ->assertJsonPath('settlements', []);
+
+        $invoiceShare = $this->postJson('/api/v1/invoices/' . $invoice['uid'] . '/share')
+            ->assertOk()
+            ->assertJsonStructure(['share_url', 'share_token'])
+            ->json();
+        $this->getJson('/api/v1/shared-invoices/' . $invoiceShare['share_token'])
+            ->assertOk()
+            ->assertJsonPath('uid', $invoice['uid']);
+
+        $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonPath('uid', $ctx['order']->uid);
+
+        $voucherShare = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/share')
+            ->assertOk()
+            ->assertJsonStructure(['share_url', 'share_token'])
+            ->json();
+        $this->getJson('/api/v1/shared-vouchers/' . $voucherShare['share_token'])
+            ->assertOk()
+            ->assertJsonPath('uid', $ctx['order']->uid);
+    }
+
+    public function test_sales_role_can_view_order_with_legacy_escaped_voucher_meta(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        DB::table('orders')
+            ->where('id', $ctx['order']->id)
+            ->update([
+                'meta' => addslashes(json_encode([
+                    'pricing' => [[
+                        'pax_name' => 'Legacy Passenger',
+                        'flight_cost' => '350',
+                        'flight_profit' => '150',
+                        'flight_sales' => '500',
+                    ]],
+                    'active_sections' => ['flights'],
+                    'flights' => [[
+                        'from' => 'KHI',
+                        'to' => 'JED',
+                        'flight_no' => 'SV705',
+                    ]],
+                ], JSON_THROW_ON_ERROR)),
+            ]);
+
+        Sanctum::actingAs($this->salesUserForContext($ctx));
+
+        $order = $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonPath('uid', $ctx['order']->uid)
+            ->json();
+
+        $this->assertSame('Legacy Passenger', $order['meta']['pricing'][0]['pax_name']);
+        $this->assertSame('500', $order['meta']['pricing'][0]['flight_sales']);
+        $this->assertArrayNotHasKey('flight_cost', $order['meta']['pricing'][0]);
+        $this->assertArrayNotHasKey('flight_profit', $order['meta']['pricing'][0]);
+    }
+
+    public function test_sales_role_can_view_invoice_with_legacy_escaped_order_fields(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        DB::table('orders')
+            ->where('id', $ctx['order']->id)
+            ->update([
+                'active_sections' => addslashes(json_encode(['other_services'], JSON_THROW_ON_ERROR)),
+                'meta' => addslashes(json_encode([
+                    'active_sections' => ['other_services'],
+                    'other_services' => [[
+                        'description' => 'Legacy Umrah package',
+                        'cost' => '250',
+                        'profit' => '100',
+                        'sales' => '350',
+                    ]],
+                ], JSON_THROW_ON_ERROR)),
+            ]);
+
+        Sanctum::actingAs($this->salesUserForContext($ctx));
+
+        $invoiceDetail = $this->getJson('/api/v1/invoices/' . $invoice['uid'])
+            ->assertOk()
+            ->assertJsonPath('uid', $invoice['uid'])
+            ->assertJsonPath('settlements', [])
+            ->json();
+
+        $this->assertSame(['other_services'], $invoiceDetail['order']['active_sections']);
+        $this->assertSame('Legacy Umrah package', $invoiceDetail['order']['meta']['other_services'][0]['description']);
+        $this->assertSame('350', $invoiceDetail['order']['meta']['other_services'][0]['sales']);
+        $this->assertArrayNotHasKey('cost', $invoiceDetail['order']['meta']['other_services'][0]);
+        $this->assertArrayNotHasKey('profit', $invoiceDetail['order']['meta']['other_services'][0]);
+    }
+
+    public function test_order_and_invoice_responses_normalize_escaped_contact_text(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $escapedAddress = 'Shop no 25, Azizabad Main Rd, Federal B Area Block 9 \\r\\nGulshan e Shamim, Karachi, 75950, Pakistan\\r\\n+92 21 33512473 /  +92 336 3819460';
+
+        $ctx['company']->update(['address' => $escapedAddress]);
+        $ctx['customer']->update([
+            'address' => $escapedAddress,
+            'phone' => '+92336031901',
+            'email' => 'abdullah@rihlatravelandtours.com',
+        ]);
+        $ctx['order']->update([
+            'meta' => [
+                'contact' => [
+                    'address' => $escapedAddress,
+                    'phone' => '+92336031901',
+                    'email' => 'abdullah@rihlatravelandtours.com',
+                ],
+            ],
+        ]);
+
+        $expectedAddress = "Shop no 25, Azizabad Main Rd, Federal B Area Block 9\nGulshan e Shamim, Karachi, 75950, Pakistan\n+92 21 33512473 / +92 336 3819460";
+
+        $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonPath('company.address', $expectedAddress)
+            ->assertJsonPath('customer.address', $expectedAddress)
+            ->assertJsonPath('meta.contact.address', $expectedAddress);
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->getJson('/api/v1/invoices/' . $invoice['uid'])
+            ->assertOk()
+            ->assertJsonPath('company.address', $expectedAddress)
+            ->assertJsonPath('customer.address', $expectedAddress)
+            ->assertJsonPath('order.meta.contact.address', $expectedAddress);
+    }
+
+    public function test_sales_role_cannot_view_or_update_receipts_and_payments(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])
+            ->assertCreated()
+            ->json('invoice');
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 100,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+        $customerReceipt = Receipt::where('customer_id', $ctx['customer']->id)->firstOrFail();
+        $customerPayment = $this->postJson('/api/v1/payments/customer', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 25,
+            'payment_method' => 'cash',
+        ])->assertCreated()->json('payment');
+        $vendorPayment = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 50,
+            'payment_method' => 'cash',
+        ])->assertCreated()->json('payment');
+        $vendorReceipt = $this->postJson('/api/v1/receipts/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 30,
+            'payment_method' => 'cash',
+        ])->assertCreated()->json('receipt');
+
+        Sanctum::actingAs($this->salesUserForContext($ctx));
+
+        $this->getJson('/api/v1/receipts/customer')->assertForbidden();
+        $this->getJson('/api/v1/receipts/customer/' . $customerReceipt->uid)->assertForbidden();
+        $this->getJson('/api/v1/receipts/vendor')->assertForbidden();
+        $this->getJson('/api/v1/payments/customer')->assertForbidden();
+        $this->getJson('/api/v1/payments/vendor')->assertForbidden();
+        $this->getJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertForbidden();
+        $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')->assertForbidden();
+        $this->getJson('/api/v1/payments/invoices/' . $invoice['uid'] . '/settlements')->assertForbidden();
+
+        $this->patchJson('/api/v1/receipts/customer/' . $customerReceipt->uid, [])->assertForbidden();
+        $this->patchJson('/api/v1/receipts/vendor/' . $vendorReceipt['uid'], [])->assertForbidden();
+        $this->patchJson('/api/v1/payments/customer/' . $customerPayment['uid'], [])->assertForbidden();
+        $this->patchJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'], [])->assertForbidden();
+        $this->postJson('/api/v1/receipts/customer/record', [])->assertForbidden();
+        $this->postJson('/api/v1/payments/customer', [])->assertForbidden();
+    }
+
     private function seedTenantContext(): array
     {
         $tenant = Tenant::create([
@@ -1184,5 +1580,27 @@ class FinancialApiTest extends TestCase
             'vendor' => $vendor,
             'order' => $order,
         ];
+    }
+
+    private function salesUserForContext(array $ctx): User
+    {
+        $salesRole = Role::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'code' => 'sales',
+            'name' => 'Sales',
+            'is_system' => false,
+        ]);
+
+        return User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $salesRole->id,
+            'name' => 'Sales Tester',
+            'email' => 'sales-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
     }
 }

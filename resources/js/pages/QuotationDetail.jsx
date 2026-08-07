@@ -8,7 +8,7 @@ import { printDocument } from '../services/printDocument';
 
 const { Title, Text, Paragraph } = Typography;
 
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toNumber = (value) => {
   const parsed = Number(value || 0);

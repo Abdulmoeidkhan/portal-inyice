@@ -40,7 +40,7 @@ class StatementService
         $invoices = Invoice::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
-            ->where('status', '!=', 'void')
+            ->whereNotIn('status', ['void', 'cancel'])
             ->whereHas('order')
             ->with('customer:id,name')
             ->when($fromDate, fn($q) => $q->where('invoice_date', '>=', $fromDate))
@@ -50,8 +50,6 @@ class StatementService
 
         $baseCurrencyInvoices = collect([]);
         $customCurrencyInvoices = collect([]);
-        $totalOutstanding = 0;
-        $totalPaid = 0;
 
         foreach ($invoices as $invoice) {
             $record = [
@@ -86,8 +84,6 @@ class StatementService
             }
 
             $customCurrencyInvoices->push($record);
-            $totalOutstanding += $invoice->outstanding_amount;
-            $totalPaid += ($invoice->total_amount - $invoice->outstanding_amount);
         }
 
         $cashTransactions = collect();
@@ -122,6 +118,10 @@ class StatementService
         $cashTransactions = $cashTransactions->sortBy([['date', 'asc'], ['sort_order', 'asc']])->values()->map(function ($row) use (&$runningCustomerBalance) {
             $runningCustomerBalance += $row['debit'] - $row['credit']; $row['balance'] = $runningCustomerBalance; unset($row['sort_order']); return $row;
         });
+        $totalAmount = (float) $customCurrencyInvoices->sum('amount_in_client_currency');
+        $totalReceipts = (float) $cashTransactions->sum('customer_receipts');
+        $totalPayments = (float) $cashTransactions->sum('customer_payments');
+        $statementPaid = min($totalAmount, max(0, $totalReceipts - $totalPayments));
 
         return [
             'customer' => [
@@ -144,9 +144,11 @@ class StatementService
             'transactions' => $cashTransactions->all(),
             'summary' => [
                 'total_invoices' => count($invoices),
-                'total_outstanding' => $totalOutstanding,
-                'total_paid' => $totalPaid,
-                'total_amount' => $totalOutstanding + $totalPaid,
+                'total_outstanding' => round($runningCustomerBalance, 4),
+                'total_paid' => round($statementPaid, 4),
+                'total_receipts' => round($totalReceipts, 4),
+                'total_payments' => round($totalPayments, 4),
+                'total_amount' => round($totalAmount, 4),
             ],
         ];
     }
@@ -259,8 +261,10 @@ class StatementService
                 return $transaction;
             });
 
-        $periodPayables = $transactions->sum('debit');
-        $periodPaid = $transactions->sum('credit');
+        $periodPayables = $transactions->sum('vendor_payables');
+        $periodRefunds = $transactions->sum('vendor_refunds');
+        $periodPayments = $transactions->sum('vendor_payments');
+        $periodReceipts = $transactions->sum('vendor_receipts');
 
         return [
             'vendor' => [
@@ -281,7 +285,10 @@ class StatementService
             'summary' => [
                 'opening_balance' => $openingBalance,
                 'period_payables' => $periodPayables,
-                'period_paid' => $periodPaid,
+                'period_refunds' => $periodRefunds,
+                'period_paid' => $periodPayments,
+                'period_payments' => $periodPayments,
+                'period_receipts' => $periodReceipts,
                 'outstanding_balance' => $runningBalance,
             ],
         ];

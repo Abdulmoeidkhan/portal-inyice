@@ -19,7 +19,7 @@ import { dateOnly } from '../services/dateFormat';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function Payments() {
   const [searchParams] = useSearchParams();
@@ -36,6 +36,8 @@ export default function Payments() {
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editInvoices, setEditInvoices] = useState([]);
+  const [advanceAllocating, setAdvanceAllocating] = useState(null);
+  const [advanceInvoices, setAdvanceInvoices] = useState([]);
   const [customerForm] = Form.useForm();
   const [form, setForm] = useState({ mode: 'allocate', date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '', advance_amount: null });
   const screens = Grid.useBreakpoint();
@@ -129,6 +131,8 @@ export default function Payments() {
   const totalOutstanding = invoices.reduce((sum, invoice) => sum + Number(invoice.outstanding_amount || 0), 0);
   const allocationTotal = selectedInvoices.reduce((sum, invoice) => sum + Number(allocations[invoice.id] || 0), 0);
   const receiptTotal = form.mode === 'advance' ? Number(form.advance_amount || 0) : allocationTotal;
+  const advanceAllocationTotal = advanceAllocating ? Object.values(advanceAllocating.allocations).reduce((sum, amount) => sum + Number(amount || 0), 0) : 0;
+  const receiptRemaining = (receipt) => Number(receipt?.remaining_amount ?? Math.max(0, Number(receipt?.amount || 0) - (receipt?.settlements || []).reduce((sum, item) => sum + Number(item.amount_received || 0), 0)));
 
   const updateSelection = (keys) => {
     const next = { ...allocations };
@@ -227,6 +231,49 @@ export default function Payments() {
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
+  const openAdvanceAllocation = async (row) => {
+    setSaving(true);
+    try {
+      const [receiptResponse, invoiceResponse] = await Promise.all([
+        fetch(`/api/v1/receipts/customer/${row.uid}`, { headers }),
+        fetch(`/api/v1/invoices?customer_id=${row.customer_id}&per_page=200`, { headers }),
+      ]);
+      const [receipt, invoiceData] = await Promise.all([receiptResponse.json(), invoiceResponse.json()]);
+      if (!receiptResponse.ok || !invoiceResponse.ok) throw new Error('Could not load advance receipt for allocation');
+      const openInvoices = (invoiceData.data || []).filter((invoice) => invoice.status !== 'void' && Number(invoice.outstanding_amount) > 0 && invoice.currency_code === receipt.currency_code);
+      setAdvanceInvoices(openInvoices);
+      setAdvanceAllocating({ ...receipt, date: today(), notes: `Applied from advance receipt ${receipt.receipt_number}`, remaining_amount: receiptRemaining(row), allocations: {} });
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
+  const autoAllocateAdvance = () => {
+    if (!advanceAllocating) return;
+    let remaining = receiptRemaining(advanceAllocating);
+    const next = {};
+    advanceInvoices.forEach((invoice) => {
+      if (remaining <= 0) return;
+      const amount = Math.min(remaining, Number(invoice.outstanding_amount || 0));
+      if (amount > 0) next[invoice.id] = Number(amount.toFixed(2));
+      remaining -= amount;
+    });
+    setAdvanceAllocating((current) => ({ ...current, allocations: next }));
+  };
+
+  const saveAdvanceAllocation = async () => {
+    const nextAllocations = Object.entries(advanceAllocating.allocations).filter(([, amount]) => Number(amount) > 0).map(([invoiceId, amount]) => ({ invoice_id: Number(invoiceId), amount: Number(amount) }));
+    if (!nextAllocations.length) return message.error('Allocate the advance to at least one invoice');
+    if (advanceAllocationTotal > receiptRemaining(advanceAllocating)) return message.error('Allocation exceeds the remaining advance balance');
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/v1/receipts/customer/${advanceAllocating.uid}/allocate-advance`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ date: advanceAllocating.date, notes: advanceAllocating.notes || null, allocations: nextAllocations }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not allocate advance');
+      message.success('Advance allocated to invoices');
+      setAdvanceAllocating(null);
+      await Promise.all([customerId ? selectCustomer(customerId) : Promise.resolve(), loadBaseData()]);
+    } catch (error) { message.error(error.message); } finally { setSaving(false); }
+  };
+
   const invoiceColumns = [
     { title: 'Invoice no.', dataIndex: 'invoice_number', width: 150 },
     { title: 'Invoice date', dataIndex: 'invoice_date', width: 125, render: dateOnly },
@@ -258,7 +305,8 @@ export default function Payments() {
     { title: 'Reference', dataIndex: 'reference_number', width: 180, ellipsis: true, render: (value) => value || '—' },
     { title: 'Invoices', dataIndex: 'settlements', width: 260, ellipsis: true, render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || 'Advance' },
     { title: 'Amount', dataIndex: 'amount', width: 145, align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
-    { title: 'Actions', key: 'actions', fixed: 'right', width: 125, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
+    { title: 'Unallocated', key: 'remaining_amount', width: 145, align: 'right', render: (_, row) => money(receiptRemaining(row)) },
+    { title: 'Actions', key: 'actions', fixed: 'right', width: 230, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} disabled={receiptRemaining(row) > 0} onClick={() => openEdit(row)} /><Button size="small" icon={<CheckSquareOutlined />} disabled={receiptRemaining(row) <= 0} onClick={() => openAdvanceAllocation(row)}>Allocate</Button><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
 
   return (
@@ -333,7 +381,7 @@ export default function Payments() {
               <Button icon={<ClearOutlined />} onClick={() => updateSelection([])} disabled={!selectedKeys.length}>{compactActions ? null : 'Clear'}</Button>
               <Text type="secondary">{selectedKeys.length} invoice{selectedKeys.length === 1 ? '' : 's'} selected</Text>
             </Space>
-          ) : <Text type="secondary">Advance receipts stay unallocated until applied from the customer statement workflow.</Text>}
+          ) : <Text type="secondary">Advance receipts can be allocated later from receipt history.</Text>}
           <Space wrap>
             <div className="allocation-total"><span>Receipt total</span><strong>{customer?.currency_code || ''} {money(receiptTotal)}</strong></div>
             <Button type="primary" size="large" icon={<SaveOutlined />} loading={saving} disabled={form.mode === 'advance' ? !customerId || receiptTotal <= 0 : !selectedKeys.length} onClick={submitReceipt}>{compactActions ? null : form.mode === 'advance' ? 'Record advance' : 'Record receipt'}</Button>
@@ -389,6 +437,21 @@ export default function Payments() {
           { title: 'Available for reallocation', key: 'available', align: 'right', render: (_, invoice) => money(Number(invoice.outstanding_amount) + Number(editing.originalAllocations[invoice.id] || 0)) },
           { title: 'Allocation', key: 'allocation', align: 'right', render: (_, invoice) => <InputNumber min={0} max={Number(invoice.outstanding_amount) + Number(editing.originalAllocations[invoice.id] || 0)} precision={2} value={editing.allocations[invoice.id] || 0} onChange={(value) => setEditing((current) => ({ ...current, allocations: { ...current.allocations, [invoice.id]: Number(value || 0) } }))} /> },
         ]} /></>}
+      </Modal>
+      <Modal width={940} title={`Allocate advance ${advanceAllocating?.receipt_number || ''}`} open={!!advanceAllocating} onCancel={() => setAdvanceAllocating(null)} onOk={saveAdvanceAllocation} confirmLoading={saving} okText="Apply advance">
+        {advanceAllocating && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
+          <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={advanceAllocating.date} onChange={(event) => setAdvanceAllocating((current) => ({ ...current, date: event.target.value }))} /></Col>
+          <Col xs={12} md={5}><Text strong>Available</Text><Input readOnly value={`${advanceAllocating.currency_code} ${money(receiptRemaining(advanceAllocating))}`} /></Col>
+          <Col xs={24} md={8}><Text strong>Allocation total</Text><Input readOnly value={`${advanceAllocating.currency_code} ${money(advanceAllocationTotal)}`} /></Col>
+          <Col xs={24} md={6}><Space wrap><Button icon={<CheckSquareOutlined />} onClick={autoAllocateAdvance}>Auto allocate</Button><Button icon={<ClearOutlined />} onClick={() => setAdvanceAllocating((current) => ({ ...current, allocations: {} }))}>Clear</Button></Space></Col>
+          <Col span={24}><Text strong>Notes</Text><Input value={advanceAllocating.notes} onChange={(event) => setAdvanceAllocating((current) => ({ ...current, notes: event.target.value }))} /></Col>
+        </Row><Table rowKey="id" pagination={false} dataSource={advanceInvoices} locale={{ emptyText: 'No open invoices available for this advance' }} columns={[
+          { title: 'Invoice', dataIndex: 'invoice_number', width: 180 },
+          { title: 'Invoice date', dataIndex: 'invoice_date', width: 130, render: dateOnly },
+          { title: 'Balance', dataIndex: 'outstanding_amount', width: 140, align: 'right', render: money },
+          { title: 'Allocation', key: 'allocation', width: 180, align: 'right', render: (_, invoice) => <InputNumber min={0} max={Math.min(Number(invoice.outstanding_amount), receiptRemaining(advanceAllocating))} precision={2} value={advanceAllocating.allocations[invoice.id] || 0} onChange={(value) => setAdvanceAllocating((current) => ({ ...current, allocations: { ...current.allocations, [invoice.id]: Number(value || 0) } }))} /> },
+          { title: 'Description', dataIndex: 'notes', ellipsis: true, render: (value) => value || '—' },
+        ]} scroll={{ x: 820 }} /></>}
       </Modal>
     </div>
   );

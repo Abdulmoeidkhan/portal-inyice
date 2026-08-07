@@ -15,6 +15,23 @@ use Illuminate\Support\Str;
 
 class InvoiceController extends Controller
 {
+    private const PRICING_COST_PROFIT_FIELDS = [
+        'flight_cost',
+        'flight_profit',
+        'hotel_cost',
+        'hotel_profit',
+        'visa_cost',
+        'visa_profit',
+        'transfer_cost',
+        'transfer_profit',
+        'city_tour_ziarat_cost',
+        'city_tour_ziarat_profit',
+        'other_service_cost',
+        'other_service_profit',
+    ];
+
+    private const SERVICE_COST_PROFIT_FIELDS = ['cost', 'profit'];
+
     public function __construct(private InvoiceService $invoiceService)
     {
     }
@@ -161,13 +178,21 @@ class InvoiceController extends Controller
      */
     public function show(string $uid): JsonResponse
     {
+        $user = auth()->user();
         $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
-            ->with(['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
+            ->with($user?->hasRole('sales') === true
+                ? ['lines', 'customer', 'order', 'company']
+                : ['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->firstOrFail();
 
-        return response()->json($invoice);
+        if ($user?->hasRole('sales') === true) {
+            $invoice->setRelation('settlements', collect());
+            $this->stripOrderCostProfitForSales($invoice);
+        }
+
+        return response()->json($this->normalizeResponseText($invoice->toArray()));
     }
 
     public function share(string $uid): JsonResponse
@@ -220,7 +245,48 @@ class InvoiceController extends Controller
         $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
         $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url', 'is_paid']);
-        return response()->json($invoice);
+        return response()->json($this->normalizeResponseText($invoice->toArray()));
+    }
+
+    private function stripOrderCostProfitForSales(Invoice $invoice): void
+    {
+        $order = $invoice->order;
+        if (!$order) {
+            return;
+        }
+
+        $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
+    }
+
+    private function stripVoucherCostProfit(array $voucher): array
+    {
+        foreach (($voucher['pricing'] ?? []) as $index => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            foreach (self::PRICING_COST_PROFIT_FIELDS as $field) {
+                unset($row[$field]);
+            }
+
+            $voucher['pricing'][$index] = $row;
+        }
+
+        foreach (['hotels', 'transfers', 'city_tours', 'visa', 'other_services'] as $section) {
+            foreach (($voucher[$section] ?? []) as $index => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                foreach (self::SERVICE_COST_PROFIT_FIELDS as $field) {
+                    unset($row[$field]);
+                }
+
+                $voucher[$section][$index] = $row;
+            }
+        }
+
+        return $voucher;
     }
 
     private function publicInvoiceLineDescription(?string $description): string

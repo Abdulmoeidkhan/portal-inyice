@@ -4,7 +4,7 @@ import { message } from '../services/feedback';
 import { DollarOutlined, AlertOutlined } from '@ant-design/icons';
 import { Column } from '@ant-design/plots';
 
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const wholeNumber = (value) => Math.round(Number(value || 0));
 const bucketAmount = (report, key) => Number(report?.buckets?.[key]?.total_outstanding || 0);
 
@@ -111,7 +111,7 @@ export default function AgingReport() {
     },
     label: {
       position: 'top',
-      text: (d) => d.amount.toFixed(0),
+      text: (d) => Number(d.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }),
       fill: chartTextColor,
       fontSize: screens.md ? 12 : 11,
       fontWeight: 600,

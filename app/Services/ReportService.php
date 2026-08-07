@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use App\Models\InvoiceSettlement;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderVendorCost;
 use App\Models\Payment;
@@ -637,6 +639,46 @@ class ReportService
             ->where('company_id', $companyId)
             ->whereBetween('payment_date', [$from, $to])
             ->sum('amount');
+        $customerReceipts = Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('customer_id')
+            ->whereBetween('receipt_date', [$from, $to])
+            ->sum('amount');
+        $customerPayments = Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('customer_id')
+            ->whereBetween('payment_date', [$from, $to])
+            ->sum('amount');
+        $vendorPayments = Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('vendor_id')
+            ->whereBetween('payment_date', [$from, $to])
+            ->sum('amount');
+        $vendorReceipts = Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('vendor_id')
+            ->whereBetween('receipt_date', [$from, $to])
+            ->sum('amount');
+        $settlementRefunds = InvoiceSettlement::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'confirmed')
+            ->whereBetween('settlement_date', [$from, $to])
+            ->sum('amount_refunded');
+        $refundOrders = Order::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where('total_amount', '<', 0)
+            ->whereBetween('created_at', [
+                Carbon::parse($from)->startOfDay(),
+                Carbon::parse($to)->endOfDay(),
+            ])
+            ->sum('total_amount');
+        $refund = (float) $settlementRefunds + abs((float) $refundOrders);
 
         $costQuery = OrderVendorCost::query()
             ->join('orders', 'orders.id', '=', 'order_vendor_costs.order_id')
@@ -647,7 +689,7 @@ class ReportService
             ->whereNotIn('invoices.status', ['void', 'cancel'])
             ->whereNotIn('orders.status', ['cancel', 'void']);
 
-        $cost = (clone $costQuery)->sum('order_vendor_costs.amount');
+        $cost = $this->dashboardPurchaseTotal($tenantId, $companyId, $from, $to);
         $expenses = (clone $costQuery)
             ->selectRaw("COALESCE(NULLIF(order_vendor_costs.service_type, ''), 'Other') as type")
             ->selectRaw('COALESCE(SUM(order_vendor_costs.amount), 0) as value')
@@ -697,16 +739,24 @@ class ReportService
             'period' => ['from' => $from, 'to' => $to],
             'summary' => [
                 'invoiced' => round($revenue, 2),
-                'collected' => round((float) $invoice->collected, 2),
-                'outstanding' => round((float) $invoice->outstanding, 2),
+                'refund' => round($refund, 2),
+                'collected' => round((float) $cashIn, 2),
+                'customer_receipts' => round((float) $customerReceipts, 2),
+                'customer_payments' => round((float) $customerPayments, 2),
+                'outstanding' => round((float) $outstanding['summary']['customer_total'], 2),
+                'purchase' => round((float) $cost, 2),
+                'paid' => round((float) $cashOut, 2),
+                'vendor_payments' => round((float) $vendorPayments, 2),
+                'vendor_receipts' => round((float) $vendorReceipts, 2),
                 'cash_in' => round((float) $cashIn, 2),
                 'cash_out' => round((float) $cashOut, 2),
                 'profit' => round($profit, 2),
                 'margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
             ],
             'mix' => [
-                ['type' => 'Collected', 'value' => round((float) $invoice->collected, 2)],
-                ['type' => 'Outstanding', 'value' => round((float) $invoice->outstanding, 2)],
+                ['type' => 'Collected', 'value' => round((float) $cashIn, 2)],
+                ['type' => 'Refund', 'value' => round($refund, 2)],
+                ['type' => 'Outstanding', 'value' => round((float) $outstanding['summary']['customer_total'], 2)],
                 ['type' => 'Cash Out', 'value' => round((float) $cashOut, 2)],
                 ['type' => 'Profit', 'value' => round(max($profit, 0), 2)],
             ],
@@ -720,35 +770,105 @@ class ReportService
         ];
     }
 
-    private function dashboardOutstandingBalances(int $tenantId, int $companyId): array
+    private function dashboardPurchaseTotal(int $tenantId, int $companyId, string $from, string $to): float
     {
-        $customers = Invoice::query()
-            ->join('customers', 'customers.id', '=', 'invoices.customer_id')
-            ->where('invoices.tenant_id', $tenantId)
-            ->where('invoices.company_id', $companyId)
-            ->where('invoices.outstanding_amount', '>', 0)
-            ->whereNotIn('invoices.status', ['void', 'cancel'])
-            ->selectRaw('customers.id as id, customers.name as name, invoices.currency_code as currency_code')
-            ->selectRaw('COALESCE(SUM(invoices.outstanding_amount), 0) as amount')
-            ->groupBy('customers.id', 'customers.name', 'invoices.currency_code')
-            ->orderByDesc('amount')
-            ->limit(6)
-            ->get()
-            ->map(fn ($row) => [
-                'type' => 'Customer',
-                'id' => (int) $row->id,
-                'name' => $row->name ?: 'Unnamed customer',
-                'currency_code' => $row->currency_code,
-                'amount' => round((float) $row->amount, 2),
-            ])
-            ->values();
-
-        $customerTotal = Invoice::query()
+        return Order::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->where('outstanding_amount', '>', 0)
-            ->whereNotIn('status', ['void', 'cancel'])
-            ->sum('outstanding_amount');
+            ->whereNotIn('status', ['cancel', 'void'])
+            ->whereHas('invoice', fn ($invoice) => $invoice
+                ->whereBetween('invoice_date', [$from, $to])
+                ->whereNotIn('status', ['void', 'cancel']))
+            ->with(['invoice:id,order_id,invoice_date', 'vendorCosts'])
+            ->get()
+            ->sum(function (Order $order): float {
+                if ($order->vendorCosts->isNotEmpty()) {
+                    return (float) $order->vendorCosts->sum('amount');
+                }
+
+                return $order->vendor_id ? $order->vendorPayableAmountFor((int) $order->vendor_id) : 0.0;
+            });
+    }
+
+    private function dashboardOutstandingBalances(int $tenantId, int $companyId): array
+    {
+        $balances = [];
+        $addCustomerBalance = function (int $customerId, ?string $currencyCode, float $amount) use (&$balances): void {
+            $key = $customerId . '|' . ($currencyCode ?: '');
+            $balances[$key]['id'] = $customerId;
+            $balances[$key]['currency_code'] = $currencyCode;
+            $balances[$key]['amount'] = ($balances[$key]['amount'] ?? 0) + $amount;
+        };
+
+        Invoice::query()
+            ->where('invoices.tenant_id', $tenantId)
+            ->where('invoices.company_id', $companyId)
+            ->whereNotIn('invoices.status', ['void', 'cancel'])
+            ->selectRaw('customer_id, currency_code, COALESCE(SUM(total_amount), 0) as amount')
+            ->groupBy('customer_id', 'currency_code')
+            ->get()
+            ->each(fn ($row) => $addCustomerBalance((int) $row->customer_id, $row->currency_code, (float) $row->amount));
+
+        Order::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where('total_amount', '<', 0)
+            ->selectRaw('customer_id, currency_code, COALESCE(SUM(ABS(total_amount)), 0) as amount')
+            ->groupBy('customer_id', 'currency_code')
+            ->get()
+            ->each(fn ($row) => $addCustomerBalance((int) $row->customer_id, $row->currency_code, -1 * (float) $row->amount));
+
+        InvoiceSettlement::query()
+            ->join('invoices', 'invoices.id', '=', 'invoice_settlements.invoice_id')
+            ->where('invoice_settlements.tenant_id', $tenantId)
+            ->where('invoice_settlements.status', 'confirmed')
+            ->where('invoices.company_id', $companyId)
+            ->where('invoice_settlements.amount_refunded', '>', 0)
+            ->selectRaw('invoices.customer_id as customer_id, invoices.currency_code as currency_code, COALESCE(SUM(invoice_settlements.amount_refunded), 0) as amount')
+            ->groupBy('invoices.customer_id', 'invoices.currency_code')
+            ->get()
+            ->each(fn ($row) => $addCustomerBalance((int) $row->customer_id, $row->currency_code, -1 * (float) $row->amount));
+
+        Receipt::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('customer_id')
+            ->selectRaw('customer_id, currency_code, COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('customer_id', 'currency_code')
+            ->get()
+            ->each(fn ($row) => $addCustomerBalance((int) $row->customer_id, $row->currency_code, -1 * (float) $row->amount));
+
+        Payment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereNotNull('customer_id')
+            ->selectRaw('customer_id, currency_code, COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('customer_id', 'currency_code')
+            ->get()
+            ->each(fn ($row) => $addCustomerBalance((int) $row->customer_id, $row->currency_code, (float) $row->amount));
+
+        $customerNames = Customer::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereIn('id', collect($balances)->pluck('id')->unique()->values())
+            ->pluck('name', 'id');
+
+        $customers = collect($balances)
+            ->map(fn (array $row) => [
+                'type' => 'Customer',
+                'id' => (int) $row['id'],
+                'name' => $customerNames[$row['id']] ?? 'Unnamed customer',
+                'currency_code' => $row['currency_code'],
+                'amount' => round(max(0, (float) $row['amount']), 2),
+            ])
+            ->filter(fn (array $row) => $row['amount'] > 0)
+            ->sortByDesc('amount')
+            ->take(6)
+            ->values();
+
+        $customerTotal = collect($balances)
+            ->sum(fn (array $row) => max(0, (float) $row['amount']));
 
         $vendorBalances = $this->dashboardVendorOutstandingBalances($tenantId, $companyId);
 

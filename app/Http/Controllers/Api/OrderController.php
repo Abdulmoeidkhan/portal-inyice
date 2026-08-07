@@ -387,7 +387,6 @@ class OrderController extends Controller
 
         $search = trim((string) $request->query('search', ''));
         $status = $request->query('status');
-
         $orders = Order::where('tenant_id', $user->tenant_id)
             ->where('company_id', $user->company_id)
             ->with(['customer:id,name', 'items:id,order_id,description,total_price', 'invoice:id,order_id,uid,invoice_number,status,outstanding_amount'])
@@ -487,7 +486,7 @@ class OrderController extends Controller
         $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid']);
         $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
-        return response()->json($order);
+        return response()->json($this->normalizeResponseText($order->toArray()));
     }
 
     public function update(string $uid, Request $request): JsonResponse
@@ -1467,10 +1466,10 @@ class OrderController extends Controller
         $request->merge(['voucher' => $voucher]);
     }
 
-    private function orderForUser(Order $order, $user): Order
+    private function orderForUser(Order $order, $user): array
     {
         if (!$this->isSalesStaff($user)) {
-            return $order;
+            return $this->normalizeResponseText($order->toArray());
         }
 
         $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
@@ -1482,7 +1481,7 @@ class OrderController extends Controller
             });
         }
 
-        return $order;
+        return $this->normalizeResponseText($order->toArray());
     }
 
     private function voucherForUserWrite(array $voucher, ?array $existingMeta, $user): array

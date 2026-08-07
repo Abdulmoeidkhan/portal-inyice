@@ -12,7 +12,7 @@ const firstOfMonth = () => {
   date.setDate(1);
   return dateString(date);
 };
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const margin = (value) => `${Number(value || 0).toFixed(2)}%`;
 const label = (value) => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const dateByOptions = [

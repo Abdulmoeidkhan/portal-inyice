@@ -5,6 +5,9 @@ import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } 
 import { Column, Line } from '@ant-design/plots';
 import { dateOnly } from '../services/dateFormat';
 
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const wholeMoney = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
 export default function RevenueReport() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -60,19 +63,19 @@ export default function RevenueReport() {
     {
       title: 'Total Revenue',
       dataIndex: 'total_revenue',
-      render: (value) => value.toFixed(2),
+      render: money,
       align: 'right',
     },
     {
       title: 'Collected',
       dataIndex: 'total_paid',
-      render: (value) => value.toFixed(2),
+      render: money,
       align: 'right',
     },
     {
       title: 'Outstanding',
       dataIndex: 'total_outstanding',
-      render: (value) => value.toFixed(2),
+      render: money,
       align: 'right',
     },
     {
@@ -83,7 +86,7 @@ export default function RevenueReport() {
     {
       title: 'Avg Invoice',
       dataIndex: 'average_invoice_value',
-      render: (value) => value.toFixed(2),
+      render: money,
       align: 'right',
     },
   ];
@@ -148,7 +151,7 @@ export default function RevenueReport() {
     padding: screens.md ? 'auto' : [20, 16, 44, 44],
     label: {
       position: 'top',
-      text: (d) => d.revenue.toFixed(0),
+      text: (d) => wholeMoney(d.revenue),
       fill: chartTextColor,
       fontSize: screens.md ? 12 : 11,
       fontWeight: 600,
@@ -242,7 +245,7 @@ export default function RevenueReport() {
                   <DollarOutlined style={{ fontSize: '24px' }} />
                   <h3>Total Revenue</h3>
                   <p>
-                    {report.summary.total_revenue.toFixed(2)}
+                    {money(report.summary.total_revenue)}
                   </p>
                 </div>
               </Card>
@@ -253,7 +256,7 @@ export default function RevenueReport() {
                   <CheckCircleOutlined style={{ fontSize: '24px', color: themeToken.colorSuccess }} />
                   <h3>Collected</h3>
                   <p style={{ color: themeToken.colorSuccess }}>
-                    {report.summary.total_collected.toFixed(2)}
+                    {money(report.summary.total_collected)}
                   </p>
                 </div>
               </Card>
@@ -264,7 +267,7 @@ export default function RevenueReport() {
                   <AlertOutlined style={{ fontSize: '24px', color: themeToken.colorWarning }} />
                   <h3>Outstanding</h3>
                   <p style={{ color: themeToken.colorWarning }}>
-                    {report.summary.total_outstanding.toFixed(2)}
+                    {money(report.summary.total_outstanding)}
                   </p>
                 </div>
               </Card>

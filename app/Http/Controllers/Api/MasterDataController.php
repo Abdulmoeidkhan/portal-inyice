@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Services\StatementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -31,9 +32,16 @@ class MasterDataController extends Controller
             });
         }
 
-        return response()->json($query->limit(50)->get([
+        $customers = $query->limit(50)->get([
             'id', 'uid', 'type', 'name', 'email', 'phone', 'address', 'city', 'country_code', 'currency_code',
-        ])->map(fn (Customer $customer) => $this->customerPayload($customer))->values());
+        ]);
+        $outstandingBalances = $this->canSeeOutstanding($user)
+            ? $this->customerOutstandingBalances($customers, (int) $user->tenant_id, (int) $user->company_id)
+            : [];
+
+        return response()->json($customers
+            ->map(fn (Customer $customer) => $this->customerPayload($customer, $outstandingBalances[$customer->id] ?? null))
+            ->values());
     }
 
     public function storeCustomer(Request $request): JsonResponse
@@ -136,9 +144,16 @@ class MasterDataController extends Controller
             });
         }
 
-        return response()->json($query->limit(50)->get([
+        $vendors = $query->limit(50)->get([
             'id', 'uid', 'type', 'name', 'email', 'phone', 'address', 'city', 'country_code', 'currency_code', 'payment_terms',
-        ])->map(fn (Vendor $vendor) => $this->vendorPayload($vendor))->values());
+        ]);
+        $outstandingBalances = $this->canSeeOutstanding($user)
+            ? $this->vendorOutstandingBalances($vendors, (int) $user->tenant_id, (int) $user->company_id)
+            : [];
+
+        return response()->json($vendors
+            ->map(fn (Vendor $vendor) => $this->vendorPayload($vendor, $outstandingBalances[$vendor->id] ?? null))
+            ->values());
     }
 
     public function staff(Request $request): JsonResponse
@@ -268,20 +283,63 @@ class MasterDataController extends Controller
         ];
     }
 
-    private function customerPayload(Customer $customer): array
+    private function customerPayload(Customer $customer, ?float $outstandingBalance = null): array
     {
-        return [
+        $payload = [
             ...$customer->only(['id', 'uid', 'type', 'name', 'email', 'phone', 'address', 'city', 'country_code', 'currency_code']),
             'can_manage' => !$this->hasCustomerFinancialLinks($customer),
         ];
+
+        if ($outstandingBalance !== null) {
+            $payload['outstanding_balance'] = round($outstandingBalance, 4);
+        }
+
+        return $payload;
     }
 
-    private function vendorPayload(Vendor $vendor): array
+    private function vendorPayload(Vendor $vendor, ?float $outstandingBalance = null): array
     {
-        return [
+        $payload = [
             ...$vendor->only(['id', 'uid', 'type', 'name', 'email', 'phone', 'address', 'city', 'country_code', 'currency_code', 'payment_terms']),
             'can_manage' => !$this->hasVendorFinancialLinks($vendor),
         ];
+
+        if ($outstandingBalance !== null) {
+            $payload['outstanding_balance'] = round($outstandingBalance, 4);
+        }
+
+        return $payload;
+    }
+
+    private function canSeeOutstanding(User $user): bool
+    {
+        return !$user->hasAnyRole(['sales']);
+    }
+
+    private function customerOutstandingBalances($customers, int $tenantId, int $companyId): array
+    {
+        $statementService = app(StatementService::class);
+
+        return $customers
+            ->mapWithKeys(function (Customer $customer) use ($statementService, $tenantId, $companyId): array {
+                $statement = $statementService->customerStatement($tenantId, $companyId, $customer->id);
+
+                return [$customer->id => (float) ($statement['summary']['total_outstanding'] ?? 0)];
+            })
+            ->all();
+    }
+
+    private function vendorOutstandingBalances($vendors, int $tenantId, int $companyId): array
+    {
+        $statementService = app(StatementService::class);
+
+        return $vendors
+            ->mapWithKeys(function (Vendor $vendor) use ($statementService, $tenantId, $companyId): array {
+                $statement = $statementService->vendorStatement($tenantId, $companyId, $vendor->id);
+
+                return [$vendor->id => (float) ($statement['summary']['outstanding_balance'] ?? 0)];
+            })
+            ->all();
     }
 
     private function hasCustomerFinancialLinks(Customer $customer): bool

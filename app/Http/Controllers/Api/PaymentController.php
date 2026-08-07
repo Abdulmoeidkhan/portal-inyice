@@ -60,13 +60,20 @@ class PaymentController extends Controller
         $query = Receipt::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->whereNotNull('customer_id')
-            ->with(['customer:id,name', 'settlements.invoice:id,invoice_number']);
+            ->with(['customer:id,name', 'settlements.invoice:id,invoice_number'])
+            ->withSum('settlements as allocated_amount', 'amount_received');
 
         if ($request->filled('customer_id')) {
             $query->where('customer_id', (int) $request->query('customer_id'));
         }
 
-        return response()->json($query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50));
+        $receipts = $query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50);
+        $receipts->getCollection()->transform(function (Receipt $receipt): Receipt {
+            $receipt->remaining_amount = round(max(0, (float) $receipt->amount - (float) ($receipt->allocated_amount ?? 0)), 4);
+            return $receipt;
+        });
+
+        return response()->json($receipts);
     }
 
     public function vendorReceipts(Request $request): JsonResponse
@@ -185,6 +192,44 @@ class PaymentController extends Controller
         } catch (\InvalidArgumentException $exception) {
             return response()->json(['error' => $exception->getMessage()], 422);
         }
+        return response()->json(['success' => true, 'receipt' => $receipt]);
+    }
+
+    public function allocateCustomerAdvance(Request $request, string $uid): JsonResponse
+    {
+        $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->whereNotNull('customer_id')
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'date' => 'nullable|date',
+            'notes' => 'nullable|string|max:1000',
+            'allocations' => 'required|array|min:1',
+            'allocations.*.invoice_id' => 'required|integer|distinct|exists:invoices,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $invoices = Invoice::where('tenant_id', $receipt->tenant_id)
+            ->where('company_id', $receipt->company_id)
+            ->where('customer_id', $receipt->customer_id)
+            ->where('currency_code', $receipt->currency_code)
+            ->whereNotIn('status', ['paid', 'void'])
+            ->where('outstanding_amount', '>', 0)
+            ->whereIn('id', collect($validated['allocations'])->pluck('invoice_id'))
+            ->get();
+
+        if ($invoices->count() !== count($validated['allocations'])) {
+            return response()->json(['error' => 'One or more invoices are unavailable for advance allocation.'], 422);
+        }
+
+        try {
+            $receipt = $this->paymentService->allocateCustomerAdvanceReceipt($receipt, $invoices, $validated);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+
         return response()->json(['success' => true, 'receipt' => $receipt]);
     }
 

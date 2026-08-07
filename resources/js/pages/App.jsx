@@ -369,6 +369,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
     .find((item) => item.key === location.pathname)?.key || '/';
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const canAccessPayments = ['owner', 'admin', 'accounts'].includes(user?.role);
   const canAccessReports = user?.role !== 'sales';
   const canAccessCancelledReport = ['owner', 'admin'].includes(user?.role);
 
@@ -557,10 +558,10 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/orders/:uid/edit" element={<OrderEdit />} />
               <Route path="/reference-search" element={<ReferenceSearch />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
-              <Route path="/payments" element={<Payments />} />
-              <Route path="/customer-payments" element={<CounterpartyTransaction direction="payment" partyType="customer" />} />
-              <Route path="/vendor-payments" element={<VendorPayments />} />
-              <Route path="/vendor-receipts" element={<CounterpartyTransaction direction="receipt" partyType="vendor" />} />
+              <Route path="/payments" element={canAccessPayments ? <Payments /> : <Navigate to="/" replace />} />
+              <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
+              <Route path="/vendor-payments" element={canAccessPayments ? <VendorPayments /> : <Navigate to="/" replace />} />
+              <Route path="/vendor-receipts" element={canAccessPayments ? <CounterpartyTransaction direction="receipt" partyType="vendor" /> : <Navigate to="/" replace />} />
               <Route path="/customers" element={<CustomerList />} />
               <Route path="/vendors" element={<VendorList />} />
               <Route path="/profile/company" element={<CompanyProfile />} />
@@ -728,6 +729,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
   }
 
   const signedInUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const canAccessPayments = ['owner', 'admin', 'accounts'].includes(signedInUser.role);
   const canAccessReports = signedInUser.role !== 'sales';
   const canAccessCancelledReport = ['owner', 'admin'].includes(signedInUser.role);
 
@@ -762,7 +764,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           label: <Link to="/reference-search">Reference Search</Link>,
           icon: <SearchOutlined />,
         },
-        {
+        ...(canAccessPayments ? [{
           key: '/payments',
           label: <Link to="/payments">Customer Receipts</Link>,
           icon: <BankOutlined />,
@@ -781,7 +783,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           key: '/vendor-payments',
           label: <Link to="/vendor-payments">Vendor Payments</Link>,
           icon: <BankOutlined />,
-        },
+        }] : []),
       ],
     },
     {

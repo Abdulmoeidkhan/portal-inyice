@@ -7,7 +7,7 @@ import { dateOnly } from '../services/dateFormat';
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const firstOfMonth = () => { const date = new Date(); date.setDate(1); return dateString(date); };
-const money = (value) => Number(value || 0).toFixed(2);
+const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const label = (value) => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export default function PaymentReport({ direction = 'payment' }) {

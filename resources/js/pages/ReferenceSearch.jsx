@@ -52,7 +52,7 @@ const rangeFields = [
 ];
 
 const dateToString = (value) => value?.format?.('YYYY-MM-DD') || undefined;
-const money = (value, currency) => value === null || value === undefined || value === '' ? '-' : `${currency || ''} ${Number(value || 0).toFixed(2)}`.trim();
+const money = (value, currency) => value === null || value === undefined || value === '' ? '-' : `${currency || ''} ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
 
 export default function ReferenceSearch() {
   const [form] = Form.useForm();
