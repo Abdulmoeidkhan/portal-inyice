@@ -1815,10 +1815,11 @@ body {
 
 .receipt-slip {
   width: 100%;
-  max-width: 760px;
-  padding: 42px 46px;
+  max-width: 690px;
+  padding: 28px 32px;
   color: #111827;
   background: #ffffff;
+  border-top: 5px solid #383a36;
 }
 
 .receipt-slip,
@@ -1841,14 +1842,15 @@ body {
 .receipt-slip-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 28px;
+  gap: 22px;
   align-items: start;
-  margin-bottom: 34px;
+  margin-bottom: 22px;
+  break-inside: avoid;
 }
 
 .receipt-slip-brand {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: flex-start;
 }
 
@@ -1860,8 +1862,8 @@ body {
 }
 
 .receipt-slip-logo {
-  width: 96px;
-  height: 70px;
+  width: 78px;
+  height: 54px;
   object-fit: contain;
   background: #ffffff;
 }
@@ -1874,7 +1876,7 @@ body {
 }
 
 .receipt-slip-heading h1.ant-typography {
-  font-size: 38px;
+  font-size: 30px;
   font-weight: 500;
   line-height: 1;
 }
@@ -1882,9 +1884,10 @@ body {
 .receipt-slip-meta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
-  gap: 28px;
+  gap: 22px;
   align-items: start;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  break-inside: avoid;
 }
 
 .receipt-slip-party {
@@ -1893,7 +1896,7 @@ body {
 
 .receipt-slip-payment {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
 .receipt-slip-payment > div,
@@ -1907,16 +1910,27 @@ body {
 .receipt-slip-amount {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 14px;
   align-items: center;
-  margin-bottom: 20px;
-  padding: 16px 18px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
   border: 1px solid #d1d5db;
-  background: #f4f4f4;
+  border-left: 5px solid #383a36;
+  background: #f7f7f5;
+  break-inside: avoid;
+}
+
+.receipt-slip-amount h2.ant-typography {
+  font-size: 22px;
 }
 
 .receipt-slip-lines .ant-table {
   border-radius: 0;
+}
+
+.receipt-slip-lines,
+.receipt-slip-lines .ant-table-row {
+  break-inside: avoid;
 }
 
 .receipt-slip-lines .ant-table-thead > tr > th {
@@ -1930,25 +1944,36 @@ body {
   color: #ffffff !important;
 }
 
+.receipt-slip-lines .ant-table-thead > tr > th,
+.receipt-slip-lines .ant-table-tbody > tr > td {
+  padding: 7px 9px !important;
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
 .receipt-slip-totals {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+  break-inside: avoid;
 }
 
 .receipt-slip-total-row {
-  padding: 12px 14px;
-  background: #f4f4f4;
+  padding: 9px 12px;
+  background: #f7f7f5;
 }
 
 .receipt-slip-notes {
-  margin-top: 34px;
+  margin-top: 20px;
+  break-inside: avoid;
 }
 
 .receipt-slip-signatures {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 42px;
-  margin-top: 52px;
+  gap: 34px;
+  margin-top: 34px;
+  break-inside: avoid;
 }
 
 .receipt-slip-signatures > div {
@@ -1959,6 +1984,21 @@ body {
 .receipt-slip-signatures span {
   display: block;
   border-top: 1px solid #9ca3af;
+}
+
+.receipt-slip .ant-divider {
+  margin: 12px 0;
+}
+
+.receipt-slip .ant-typography {
+  line-height: 1.32;
+}
+
+.receipt-slip-party,
+.receipt-slip-payment,
+.receipt-slip-totals,
+.receipt-slip-signatures {
+  white-space: nowrap;
 }
 
 .app-utility-float {

@@ -506,6 +506,7 @@ export default function Payments() {
 
               <Table
                 className="receipt-slip-lines"
+                size="small"
                 rowKey="key"
                 pagination={false}
                 dataSource={receiptAllocationRows}
