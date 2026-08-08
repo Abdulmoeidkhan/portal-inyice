@@ -162,7 +162,11 @@ class PaymentController extends Controller
     public function showCustomerReceipt(string $uid): JsonResponse
     {
         $receipt = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)
-            ->with(['customer:id,name,currency_code', 'settlements.invoice:id,uid,invoice_number,outstanding_amount,total_amount'])
+            ->with([
+                'company:id,display_name,legal_name,email,phone,address,is_paid,logo_path,footer_logo_path',
+                'customer:id,name,email,phone,address,currency_code',
+                'settlements.invoice:id,uid,invoice_number,invoice_date,outstanding_amount,total_amount',
+            ])
             ->firstOrFail();
         return response()->json($receipt);
     }

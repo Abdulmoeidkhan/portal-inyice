@@ -6,20 +6,23 @@ import {
   ClearOutlined,
   CreditCardOutlined,
   DollarOutlined,
+  PrinterOutlined,
   ReloadOutlined,
   SaveOutlined,
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Form, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Col, Divider, Form, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, Watermark } from 'antd';
 import { message } from '../services/feedback';
 import { useSearchParams } from 'react-router-dom';
 import { createCustomerApi } from '../services/salesFlowApi';
 import { dateOnly } from '../services/dateFormat';
+import { printDocument } from '../services/printDocument';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatMethod = (value) => String(value || '—').replaceAll('_', ' ').toUpperCase();
 
 export default function Payments() {
   const [searchParams] = useSearchParams();
@@ -38,6 +41,8 @@ export default function Payments() {
   const [editInvoices, setEditInvoices] = useState([]);
   const [advanceAllocating, setAdvanceAllocating] = useState(null);
   const [advanceInvoices, setAdvanceInvoices] = useState([]);
+  const [printableReceipt, setPrintableReceipt] = useState(null);
+  const [printingReceiptUid, setPrintingReceiptUid] = useState(null);
   const [customerForm] = Form.useForm();
   const [form, setForm] = useState({ mode: 'allocate', date: today(), method: 'bank_transfer', account_id: null, reference: '', narration: '', advance_amount: null });
   const screens = Grid.useBreakpoint();
@@ -70,6 +75,16 @@ export default function Payments() {
   };
 
   useEffect(() => { loadBaseData(); }, []);
+  useEffect(() => {
+    if (!printableReceipt) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      printDocument('.receipt-print-host .receipt-slip', `Receipt ${printableReceipt.receipt_number || ''}`);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [printableReceipt]);
+
   useEffect(() => {
     const invoiceUid = searchParams.get('invoice');
     if (!invoiceUid) return;
@@ -246,6 +261,20 @@ export default function Payments() {
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
+  const printReceipt = async (row) => {
+    setPrintingReceiptUid(row.uid);
+    try {
+      const response = await fetch(`/api/v1/receipts/customer/${row.uid}`, { headers });
+      const receipt = await response.json();
+      if (!response.ok) throw new Error(receipt.error || receipt.message || 'Could not load receipt slip');
+      setPrintableReceipt({ ...receipt, remaining_amount: receiptRemaining(row) });
+    } catch (error) {
+      message.error(error.message);
+    } finally {
+      setPrintingReceiptUid(null);
+    }
+  };
+
   const autoAllocateAdvance = () => {
     if (!advanceAllocating) return;
     let remaining = receiptRemaining(advanceAllocating);
@@ -301,13 +330,45 @@ export default function Payments() {
     { title: 'Receipt #', dataIndex: 'receipt_number', width: 160 },
     { title: 'Date', dataIndex: 'receipt_date', width: 120, render: dateOnly },
     { title: 'Customer', dataIndex: ['customer', 'name'], width: 210 },
-    { title: 'Method', dataIndex: 'payment_method', width: 145, render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
+    { title: 'Method', dataIndex: 'payment_method', width: 145, render: (value) => <Tag>{formatMethod(value)}</Tag> },
     { title: 'Reference', dataIndex: 'reference_number', width: 180, ellipsis: true, render: (value) => value || '—' },
     { title: 'Invoices', dataIndex: 'settlements', width: 260, ellipsis: true, render: (items = []) => items.map((item) => item.invoice?.invoice_number).filter(Boolean).join(', ') || 'Advance' },
     { title: 'Amount', dataIndex: 'amount', width: 145, align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
     { title: 'Unallocated', key: 'remaining_amount', width: 145, align: 'right', render: (_, row) => money(receiptRemaining(row)) },
-    { title: 'Actions', key: 'actions', fixed: 'right', width: 230, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} disabled={receiptRemaining(row) > 0} onClick={() => openEdit(row)} /><Button size="small" icon={<CheckSquareOutlined />} disabled={receiptRemaining(row) <= 0} onClick={() => openAdvanceAllocation(row)}>Allocate</Button><Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
+    {
+      title: 'Actions',
+      key: 'actions',
+      fixed: 'right',
+      width: compactActions ? 170 : 300,
+      render: (_, row) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} disabled={receiptRemaining(row) > 0} onClick={() => openEdit(row)} title="Edit receipt" aria-label="Edit receipt" />
+          <Button size="small" icon={<CheckSquareOutlined />} disabled={receiptRemaining(row) <= 0} onClick={() => openAdvanceAllocation(row)} title="Allocate advance" aria-label="Allocate advance">
+            {compactActions ? null : 'Allocate'}
+          </Button>
+          <Button size="small" icon={<PrinterOutlined />} loading={printingReceiptUid === row.uid} onClick={() => printReceipt(row)} title="Print receipt slip" aria-label="Print receipt slip">
+          </Button>
+          <Popconfirm title="Delete this receipt?" description="Its invoice allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteReceipt(row)}>
+            <Button danger size="small" icon={<DeleteOutlined />} title="Delete receipt" aria-label="Delete receipt" />
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
+
+  const receiptCompany = printableReceipt?.company || {};
+  const receiptCustomer = printableReceipt?.customer || {};
+  const receiptCompanyName = receiptCompany.display_name || receiptCompany.legal_name || 'Company';
+  const receiptCompanyContact = [receiptCompany.address, receiptCompany.phone, receiptCompany.email].filter(Boolean);
+  const receiptCustomerContact = [receiptCustomer.name, receiptCustomer.phone, receiptCustomer.email, receiptCustomer.address].filter(Boolean);
+  const receiptAllocationRows = (printableReceipt?.settlements || [])
+    .filter((item) => Number(item.amount_received || 0) > 0)
+    .map((item, index) => ({
+      ...item,
+      key: item.id || `${item.invoice_id}-${index}`,
+    }));
+  const receiptAllocatedTotal = receiptAllocationRows.reduce((sum, item) => sum + Number(item.amount_received || 0), 0);
+  const receiptBalance = printableReceipt ? Math.max(0, Number(printableReceipt.amount || 0) - receiptAllocatedTotal) : 0;
 
   return (
     <div className="page-shell page-fade-up financial-entry-page">
@@ -397,8 +458,88 @@ export default function Payments() {
       </Card>
 
       <Card className="financial-history-card">
-        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1345 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>{compactActions ? null : 'Refresh'}</Button>} />
+        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1670 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>{compactActions ? null : 'Refresh'}</Button>} />
       </Card>
+      {printableReceipt && (
+        <div className="receipt-print-host" aria-hidden="true">
+          <div className="receipt-slip">
+            <Watermark
+              content={receiptCompany && receiptCompany.is_paid === false ? 'InYice' : undefined}
+              rotate={-24}
+              gap={[120, 100]}
+              font={{ color: 'rgba(0, 0, 0, 0.12)', fontSize: 24, fontWeight: 700 }}
+            >
+              <div className="receipt-slip-header">
+                <div className="receipt-slip-brand">
+                  {receiptCompany.logo_url && <img className="receipt-slip-logo" src={receiptCompany.logo_url} alt={`${receiptCompanyName} logo`} />}
+                  <div>
+                    <Title level={3}>{receiptCompanyName}</Title>
+                    {receiptCompanyContact.map((item) => <Text key={item}>{item}<br /></Text>)}
+                  </div>
+                </div>
+                <div className="receipt-slip-heading">
+                  <Title level={1}>RECEIPT</Title>
+                  <Text strong># {printableReceipt.receipt_number}</Text>
+                  <Text type="secondary">Date</Text>
+                  <Title level={5}>{dateOnly(printableReceipt.receipt_date)}</Title>
+                </div>
+              </div>
+
+              <div className="receipt-slip-meta">
+                <div>
+                  <Text type="secondary">Received From</Text>
+                  <div className="receipt-slip-party">
+                    {receiptCustomerContact.length ? receiptCustomerContact.map((item, index) => <Text key={`${item}-${index}`} strong={index === 0}>{item}<br /></Text>) : <Text>-</Text>}
+                  </div>
+                </div>
+                <div className="receipt-slip-payment">
+                  <div><Text>Payment Method</Text><Text strong>{formatMethod(printableReceipt.payment_method)}</Text></div>
+                  <div><Text>Reference</Text><Text>{printableReceipt.reference_number || '—'}</Text></div>
+                  <div><Text>Currency</Text><Text>{printableReceipt.currency_code}</Text></div>
+                </div>
+              </div>
+
+              <div className="receipt-slip-amount">
+                <Text>Amount Received</Text>
+                <Title level={2}>{printableReceipt.currency_code} {money(printableReceipt.amount)}</Title>
+              </div>
+
+              <Table
+                className="receipt-slip-lines"
+                rowKey="key"
+                pagination={false}
+                dataSource={receiptAllocationRows}
+                columns={[
+                  { title: 'Invoice', render: (_, row) => row.invoice?.invoice_number || 'Advance balance' },
+                  { title: 'Date', width: 120, render: (_, row) => dateOnly(row.settlement_date) },
+                  { title: 'Amount', width: 150, align: 'right', render: (_, row) => money(row.amount_received) },
+                ]}
+                locale={{ emptyText: 'Advance receipt, not yet allocated to invoices' }}
+              />
+
+              <Divider />
+              <Row justify="end">
+                <Col xs={24} md={12}>
+                  <div className="receipt-slip-totals">
+                    <div><Text>Allocated</Text><Text>{money(receiptAllocatedTotal)}</Text></div>
+                    <div><Text>Unallocated</Text><Text>{money(receiptBalance)}</Text></div>
+                    <div className="receipt-slip-total-row"><Text strong>Total Received</Text><Text strong>{printableReceipt.currency_code} {money(printableReceipt.amount)}</Text></div>
+                  </div>
+                </Col>
+              </Row>
+
+              <div className="receipt-slip-notes">
+                <Text strong>Notes</Text>
+                <Paragraph>{printableReceipt.description || 'Thank you for your payment.'}</Paragraph>
+              </div>
+              <div className="receipt-slip-signatures">
+                <div><span /> <Text>Received by</Text></div>
+                <div><span /> <Text>Customer signature</Text></div>
+              </div>
+            </Watermark>
+          </div>
+        </div>
+      )}
       <Modal
         title="Add Customer"
         open={customerModalOpen}

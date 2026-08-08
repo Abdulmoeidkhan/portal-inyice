@@ -98,6 +98,7 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root > .invoice-paper,
+    .print-document-root > .receipt-slip,
     .print-document-root > .voucher-preview {
       max-width: none !important;
       margin: 0 !important;
@@ -157,6 +158,8 @@ const buildPrintHtml = (source, title) => {
     .print-document-root .ant-table-tbody > tr > td,
     .print-document-root .ant-card-body,
     .print-document-root .voucher-preview,
+    .print-document-root .receipt-slip,
+    .print-document-root .receipt-slip-lines .ant-table-tbody > tr > td,
     .print-document-root .invoice-paper {
       background: #ffffff !important;
       print-color-adjust: exact;
