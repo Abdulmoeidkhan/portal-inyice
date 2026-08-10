@@ -35,6 +35,30 @@ class AuthSecurityApiTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
+    public function test_signin_requires_confirmation_before_replacing_active_session(): void
+    {
+        $ctx = $this->seedContext('admin');
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $ctx['user']->email,
+            'password' => 'password123',
+        ])->assertOk();
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $ctx['user']->email,
+            'password' => 'password123',
+        ])->assertStatus(409)
+            ->assertJsonPath('session_conflict', true);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $ctx['user']->email,
+            'password' => 'password123',
+            'force_logout' => true,
+        ])->assertOk();
+
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
     public function test_signin_is_rate_limited_after_too_many_attempts(): void
     {
         for ($i = 0; $i < 6; $i++) {
@@ -112,6 +136,89 @@ class AuthSecurityApiTest extends TestCase
             ->assertJsonPath('invoice', null);
 
         $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_edit_locks_block_other_users_until_released(): void
+    {
+        $ctx = $this->seedContext('admin');
+        $otherUser = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $ctx['role']->id,
+            'name' => 'Second User',
+            'email' => 'second-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+        $invoice = Invoice::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'order_id' => $ctx['order']->id,
+            'customer_id' => $ctx['customer']->id,
+            'invoice_number' => 'INV-' . fake()->unique()->numerify('######'),
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(7)->toDateString(),
+            'currency_code' => 'PKR',
+            'subtotal' => 500,
+            'tax_amount' => 0,
+            'total_amount' => 500,
+            'outstanding_amount' => 500,
+            'advance_balance' => 0,
+            'status' => 'issued',
+            'fx_rate_to_base' => 1,
+        ]);
+
+        Sanctum::actingAs($ctx['user']);
+        $this->postJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertOk()
+            ->assertJsonPath('locked', false);
+
+        Sanctum::actingAs($otherUser);
+        $this->postJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertStatus(423)
+            ->assertJsonPath('locked_by.name', 'Security User');
+
+        Sanctum::actingAs($ctx['user']);
+        $this->patchJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertOk();
+        $this->deleteJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertOk();
+
+        Sanctum::actingAs($otherUser);
+        $this->postJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertOk()
+            ->assertJsonPath('locked', false);
+
+        $this->deleteJson('/api/v1/edit-locks', [
+            'type' => 'order',
+            'uid' => $ctx['order']->uid,
+        ])->assertOk();
+
+        Sanctum::actingAs($ctx['user']);
+        $this->postJson('/api/v1/edit-locks', [
+            'type' => 'invoice',
+            'uid' => $invoice->uid,
+        ])->assertOk()
+            ->assertJsonPath('locked', false);
+
+        Sanctum::actingAs($otherUser);
+        $this->postJson('/api/v1/edit-locks', [
+            'type' => 'invoice',
+            'uid' => $invoice->uid,
+        ])->assertStatus(423)
+            ->assertJsonPath('locked_by.name', 'Security User');
     }
 
     /**

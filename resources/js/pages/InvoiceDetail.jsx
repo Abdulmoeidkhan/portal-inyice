@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography, Watermark } from 'antd';
+import { Alert, Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
+import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 
 const { Title, Text, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -165,19 +166,59 @@ export default function InvoiceDetail({ shared = false }) {
   const location = useLocation();
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lockConflict, setLockConflict] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const detailed = new URLSearchParams(location.search).get('view') === 'detailed';
 
   useEffect(() => {
-    const endpoint = shared ? `/api/v1/shared-invoices/${shareToken}` : `/api/v1/invoices/${uid}`;
-    fetch(endpoint, { headers: shared ? { Accept: 'application/json' } : { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
-      .then(async (response) => {
+    let acquiredLock = false;
+    let heartbeatTimer = null;
+    let cancelled = false;
+
+    const loadInvoice = async () => {
+      setLoading(true);
+      setLockConflict(null);
+
+      try {
+        if (!shared) {
+          await acquireEditLock('invoice', uid);
+          acquiredLock = true;
+          heartbeatTimer = setInterval(() => {
+            heartbeatEditLock('invoice', uid).catch(() => {});
+          }, 30000);
+        }
+
+        const endpoint = shared ? `/api/v1/shared-invoices/${shareToken}` : `/api/v1/invoices/${uid}`;
+        const response = await fetch(endpoint, { headers: shared ? { Accept: 'application/json' } : { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Invoice is unavailable');
+        if (cancelled) return;
         setInvoice(data);
-      })
-      .catch((error) => message.error(error.message))
-      .finally(() => setLoading(false));
+      } catch (error) {
+        if (cancelled) return;
+        if (error.status === 423) {
+          setLockConflict(error.data || { message: error.message });
+        } else {
+          message.error(error.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInvoice();
+
+    return () => {
+      cancelled = true;
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+      }
+      if (acquiredLock) {
+        releaseEditLock('invoice', uid).catch(() => {});
+      }
+    };
   }, [shared, shareToken, uid]);
 
   const share = async () => {
@@ -191,6 +232,25 @@ export default function InvoiceDetail({ shared = false }) {
   };
 
   if (loading) return <div className="page-shell"><Card><Skeleton active /></Card></div>;
+  if (lockConflict) {
+    const userName = lockConflict.locked_by?.name || 'Another user';
+
+    return (
+      <div className="page-shell page-fade-up">
+        <Alert
+          type="warning"
+          showIcon
+          message={`${userName} is working on this invoice`}
+          description="This invoice is temporarily locked for editing. Try again after they finish or the lock expires."
+          action={(
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/invoices')}>
+              Back to Invoices
+            </Button>
+          )}
+        />
+      </div>
+    );
+  }
   if (!invoice) return <div className="page-shell"><Empty description="Invoice not found" /></div>;
 
   const passengerRows = buildPassengerRows(invoice);

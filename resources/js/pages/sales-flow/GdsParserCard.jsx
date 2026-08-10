@@ -3,9 +3,9 @@ import { Alert, Button, Card, Form, Input, Space, Tag } from 'antd';
 
 const { TextArea } = Input;
 
-export default function GdsParserCard({ form, loading, parsedHint, parseResult, onParse }) {
-  return (
-    <Card className="border-beam-aurora" title="Parse GDS (Sabre / Galileo / Amadeus / Other)">
+export default function GdsParserCard({ form, loading, parsedHint, parseResult, onParse, embedded = false }) {
+  const content = (
+    <>
       <Alert type="info" showIcon style={{ marginBottom: 12 }} message={parsedHint} />
       <Form
         layout="vertical"
@@ -25,6 +25,16 @@ export default function GdsParserCard({ form, loading, parsedHint, parseResult, 
           <Tag color="green">Local parser</Tag>
         </Space>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <Card className="border-beam-aurora" title="Parse GDS (Sabre / Galileo / Amadeus / Other)">
+      {content}
     </Card>
   );
 }

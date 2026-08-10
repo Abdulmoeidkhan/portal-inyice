@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ProfitShare;
 use App\Models\Role;
 use App\Models\Receipt;
 use App\Models\VendorPaymentAllocation;
@@ -901,12 +902,18 @@ class FinancialApiTest extends TestCase
 
         $invoiceUid = $invoiceResponse->json('invoice.uid');
         $this->patchJson('/api/v1/invoices/' . $invoiceUid . '/mark-sent')->assertOk();
+        DB::table('invoices')
+            ->where('uid', $invoiceUid)
+            ->update(['invoice_date' => '2026-08-10 15:45:00']);
 
         $this->postJson('/api/v1/receipts/customer/record', [
             'invoice_uid' => $invoiceUid,
             'amount' => 250,
             'payment_method' => 'cash',
         ])->assertCreated();
+        DB::table('receipts')
+            ->where('tenant_id', $ctx['tenant']->id)
+            ->update(['receipt_date' => '2026-08-10 16:30:00']);
 
         $aging = $this->getJson('/api/v1/reports/aging');
         $aging->assertOk();
@@ -920,6 +927,15 @@ class FinancialApiTest extends TestCase
         $revenue = $this->getJson('/api/v1/reports/revenue?from_date=2020-01-01&to_date=2030-12-31&group_by=month');
         $revenue->assertOk();
         $revenue->assertJsonPath('group_by', 'month');
+
+        $sameDayRevenue = $this->getJson('/api/v1/reports/revenue?from_date=2026-08-10&to_date=2026-08-10&group_by=day');
+        $sameDayRevenue->assertOk()
+            ->assertJsonPath('summary.total_invoices', 1)
+            ->assertJsonPath('data.0.period', '2026-08-10');
+
+        $this->getJson('/api/v1/reports/receipts?from_date=2026-08-10&to_date=2026-08-10')
+            ->assertOk()
+            ->assertJsonPath('summary.total_records', 1);
 
         $profit = $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer');
         $profit->assertOk()
@@ -937,6 +953,53 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('filters.entity_id', $ctx['user']->id)
             ->assertJsonPath('data.0.group_name', 'API Tester')
             ->assertJsonPath('summary.total_orders', 1);
+
+        $recipient = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $ctx['user']->role_id,
+            'name' => 'Profit Recipient',
+            'email' => 'recipient-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+        $invoice = Invoice::where('uid', $invoiceUid)->firstOrFail();
+        $profitShare = ProfitShare::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'from_user_id' => $ctx['user']->id,
+            'to_user_id' => $recipient->id,
+            'invoice_id' => $invoice->id,
+            'share_date' => '2026-08-10',
+            'currency_code' => 'PKR',
+            'amount' => 125,
+            'created_by_user_id' => $ctx['user']->id,
+            'updated_by_user_id' => $ctx['user']->id,
+        ]);
+        DB::table('profit_shares')
+            ->where('id', $profitShare->id)
+            ->update(['share_date' => '2026-08-10 17:15:00']);
+
+        $this->getJson('/api/v1/profit-shares?from_date=2026-08-10&to_date=2026-08-10')
+            ->assertOk()
+            ->assertJsonPath('data.0.amount', 125);
+
+        $senderProfit = $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=staff&entity_id=' . $ctx['user']->id)
+            ->assertOk();
+        $senderProfit->assertJsonPath('data.0.shared_out', 125)
+            ->assertJsonPath('data.0.shared_in', 0)
+            ->assertJsonPath('data.0.profit', 1000)
+            ->assertJsonPath('data.0.profit_after_sharing', 875);
+
+        $recipientProfit = $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=staff&entity_id=' . $recipient->id)
+            ->assertOk();
+        $recipientProfit->assertJsonPath('data.0.group_name', 'Profit Recipient')
+            ->assertJsonPath('data.0.shared_out', 0)
+            ->assertJsonPath('data.0.shared_in', 125)
+            ->assertJsonPath('data.0.profit', 0)
+            ->assertJsonPath('data.0.profit_after_sharing', 125);
 
         $customerSummary = $this->getJson('/api/v1/reports/customer-summary');
         $customerSummary->assertOk();
@@ -960,6 +1023,63 @@ class FinancialApiTest extends TestCase
             'vendor',
             'statement_date',
             'summary',
+        ]);
+    }
+
+    public function test_order_can_be_duplicated_without_copying_invoice(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $response = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/duplicate');
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('source_order_uid', $ctx['order']->uid)
+            ->assertJsonPath('order.status', 'order');
+
+        $duplicatedOrder = Order::where('uid', $response->json('order.uid'))->firstOrFail();
+        $this->assertNotSame($ctx['order']->id, $duplicatedOrder->id);
+        $this->assertNotSame($ctx['order']->order_number, $duplicatedOrder->order_number);
+        $this->assertNull($duplicatedOrder->invoice);
+        $this->assertSame(1, $duplicatedOrder->items()->count());
+        $this->assertSame((float) $ctx['order']->total_amount, (float) $duplicatedOrder->total_amount);
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $invoice['uid'],
+            'order_id' => $ctx['order']->id,
+        ]);
+    }
+
+    public function test_admin_can_change_order_booked_by_from_invoice_folder_action(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $newBooker = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $ctx['user']->role_id,
+            'name' => 'New Booker',
+            'email' => 'booker-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid . '/booked-by', [
+            'user_id' => $newBooker->id,
+        ])->assertOk()
+            ->assertJsonPath('order.created_by.id', $newBooker->id)
+            ->assertJsonPath('order.created_by.name', 'New Booker');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $ctx['order']->id,
+            'created_by_user_id' => $newBooker->id,
         ]);
     }
 

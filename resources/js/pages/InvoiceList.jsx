@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { CopyOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
+import { acquireEditLock } from '../services/editLocks';
 
 const { Title, Paragraph, Text } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -11,6 +12,14 @@ const canEditInvoiceOrder = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return ['admin', 'owner', 'accounts'].includes(user.role);
+  } catch {
+    return false;
+  }
+};
+const canChangeBookedBy = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return ['admin', 'owner'].includes(user.role);
   } catch {
     return false;
   }
@@ -34,10 +43,18 @@ export default function InvoiceList() {
   const [deleteInvoiceNumber, setDeleteInvoiceNumber] = useState('');
   const [actionLoadingKey, setActionLoadingKey] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [staff, setStaff] = useState([]);
+  const [bookedByInvoice, setBookedByInvoice] = useState(null);
+  const [bookedByUserId, setBookedByUserId] = useState(null);
   const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const canEditInvoices = canEditInvoiceOrder();
+  const canUpdateBookedBy = canChangeBookedBy();
   const compactActions = !screens.sm;
+  const staffOptions = staff.map((user) => ({
+    value: user.id,
+    label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
+  }));
 
   const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
     setLoading(true);
@@ -84,6 +101,28 @@ export default function InvoiceList() {
     fetchInvoices(1, searchTerm, statusFilter);
   }, [statusFilter]);
 
+  useEffect(() => {
+    if (!canUpdateBookedBy) return;
+
+    const fetchStaff = async () => {
+      try {
+        const response = await fetch('/api/v1/staff', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.message || 'Could not load staff');
+        setStaff(data || []);
+      } catch (error) {
+        message.error(error.message || 'Could not load staff');
+      }
+    };
+
+    fetchStaff();
+  }, [canUpdateBookedBy, token]);
+
   const handleSearch = (value) => {
     const search = value.trim();
     setSearchTerm(search);
@@ -115,6 +154,27 @@ export default function InvoiceList() {
       if (!response.ok) throw new Error(data.error || data.message || 'Action failed');
       return data;
     } catch (error) { message.error(error.message); return null; } finally { setActionLoadingKey(''); }
+  };
+
+  const openOrderEdit = async (invoice) => {
+    if (!invoice.order?.uid) return;
+
+    setActionLoadingKey(`${invoice.uid}:edit`);
+    try {
+      await acquireEditLock('order', invoice.order.uid);
+      navigate(`/orders/${invoice.order.uid}/edit`);
+    } catch (error) {
+      if (error.status === 423) {
+        Modal.warning({
+          title: 'Order is being edited',
+          content: error?.data?.message || error.message || 'This order is currently locked for editing.',
+        });
+      } else {
+        message.error(error.message || 'Unable to open order for editing');
+      }
+    } finally {
+      setActionLoadingKey('');
+    }
   };
 
   const refund = async (invoice, amount) => {
@@ -164,6 +224,39 @@ export default function InvoiceList() {
     }
   };
 
+  const duplicateInvoiceOrder = async (invoice) => {
+    if (!invoice.order?.uid) return;
+
+    const data = await request(`/api/v1/orders/${invoice.order.uid}/duplicate`, 'POST', undefined, `${invoice.uid}:duplicate`);
+    if (data) {
+      message.success(data.message || 'Order duplicated');
+      fetchInvoices();
+      if (data.order?.uid) {
+        navigate(`/orders/${data.order.uid}/edit`);
+      }
+    }
+  };
+
+  const openBookedByModal = (invoice) => {
+    setBookedByInvoice(invoice);
+    setBookedByUserId(invoice.order?.created_by?.id || invoice.order?.created_by_user_id || null);
+  };
+
+  const updateBookedBy = async () => {
+    if (!bookedByInvoice?.order?.uid || !bookedByUserId) return;
+
+    const data = await request(`/api/v1/orders/${bookedByInvoice.order.uid}/booked-by`, 'PATCH', {
+      user_id: bookedByUserId,
+    }, `${bookedByInvoice.uid}:booked-by`);
+
+    if (data) {
+      message.success(data.message || 'Booked by updated');
+      setBookedByInvoice(null);
+      setBookedByUserId(null);
+      fetchInvoices();
+    }
+  };
+
   const openDeleteInvoice = (invoice) => {
     setDeleteInvoice(invoice);
     setDeletePassword('');
@@ -190,9 +283,19 @@ export default function InvoiceList() {
   const renderInvoiceActions = (invoice, { showLabels = !compactActions } = {}) => (
     <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
       {invoice.is_refund_order ? (
-        <Button size="small" type="primary" icon={<EyeOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
-          {showLabels ? 'Open Order' : null}
-        </Button>
+        <>
+          <Button size="small" type="primary" icon={<EyeOutlined />} loading={actionLoadingKey === `${invoice.uid}:edit`} onClick={() => openOrderEdit(invoice)}>
+            {showLabels ? 'Open Order' : null}
+          </Button>
+          <Button size="small" icon={<CopyOutlined />} loading={actionLoadingKey === `${invoice.uid}:duplicate`} onClick={() => duplicateInvoiceOrder(invoice)}>
+            {showLabels ? 'Duplicate' : null}
+          </Button>
+          {canUpdateBookedBy && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => openBookedByModal(invoice)}>
+              {showLabels ? 'Booked By' : null}
+            </Button>
+          )}
+        </>
       ) : (
         <>
           <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
@@ -215,6 +318,10 @@ export default function InvoiceList() {
             { key: 'discount', icon: <PercentageOutlined />, label: 'Add discount', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['paid', 'void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
           ] : []),
           { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
+          { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate order', disabled: !invoice.order?.uid, onClick: () => duplicateInvoiceOrder(invoice) },
+          ...(canUpdateBookedBy ? [
+            { key: 'booked-by', icon: <EditOutlined />, label: 'Change booked by', disabled: !invoice.order?.uid, onClick: () => openBookedByModal(invoice) },
+          ] : []),
           ...(canEditInvoices ? [
             { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
             { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || invoice.status === 'void', onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
@@ -222,7 +329,7 @@ export default function InvoiceList() {
           { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
           ...(canEditInvoices ? [
             { type: 'divider' },
-            { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => navigate(`/orders/${invoice.order.uid}/edit`) },
+            { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => openOrderEdit(invoice) },
             { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
             { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
           ] : []),
@@ -233,7 +340,7 @@ export default function InvoiceList() {
         </Dropdown>
       )}
       {invoice.is_refund_order && canEditInvoices && (
-        <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/edit`)}>
+        <Button size="small" icon={<EditOutlined />} loading={actionLoadingKey === `${invoice.uid}:edit`} onClick={() => openOrderEdit(invoice)}>
           {showLabels ? 'Edit' : null}
         </Button>
       )}
@@ -260,6 +367,12 @@ export default function InvoiceList() {
       key: 'order_number',
       width: 160,
       render: (value) => value || '-',
+    },
+    {
+      title: 'Booked By',
+      key: 'booked_by',
+      width: 170,
+      render: (_, invoice) => invoice.order?.created_by?.name || '-',
     },
     {
       title: 'Amount',
@@ -377,6 +490,7 @@ export default function InvoiceList() {
               <Descriptions.Item label="Invoice #">{selectedInvoice.invoice_number || '-'}</Descriptions.Item>
               <Descriptions.Item label="Customer">{selectedInvoice.customer?.name || '-'}</Descriptions.Item>
               <Descriptions.Item label="Order #">{selectedInvoice.order?.order_number || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Booked By">{selectedInvoice.order?.created_by?.name || '-'}</Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={getStatusColor(selectedInvoice.status)}>{String(selectedInvoice.status || '-').toUpperCase()}</Tag>
               </Descriptions.Item>
@@ -424,6 +538,29 @@ export default function InvoiceList() {
         />
         <Typography.Text strong>Reason</Typography.Text>
         <Input.TextArea maxLength={500} value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} />
+      </Modal>
+      <Modal
+        title={`Change booked by · ${bookedByInvoice?.invoice_number || ''}`}
+        open={!!bookedByInvoice}
+        onCancel={() => {
+          setBookedByInvoice(null);
+          setBookedByUserId(null);
+        }}
+        onOk={updateBookedBy}
+        okText="Save"
+        confirmLoading={actionLoadingKey === `${bookedByInvoice?.uid}:booked-by`}
+        okButtonProps={{ disabled: !bookedByUserId }}
+      >
+        <Typography.Text strong>Booked By</Typography.Text>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          value={bookedByUserId || undefined}
+          options={staffOptions}
+          placeholder="Select staff"
+          onChange={setBookedByUserId}
+          style={{ width: '100%', marginTop: 8 }}
+        />
       </Modal>
       <Modal
         title={`Delete invoice · ${deleteInvoice?.invoice_number || ''}`}

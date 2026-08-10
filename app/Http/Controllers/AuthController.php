@@ -17,6 +17,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
+            'force_logout' => 'nullable|boolean',
         ]);
 
         $user = User::with(['role', 'company', 'tenant'])
@@ -39,6 +40,23 @@ class AuthController extends Controller
             return response()->json([
                 'error' => 'Your company account is inactive. Contact administrator.',
             ], 403);
+        }
+
+        $activeTokens = $user->tokens()
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
+
+        if ((clone $activeTokens)->exists() && !($validated['force_logout'] ?? false)) {
+            return response()->json([
+                'session_conflict' => true,
+                'message' => 'This user is already logged in on another device. Sign out the old session to continue.',
+            ], 409);
+        }
+
+        if ($validated['force_logout'] ?? false) {
+            $user->tokens()->delete();
         }
 
         $token = $user->createToken('web')->plainTextToken;

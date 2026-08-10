@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, EditOutlined, EyeOutlined, FileSearchOutlined } from '@ant-design/icons';
+import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { acquireEditLock, releaseEditLock } from '../services/editLocks';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 
 const { Title, Paragraph, Text } = Typography;
@@ -92,6 +93,7 @@ export default function OrderList() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [duplicateLoadingKey, setDuplicateLoadingKey] = useState('');
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -102,6 +104,13 @@ export default function OrderList() {
   const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
   const visibleStatusFilterOptions = statusFilterOptions;
+
+  const showLockAlert = (error, fallback = 'This order is currently locked for editing.') => {
+    Modal.warning({
+      title: 'Order is being edited',
+      content: error?.data?.message || error?.message || fallback,
+    });
+  };
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -201,7 +210,11 @@ export default function OrderList() {
 
   const openEditDrawer = async (order) => {
     setSaving(true);
+    let acquiredLock = false;
     try {
+      await acquireEditLock('order', order.uid);
+      acquiredLock = true;
+
       const response = await fetch(`/api/v1/orders/${order.uid}`, {
         headers: authHeaders(),
       });
@@ -220,13 +233,23 @@ export default function OrderList() {
         notes: detail.notes || '',
       });
     } catch (error) {
-      message.error(error.message || 'Failed to load order for editing');
+      if (acquiredLock) {
+        releaseEditLock('order', order.uid).catch(() => {});
+      }
+      if (error.status === 423) {
+        showLockAlert(error);
+      } else {
+        message.error(error.message || 'Failed to load order for editing');
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const closeEditDrawer = () => {
+    if (editingOrder?.uid) {
+      releaseEditLock('order', editingOrder.uid).catch(() => {});
+    }
     setEditingOrder(null);
     setCancelConfirmOpen(false);
     setPendingCancelValues(null);
@@ -306,6 +329,38 @@ export default function OrderList() {
     saveEditedOrder(pendingCancelValues, cancelPassword);
   };
 
+  const duplicateOrder = (order) => {
+    Modal.confirm({
+      title: 'Duplicate this order?',
+      content: `Create a new editable order copied from ${order.order_number}.`,
+      okText: 'Duplicate',
+      onOk: async () => {
+        setDuplicateLoadingKey(order.uid);
+        try {
+          const response = await fetch(`/api/v1/orders/${order.uid}/duplicate`, {
+            method: 'POST',
+            headers: authHeaders(),
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data?.message || data?.error || 'Failed to duplicate order');
+          }
+
+          message.success(data.message || 'Order duplicated');
+          fetchOrders(pagination.current);
+          if (data.order?.uid) {
+            navigate(`/orders/${data.order.uid}/edit`);
+          }
+        } catch (error) {
+          message.error(error.message || 'Failed to duplicate order');
+        } finally {
+          setDuplicateLoadingKey('');
+        }
+      },
+    });
+  };
+
   const renderOrderActions = (record, { showLabels = !compactActions } = {}) => (
     <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={false}>
       <Button
@@ -328,6 +383,14 @@ export default function OrderList() {
         onClick={() => navigate(`/orders/${record.uid}/voucher`)}
       >
         {showLabels ? 'Voucher' : null}
+      </Button>
+      <Button
+        size="small"
+        icon={<CopyOutlined />}
+        loading={duplicateLoadingKey === record.uid}
+        onClick={() => duplicateOrder(record)}
+      >
+        {showLabels ? 'Duplicate' : null}
       </Button>
     </Space>
   );

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\CompanyUserController;
 use App\Http\Controllers\Api\CompanyProfileController;
 use App\Http\Controllers\Api\InternalPortalController;
 use App\Http\Controllers\Api\ReferenceSearchController;
+use App\Http\Controllers\Api\EditLockController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,9 @@ Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
 
 Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('throttle:sensitive-write');
+    Route::post('/edit-locks', [EditLockController::class, 'acquire'])->middleware('throttle:sensitive-write')->name('editLocks.acquire');
+    Route::patch('/edit-locks', [EditLockController::class, 'heartbeat'])->name('editLocks.heartbeat');
+    Route::delete('/edit-locks', [EditLockController::class, 'release'])->name('editLocks.release');
 
     // Auth user info
     Route::get('/user', function (Request $request) {
@@ -84,6 +88,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/', 'index')->name('orders.list');
         Route::post('/{uid}/share', 'share')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share');
         Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share.revoke');
+        Route::post('/{uid}/duplicate', 'duplicate')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.duplicate');
+        Route::patch('/{uid}/booked-by', 'updateBookedBy')->middleware(['role:admin,owner', 'throttle:sensitive-write'])->name('orders.bookedBy.update');
         Route::post('/{uid}/refund-request', 'createRefundRequest')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.refundRequest');
         Route::post('/{uid}/recreate', 'recreateCancelled')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.recreateCancelled');
         Route::get('/{uid}', 'show')->name('orders.show');

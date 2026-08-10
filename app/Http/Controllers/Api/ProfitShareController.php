@@ -37,8 +37,8 @@ class ProfitShareController extends Controller
             ])
             ->where('tenant_id', $user->tenant_id)
             ->where('company_id', $user->company_id)
-            ->when($validated['from_date'] ?? null, fn ($query, string $date) => $query->where('share_date', '>=', $date))
-            ->when($validated['to_date'] ?? null, fn ($query, string $date) => $query->where('share_date', '<=', $date))
+            ->when($validated['from_date'] ?? null, fn ($query, string $date) => $query->whereDate('share_date', '>=', $date))
+            ->when($validated['to_date'] ?? null, fn ($query, string $date) => $query->whereDate('share_date', '<=', $date))
             ->when($validated['user_id'] ?? null, function ($query, int $userId): void {
                 $query->where(function ($nested) use ($userId): void {
                     $nested->where('from_user_id', $userId)->orWhere('to_user_id', $userId);
@@ -245,8 +245,8 @@ class ProfitShareController extends Controller
             ->where('company_id', $user->company_id)
             ->whereHas('invoice', function ($invoice) use ($filters): void {
                 $invoice->whereNotIn('status', ['void', 'cancel'])
-                    ->when($filters['from_date'] ?? null, fn ($query, string $date) => $query->where('invoice_date', '>=', $date))
-                    ->when($filters['to_date'] ?? null, fn ($query, string $date) => $query->where('invoice_date', '<=', $date));
+                    ->when($filters['from_date'] ?? null, fn ($query, string $date) => $query->whereDate('invoice_date', '>=', $date))
+                    ->when($filters['to_date'] ?? null, fn ($query, string $date) => $query->whereDate('invoice_date', '<=', $date));
             })
             ->when($filters['user_id'] ?? null, fn ($query, int $userId) => $query->where('created_by_user_id', $userId))
             ->when($filters['currency_code'] ?? null, fn ($query, string $currency) => $query->where('currency_code', strtoupper($currency)))

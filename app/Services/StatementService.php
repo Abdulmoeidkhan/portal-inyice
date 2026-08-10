@@ -43,8 +43,8 @@ class StatementService
             ->whereNotIn('status', ['void', 'cancel'])
             ->whereHas('order')
             ->with('customer:id,name')
-            ->when($fromDate, fn($q) => $q->where('invoice_date', '>=', $fromDate))
-            ->when($toDate, fn($q) => $q->where('invoice_date', '<=', $toDate))
+            ->when($fromDate, fn($q) => $q->whereDate('invoice_date', '>=', $fromDate))
+            ->when($toDate, fn($q) => $q->whereDate('invoice_date', '<=', $toDate))
             ->orderBy('invoice_date')
             ->get();
 
@@ -106,13 +106,13 @@ class StatementService
             ->where('company_id', $companyId)
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->with('customer:id,name')
-            ->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get()
+            ->when($fromDate, fn ($q) => $q->whereDate('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('receipt_date', '<=', $toDate))->get()
             ->each(fn (Receipt $receipt) => $cashTransactions->push(['id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt', 'reference' => $receipt->receipt_number, 'customer_name' => $receipt->customer?->name, 'description' => $receipt->description ?: 'Receipt from customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => (float) $receipt->amount, 'customer_payments' => 0, 'debit' => 0, 'credit' => (float) $receipt->amount, 'sort_order' => 3]));
         Payment::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->with('customer:id,name')
-            ->when($fromDate, fn ($q) => $q->where('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('payment_date', '<=', $toDate))->get()
+            ->when($fromDate, fn ($q) => $q->whereDate('payment_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('payment_date', '<=', $toDate))->get()
             ->each(fn (Payment $payment) => $cashTransactions->push(['id' => 'payment-' . $payment->id, 'date' => $payment->payment_date->toDateString(), 'type' => 'payment', 'reference' => $payment->payment_number, 'customer_name' => $payment->customer?->name, 'description' => $payment->description ?: 'Payment to customer', 'sales' => 0, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => (float) $payment->amount, 'debit' => (float) $payment->amount, 'credit' => 0, 'sort_order' => 4]));
         $runningCustomerBalance = 0;
         $cashTransactions = $cashTransactions->sortBy([['date', 'asc'], ['sort_order', 'asc']])->values()->map(function ($row) use (&$runningCustomerBalance) {
@@ -191,20 +191,20 @@ class StatementService
             ->when($fromDate, fn ($orders) => $orders->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() < $fromDate))
             ->sum(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId));
         $openingPayments = (clone $paymentsQuery)
-            ->when($fromDate, fn ($query) => $query->where('payment_date', '<', $fromDate))
+            ->when($fromDate, fn ($query) => $query->whereDate('payment_date', '<', $fromDate))
             ->sum('amount');
-        $openingReceipts = (clone $receiptsQuery)->when($fromDate, fn ($query) => $query->where('receipt_date', '<', $fromDate))->sum('amount');
+        $openingReceipts = (clone $receiptsQuery)->when($fromDate, fn ($query) => $query->whereDate('receipt_date', '<', $fromDate))->sum('amount');
         $openingBalance = $fromDate ? (float) $openingPayables - (float) $openingPayments + (float) $openingReceipts : 0;
 
         $orders = $eligibleOrders
             ->when($fromDate, fn ($items) => $items->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() >= $fromDate))
             ->when($toDate, fn ($items) => $items->filter(fn (Order $order) => $order->invoice?->invoice_date?->toDateString() <= $toDate));
         $payments = $paymentsQuery
-            ->when($fromDate, fn ($query) => $query->where('payment_date', '>=', $fromDate))
-            ->when($toDate, fn ($query) => $query->where('payment_date', '<=', $toDate))
+            ->when($fromDate, fn ($query) => $query->whereDate('payment_date', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->whereDate('payment_date', '<=', $toDate))
             ->orderBy('payment_date')
             ->get();
-        $receipts = $receiptsQuery->when($fromDate, fn ($q) => $q->where('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->where('receipt_date', '<=', $toDate))->get();
+        $receipts = $receiptsQuery->when($fromDate, fn ($q) => $q->whereDate('receipt_date', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('receipt_date', '<=', $toDate))->get();
 
         $transactions = collect();
         foreach ($orders as $order) {

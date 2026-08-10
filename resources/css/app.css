@@ -1264,6 +1264,31 @@ body {
   min-width: max-content;
 }
 
+.edit-order-action-affix,
+.edit-order-action-affix .ant-affix {
+  z-index: 13;
+}
+
+.edit-order-action-card .ant-card-body {
+  display: flex;
+  justify-content: flex-start;
+  padding: 12px;
+}
+
+.edit-order-collapse {
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.edit-order-collapse .ant-collapse-header {
+  align-items: center !important;
+  font-weight: 700;
+}
+
+.edit-order-collapse .ant-collapse-content-box {
+  padding: 16px !important;
+}
+
 .mobile-row-clickable {
   cursor: pointer;
 }
@@ -2544,6 +2569,11 @@ body {
 
   .edit-order-fields .ant-form-item {
     min-width: 0 !important;
+    width: 100%;
+  }
+
+  .edit-order-actions {
+    justify-content: center;
     width: 100%;
   }
 

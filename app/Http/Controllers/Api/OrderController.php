@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderVendorCost;
+use App\Models\User;
 use App\Services\GdsParserService;
 use App\Services\InvoiceService;
 use App\Services\OrderNumberService;
@@ -923,6 +924,106 @@ class OrderController extends Controller
         ], 201);
     }
 
+    public function duplicate(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
+
+        $sourceOrder = Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('uid', $uid)
+            ->with(['items', 'vendorCosts'])
+            ->firstOrFail();
+
+        $newOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
+            $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
+            $newMeta = $sourceMeta;
+            unset($newMeta['cancel_approval'], $newMeta['cancel_signature'], $newMeta['recreated_from_cancelled_order']);
+            $newMeta['duplicated_from_order'] = [
+                'order_id' => $sourceOrder->id,
+                'order_uid' => $sourceOrder->uid,
+                'order_number' => $sourceOrder->order_number,
+                'duplicated_by_user_id' => (int) $user->id,
+                'duplicated_by_name' => $user->name,
+                'duplicated_at' => now()->toDateTimeString(),
+            ];
+
+            $newOrder = Order::create([
+                'tenant_id' => $tenantId,
+                'uid' => (string) Str::ulid(),
+                'company_id' => $companyId,
+                'customer_id' => $sourceOrder->customer_id,
+                'vendor_id' => $sourceOrder->vendor_id,
+                'created_by_user_id' => (int) $user->id,
+                'updated_by_user_id' => (int) $user->id,
+                'order_number' => $this->orderNumberService->generateOrderNumber($companyId, $tenantId),
+                'voucher_no' => null,
+                'issue_date' => now()->toDateString(),
+                'package_type' => $sourceOrder->package_type,
+                'active_sections' => $sourceOrder->active_sections,
+                'emergency_contact' => $sourceOrder->emergency_contact,
+                'booking_reference' => $sourceOrder->booking_reference,
+                'status' => 'order',
+                'currency_code' => $sourceOrder->currency_code,
+                'total_amount' => 0,
+                'notes' => trim("Duplicated from order {$sourceOrder->order_number}.\n" . (string) $sourceOrder->notes),
+                'gds_source' => $sourceOrder->gds_source,
+                'gds_parsed_record_id' => $sourceOrder->gds_parsed_record_id,
+                'meta' => $newMeta,
+            ]);
+
+            $this->copyOrderItems($sourceOrder, $newOrder);
+            $this->copyVendorCosts($sourceOrder, $newOrder);
+            $newOrder->update([
+                'total_amount' => OrderItem::where('order_id', $newOrder->id)->sum('total_price') ?: (float) $sourceOrder->total_amount,
+            ]);
+
+            return $newOrder;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order {$newOrder->order_number} duplicated from {$sourceOrder->order_number}.",
+            'order' => $this->orderForUser($newOrder->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']), $user),
+            'source_order_uid' => $sourceOrder->uid,
+            'source_order_number' => $sourceOrder->order_number,
+        ], 201);
+    }
+
+    public function updateBookedBy(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = (int) $user->tenant_id;
+        $companyId = (int) $user->company_id;
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $bookedBy = User::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->findOrFail((int) $validated['user_id']);
+
+        $order = Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $order->update([
+            'created_by_user_id' => $bookedBy->id,
+            'updated_by_user_id' => (int) $user->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Booked by changed to {$bookedBy->name}.",
+            'order' => $this->orderForUser($order->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice', 'createdBy:id,name,email']), $user),
+        ]);
+    }
+
     public function createRefundRequest(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
@@ -1046,6 +1147,26 @@ class OrderController extends Controller
 
         if ($items !== []) {
             OrderItem::insert($items);
+        }
+    }
+
+    private function copyVendorCosts(Order $sourceOrder, Order $targetOrder): void
+    {
+        $sourceOrder->loadMissing('vendorCosts');
+
+        $costs = $sourceOrder->vendorCosts->map(fn (OrderVendorCost $cost) => [
+            'tenant_id' => $targetOrder->tenant_id,
+            'order_id' => $targetOrder->id,
+            'vendor_id' => $cost->vendor_id,
+            'service_type' => $cost->service_type,
+            'service_index' => $cost->service_index,
+            'amount' => $cost->amount,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($costs !== []) {
+            OrderVendorCost::insert($costs);
         }
     }
 

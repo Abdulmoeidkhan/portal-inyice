@@ -112,11 +112,11 @@ export function buildVoucherSummaryRows(voucher) {
   return Array.from(rows.values());
 }
 
-export default function VoucherSummaryCard({ voucher, canViewCostProfit = true }) {
+export default function VoucherSummaryCard({ voucher, canViewCostProfit = true, embedded = false }) {
   const data = buildVoucherSummaryRows(voucher);
   const grandTotal = data.reduce((sum, row) => sum + row.total, 0);
   const grandProfit = data.reduce((sum, row) => sum + row.profit, 0);
-  const passengerNameColumnWidth = 140;
+  const passengerNameColumnWidth = 200;
   const passengerNameColumnStyle = {
     minWidth: passengerNameColumnWidth,
     width: passengerNameColumnWidth,
@@ -143,27 +143,35 @@ export default function VoucherSummaryCard({ voucher, canViewCostProfit = true }
   const totalColumnIndex = columns.findIndex((column) => column.key === 'total');
   const profitColumnIndex = columns.findIndex((column) => column.key === 'profit');
 
+  const content = (
+    <Table
+      size="small"
+      rowKey="key"
+      columns={columns}
+      dataSource={data}
+      pagination={false}
+      tableLayout="fixed"
+      scroll={{ x: canViewCostProfit ? 1040 : 920 }}
+      summary={() => (
+        <Table.Summary.Row>
+          <Table.Summary.Cell index={0}><Text strong>Total</Text></Table.Summary.Cell>
+          <Table.Summary.Cell index={1} colSpan={6} />
+          {canViewCostProfit && (
+            <Table.Summary.Cell index={profitColumnIndex} align="right"><Text strong>{money(grandProfit)}</Text></Table.Summary.Cell>
+          )}
+          <Table.Summary.Cell index={totalColumnIndex} align="right"><Text strong>{money(grandTotal)}</Text></Table.Summary.Cell>
+        </Table.Summary.Row>
+      )}
+    />
+  );
+
+  if (embedded) {
+    return content;
+  }
+
   return (
     <Card className="border-beam-aurora" style={{ marginTop: 16 }} title="Order Summary">
-      <Table
-        size="small"
-        rowKey="key"
-        columns={columns}
-        dataSource={data}
-        pagination={false}
-        tableLayout="fixed"
-        scroll={{ x: canViewCostProfit ? 1040 : 920 }}
-        summary={() => (
-          <Table.Summary.Row>
-            <Table.Summary.Cell index={0}><Text strong>Total</Text></Table.Summary.Cell>
-            <Table.Summary.Cell index={1} colSpan={6} />
-            {canViewCostProfit && (
-              <Table.Summary.Cell index={profitColumnIndex} align="right"><Text strong>{money(grandProfit)}</Text></Table.Summary.Cell>
-            )}
-            <Table.Summary.Cell index={totalColumnIndex} align="right"><Text strong>{money(grandTotal)}</Text></Table.Summary.Cell>
-          </Table.Summary.Row>
-        )}
-      />
+      {content}
     </Card>
   );
 }

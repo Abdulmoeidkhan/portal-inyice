@@ -73,7 +73,7 @@ class InvoiceController extends Controller
         $query = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
             ->where('status', '!=', 'cancel')
-            ->with(['customer', 'order']);
+            ->with(['customer', 'order.createdBy']);
 
         if ($status) {
             $query->where('status', $status);
@@ -116,7 +116,7 @@ class InvoiceController extends Controller
                 ->where('company_id', $companyId)
                 ->whereIn('status', ['partial_refund', 'refund'])
                 ->when($customerId, fn ($orderQuery) => $orderQuery->where('customer_id', $customerId))
-                ->with(['customer', 'invoice', 'items', 'vendor'])
+                ->with(['customer', 'invoice', 'items', 'vendor', 'createdBy'])
                 ->when($search !== '', function ($orderQuery) use ($search): void {
                     $orderQuery->where(function ($searchQuery) use ($search): void {
                         $searchQuery->where('order_number', 'like', "%{$search}%")

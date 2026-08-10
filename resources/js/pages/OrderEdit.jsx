@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Affix, Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -16,14 +17,17 @@ import {
   blankPricing,
   blankTransfer,
   blankVisa,
+  buildVoucherFromParsed,
   createInitialVoucher,
   normalizeCabin,
   normalizeFlightDate,
   syncPassengerNameFields,
   syncVisaNumberFields,
 } from './sales-flow/defaults';
+import { parseGdsData } from './sales-flow/gdsParser';
+import GdsParserCard from './sales-flow/GdsParserCard';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
 
 const invoiceStatusColors = {
@@ -177,17 +181,32 @@ export default function OrderEdit() {
   const { uid } = useParams();
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [gdsForm] = Form.useForm();
   const [order, setOrder] = useState(null);
   const [voucher, setVoucher] = useState(createInitialVoucher());
+  const [parseResult, setParseResult] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadingParse, setLoadingParse] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [pendingCancelSubmit, setPendingCancelSubmit] = useState(null);
   const [cancelPassword, setCancelPassword] = useState('');
+  const [lockConflict, setLockConflict] = useState(null);
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
+  const affixTarget = () => document.querySelector('.app-content');
+
+  const parsedHint = useMemo(() => {
+    if (!parseResult) {
+      return 'Parse GDS text locally to update booking reference, flights, and passengers.';
+    }
+
+    const passengerCount = parseResult.parsed?.passengers?.length || 0;
+    const segmentCount = parseResult.parsed?.flights?.length || parseResult.parsed?.segments?.length || 0;
+    return `Parsed ${passengerCount} passenger(s) and ${segmentCount} flight segment(s).`;
+  }, [parseResult]);
 
   const customerOptions = customers.map((customer) => ({
     value: customer.id,
@@ -278,15 +297,27 @@ export default function OrderEdit() {
   };
 
   useEffect(() => {
+    let acquiredLock = false;
+    let heartbeatTimer = null;
+    let cancelled = false;
+
     const loadOrder = async () => {
       setLoading(true);
       try {
+        setLockConflict(null);
+        await acquireEditLock('order', uid);
+        acquiredLock = true;
+        heartbeatTimer = setInterval(() => {
+          heartbeatEditLock('order', uid).catch(() => {});
+        }, 30000);
+
         const response = await fetch(`/api/v1/orders/${uid}`, {
           headers: authHeaders(),
         });
 
         if (!response.ok) throw new Error('Failed to load order');
         const detail = await response.json();
+        if (cancelled) return;
         setOrder(detail);
         setVoucher(voucherFromOrder(detail));
         form.setFieldsValue({
@@ -297,15 +328,32 @@ export default function OrderEdit() {
           notes: detail.notes || '',
         });
       } catch (error) {
-        message.error(error.message || 'Failed to load order');
+        if (cancelled) return;
+        if (error.status === 423) {
+          setLockConflict(error.data || { message: error.message });
+        } else {
+          message.error(error.message || 'Failed to load order');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadOrder();
     loadCustomers();
     loadVendors();
+
+    return () => {
+      cancelled = true;
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+      }
+      if (acquiredLock) {
+        releaseEditLock('order', uid).catch(() => {});
+      }
+    };
   }, [uid]);
 
   const setVoucherField = (field, value) => {
@@ -393,6 +441,39 @@ export default function OrderEdit() {
     }));
   };
 
+  const handleParse = ({ raw_text }) => {
+    setLoadingParse(true);
+    try {
+      const parsed = parseGdsData(raw_text);
+      const detectedSource = parsed.gds_source || 'other';
+      const data = {
+        success: true,
+        gds_record: {
+          id: null,
+          uid: 'local',
+          booking_reference: parsed.booking_reference,
+          gds_source: detectedSource,
+        },
+        parsed,
+      };
+
+      if (!parsed.flights.length && !parsed.passengers.length) {
+        throw new Error('No valid flights or passengers detected. Check the pasted GDS text format.');
+      }
+
+      setParseResult(data);
+      setVoucher((prev) => ({
+        ...buildVoucherFromParsed(prev, detectedSource, data.parsed),
+        gds_parsed_record_id: null,
+      }));
+      message.success('GDS parsed locally and voucher fields updated.');
+    } catch (error) {
+      message.error(error.message || 'GDS parse failed');
+    } finally {
+      setLoadingParse(false);
+    }
+  };
+
   const submitOrder = async (confirmInvoiceRevision = false, password = null) => {
     setSaving(true);
     try {
@@ -478,6 +559,26 @@ export default function OrderEdit() {
 
   const handleSave = () => submitOrder(false);
 
+  if (lockConflict) {
+    const userName = lockConflict.locked_by?.name || 'Another user';
+
+    return (
+      <div className="page-shell page-fade-up">
+        <Alert
+          type="warning"
+          showIcon
+          message={`${userName} is working on this order`}
+          description="This order is temporarily locked for editing. Try again after they finish or the lock expires."
+          action={(
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>
+              Back to Orders
+            </Button>
+          )}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
@@ -494,78 +595,117 @@ export default function OrderEdit() {
         </Space>
       </div>
 
+      <Affix className="edit-order-action-affix" offsetTop={10} target={affixTarget}>
+        <Card className="edit-order-action-card border-beam-aurora" style={{ marginBottom: 16 }}>
+          <Space className="edit-order-actions">
+            <Button onClick={() => navigate('/orders')}>Cancel</Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
+              Save Order
+            </Button>
+          </Space>
+        </Card>
+      </Affix>
+
       <Spin spinning={loading}>
-        <Card className="border-beam-aurora" style={{ marginBottom: 16 }} title="Order Details">
-          {order?.invoice && (
-            <Alert
-              type="warning"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message={`Invoice ${order.invoice.invoice_number} already exists`}
-              description="Saving changes will ask for confirmation, then cancel the current invoice and create a new order for manual invoicing."
-            />
-          )}
-          <Form form={form} layout="vertical">
-            <Space className="edit-order-fields" wrap align="start" style={{ width: '100%' }}>
-              <Form.Item name="customer_id" label="Customer" rules={[{ required: true, message: 'Customer required' }]} style={{ minWidth: 300 }}>
-                <Select showSearch filterOption={false} onSearch={loadCustomers} options={customerOptions} />
-              </Form.Item>
-              <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 200 }}>
-                <Select
-                  disabled={!canChangeStatus}
-                  options={[
-                    { label: 'Quote', value: 'quote' },
-                    { label: 'Order', value: 'order' },
-                    { label: 'Cancel', value: 'cancel' },
-                    { label: 'Invoice', value: 'invoice' },
-                    { label: 'Void', value: 'void' },
-                    { label: 'Refund Request', value: 'refund_request' },
-                    { label: 'Refund', value: 'refund' },
-                    { label: 'Partial Refund', value: 'partial_refund' },
-                  ]}
+        <Collapse
+          className="edit-order-collapse border-beam-aurora"
+          items={[
+            {
+              key: 'order-details',
+              label: 'Order Details',
+              children: (
+                <>
+                  {order?.invoice && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      message={`Invoice ${order.invoice.invoice_number} already exists`}
+                      description="Saving changes will ask for confirmation, then cancel the current invoice and create a new order for manual invoicing."
+                    />
+                  )}
+                  <Form form={form} layout="vertical">
+                    <Space className="edit-order-fields" wrap align="start" style={{ width: '100%' }}>
+                      <Form.Item name="customer_id" label="Customer" rules={[{ required: true, message: 'Customer required' }]} style={{ minWidth: 300 }}>
+                        <Select showSearch filterOption={false} onSearch={loadCustomers} options={customerOptions} />
+                      </Form.Item>
+                      <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 200 }}>
+                        <Select
+                          disabled={!canChangeStatus}
+                          options={[
+                            { label: 'Quote', value: 'quote' },
+                            { label: 'Order', value: 'order' },
+                            { label: 'Cancel', value: 'cancel' },
+                            { label: 'Invoice', value: 'invoice' },
+                            { label: 'Void', value: 'void' },
+                            { label: 'Refund Request', value: 'refund_request' },
+                            { label: 'Refund', value: 'refund' },
+                            { label: 'Partial Refund', value: 'partial_refund' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="currency_code"
+                        label="Currency Code"
+                        normalize={(value) => value?.toUpperCase()}
+                        rules={[{ required: true, message: 'Currency required' }]}
+                        style={{ minWidth: 160 }}
+                      >
+                        <Input maxLength={3} />
+                      </Form.Item>
+                      <Form.Item
+                        name="total_amount"
+                        label="Total Amount"
+                        rules={[{ required: true, message: 'Total amount required' }]}
+                        style={{ minWidth: 180 }}
+                      >
+                        <InputNumber min={0} precision={2} controls={false} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Space>
+                    <Form.Item name="notes" label="Order Notes">
+                      <TextArea rows={3} />
+                    </Form.Item>
+                  </Form>
+                </>
+              ),
+            },
+            {
+              key: 'parse-gds',
+              label: 'Parse GDS (Sabre / Galileo / Amadeus / Other)',
+              children: (
+                <GdsParserCard
+                  form={gdsForm}
+                  loading={loadingParse}
+                  parsedHint={parsedHint}
+                  parseResult={parseResult}
+                  onParse={handleParse}
+                  embedded
                 />
-              </Form.Item>
-              <Form.Item
-                name="currency_code"
-                label="Currency Code"
-                normalize={(value) => value?.toUpperCase()}
-                rules={[{ required: true, message: 'Currency required' }]}
-                style={{ minWidth: 160 }}
-              >
-                <Input maxLength={3} />
-              </Form.Item>
-              <Form.Item
-                name="total_amount"
-                label="Total Amount"
-                rules={[{ required: true, message: 'Total amount required' }]}
-                style={{ minWidth: 180 }}
-              >
-                <InputNumber min={0} precision={2} controls={false} style={{ width: '100%' }} />
-              </Form.Item>
-            </Space>
-            <Form.Item name="notes" label="Order Notes">
-              <TextArea rows={3} />
-            </Form.Item>
-          </Form>
-        </Card>
+              ),
+            },
+            {
+              key: 'invoice-history',
+              label: 'Invoice History',
+              children: (
+                <Table
+                  rowKey="uid"
+                  size="small"
+                  columns={invoiceHistoryColumns}
+                  dataSource={order?.invoices || []}
+                  pagination={false}
+                  scroll={{ x: 900 }}
+                  locale={{ emptyText: 'No invoices have been generated for this order yet' }}
+                />
+              ),
+            },
+            {
+              key: 'basic-voucher-information',
+              label: 'Basic Voucher Information',
+              children: <VoucherHeaderCard voucher={voucher} setVoucherField={setVoucherField} embedded />,
+            },
+          ]}
+        />
 
-        <Card
-          className="border-beam-aurora"
-          style={{ marginBottom: 16 }}
-          title="Invoice History"
-        >
-          <Table
-            rowKey="uid"
-            size="small"
-            columns={invoiceHistoryColumns}
-            dataSource={order?.invoices || []}
-            pagination={false}
-            scroll={{ x: 900 }}
-            locale={{ emptyText: 'No invoices have been generated for this order yet' }}
-          />
-        </Card>
-
-        <VoucherHeaderCard voucher={voucher} setVoucherField={setVoucherField} />
         <VoucherRowsSections
           voucher={voucher}
           vendors={vendors}
@@ -578,16 +718,16 @@ export default function OrderEdit() {
           canViewCostProfit={canViewCostProfit}
         />
 
-        <VoucherSummaryCard voucher={voucher} canViewCostProfit={canViewCostProfit} />
-
-        <Card className="border-beam-aurora" style={{ marginTop: 16 }}>
-          <Space>
-            <Button onClick={() => navigate('/orders')}>Cancel</Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-              Save Order
-            </Button>
-          </Space>
-        </Card>
+        <Collapse
+          className="edit-order-collapse border-beam-aurora"
+          items={[
+            {
+              key: 'order-summary',
+              label: 'Order Summary',
+              children: <VoucherSummaryCard voucher={voucher} canViewCostProfit={canViewCostProfit} embedded />,
+            },
+          ]}
+        />
       </Spin>
 
       <Modal

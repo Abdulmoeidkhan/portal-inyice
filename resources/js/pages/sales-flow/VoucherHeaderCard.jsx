@@ -16,10 +16,9 @@ const packageTypeOptions = [
   'Umrah Package',
 ].map((value) => ({ value, label: value }));
 
-export default function VoucherHeaderCard({ voucher, setVoucherField }) {
-  return (
+export default function VoucherHeaderCard({ voucher, setVoucherField, embedded = false }) {
+  const content = (
     <>
-      <Card className="border-beam-aurora" style={{ marginBottom: 12 }} title="Basic Voucher Information">
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12} md={8} lg={4}>
             <Text>Voucher No</Text>
@@ -76,7 +75,16 @@ export default function VoucherHeaderCard({ voucher, setVoucherField }) {
             <TextArea rows={3} value={voucher.emergency_contact} onChange={(e) => setVoucherField('emergency_contact', e.target.value)} />
           </Col>
         </Row>
-      </Card>
     </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <Card className="border-beam-aurora" style={{ marginBottom: 12 }} title="Basic Voucher Information">
+      {content}
+    </Card>
   );
 }

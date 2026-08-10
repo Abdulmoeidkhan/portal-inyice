@@ -362,10 +362,6 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   const [floatControlsVisible, setFloatControlsVisible] = useState(true);
   const [showMoveTop, setShowMoveTop] = useState(false);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
-  const [canUseCalculator, setCanUseCalculator] = useState(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    return storedUser?.company_is_paid === true;
-  });
   const selectedKey = menuItems
     .flatMap((item) => (item.children ? item.children : [item]))
     .find((item) => item.key === location.pathname)?.key || '/';
@@ -432,9 +428,8 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
           company_name: data.company?.display_name || storedUser.company_name,
           company_is_paid: paid,
         }));
-        setCanUseCalculator(paid);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const profileMenu = [
@@ -593,13 +588,11 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               type="default"
               onClick={onToggleCompactTheme}
             />
-            {canUseCalculator && (
-              <FloatButton
-                icon={<CalculatorOutlined />}
-                tooltip="Calculator"
-                onClick={() => setCalculatorOpen(true)}
-              />
-            )}
+            <FloatButton
+              icon={<CalculatorOutlined />}
+              tooltip="Calculator"
+              onClick={() => setCalculatorOpen(true)}
+            />
           </FloatButton.Group>
           {showMoveTop && (
             <FloatButton
@@ -613,7 +606,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               }}
             />
           )}
-          {canUseCalculator && <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />}
+          <AppCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
         </Content>
       </Layout>
     </Layout>
@@ -768,14 +761,14 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           icon: <SearchOutlined />,
         },
         ...(canAccessPayments ? [{
-          key: '/payments',
-          label: <Link to="/payments">Customer Receipts</Link>,
-          icon: <BankOutlined />,
-        },
-        {
           key: '/profit-shares',
           label: <Link to="/profit-shares">Profit Shares</Link>,
           icon: <SwapOutlined />,
+        },
+        {
+          key: '/payments',
+          label: <Link to="/payments">Customer Receipts</Link>,
+          icon: <BankOutlined />,
         },
         {
           key: '/customer-payments',

@@ -8,7 +8,9 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderVendorCost;
 use App\Models\Payment;
+use App\Models\ProfitShare;
 use App\Models\Receipt;
+use App\Models\User;
 use App\Models\Vendor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -31,7 +33,8 @@ class ReportService
         $dateColumn = $isReceipt ? 'receipt_date' : 'payment_date';
         $numberColumn = $isReceipt ? 'receipt_number' : 'payment_number';
         $query = $model::query()->where('tenant_id', $tenantId)->where('company_id', $companyId)
-            ->whereBetween($dateColumn, [$fromDate, $toDate])
+            ->whereDate($dateColumn, '>=', $fromDate)
+            ->whereDate($dateColumn, '<=', $toDate)
             ->when($counterpartyType === 'customer', fn ($q) => $q->whereNotNull('customer_id'))
             ->when($counterpartyType === 'vendor', fn ($q) => $q->whereNotNull('vendor_id'))
             ->when($counterpartyType === 'customer' && $counterpartyId, fn ($q) => $q->where('customer_id', $counterpartyId))
@@ -92,7 +95,8 @@ class ReportService
     ): array {
         $query = ($allTenants ? Invoice::withoutGlobalScopes() : Invoice::query())
             ->where('status', 'cancel')
-            ->whereBetween('invoice_date', [$fromDate, $toDate])
+            ->whereDate('invoice_date', '>=', $fromDate)
+            ->whereDate('invoice_date', '<=', $toDate)
             ->with([
                 'tenant:id,name,code',
                 'company:id,tenant_id,display_name,legal_name',
@@ -142,7 +146,10 @@ class ReportService
             ])
             ->whereDoesntHave('invoice', fn ($invoice) => $invoice->where('status', 'cancel'))
             ->where(function ($dateQuery) use ($fromDate, $toDate) {
-                $dateQuery->whereBetween('issue_date', [$fromDate, $toDate])
+                $dateQuery->where(function ($issueDateQuery) use ($fromDate, $toDate) {
+                    $issueDateQuery->whereDate('issue_date', '>=', $fromDate)
+                        ->whereDate('issue_date', '<=', $toDate);
+                })
                     ->orWhere(function ($fallbackDateQuery) use ($fromDate, $toDate) {
                         $fallbackDateQuery->whereNull('issue_date')
                             ->whereDate('created_at', '>=', $fromDate)
@@ -221,7 +228,8 @@ class ReportService
             $receipts = Receipt::query()
                 ->where('tenant_id', $tenantId)
                 ->where('company_id', $companyId)
-                ->whereBetween('receipt_date', [$fromDate, $toDate])
+                ->whereDate('receipt_date', '>=', $fromDate)
+                ->whereDate('receipt_date', '<=', $toDate)
                 ->when($paymentMethod, fn ($query) => $query->where('payment_method', $paymentMethod))
                 ->when($search, function ($query, $search) {
                     $query->where(function ($searchQuery) use ($search) {
@@ -257,7 +265,8 @@ class ReportService
             $payments = Payment::query()
                 ->where('tenant_id', $tenantId)
                 ->where('company_id', $companyId)
-                ->whereBetween('payment_date', [$fromDate, $toDate])
+                ->whereDate('payment_date', '>=', $fromDate)
+                ->whereDate('payment_date', '<=', $toDate)
                 ->when($paymentMethod, fn ($query) => $query->where('payment_method', $paymentMethod))
                 ->when($search, function ($query, $search) {
                     $query->where(function ($searchQuery) use ($search) {
@@ -422,8 +431,8 @@ class ReportService
     ): array {
         $invoices = Invoice::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->where('invoice_date', '>=', $fromDate)
-            ->where('invoice_date', '<=', $toDate)
+            ->whereDate('invoice_date', '>=', $fromDate)
+            ->whereDate('invoice_date', '<=', $toDate)
             ->with(['customer'])
             ->get();
 
@@ -621,7 +630,8 @@ class ReportService
         $invoice = Invoice::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereBetween('invoice_date', [$from, $to])
+            ->whereDate('invoice_date', '>=', $from)
+            ->whereDate('invoice_date', '<=', $to)
             ->whereNotIn('status', ['void', 'cancel'])
             ->selectRaw('COALESCE(SUM(total_amount), 0) as invoiced')
             ->selectRaw('COALESCE(SUM(total_amount - outstanding_amount), 0) as collected')
@@ -631,42 +641,49 @@ class ReportService
         $cashIn = Receipt::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereBetween('receipt_date', [$from, $to])
+            ->whereDate('receipt_date', '>=', $from)
+            ->whereDate('receipt_date', '<=', $to)
             ->sum('amount');
 
         $cashOut = Payment::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereBetween('payment_date', [$from, $to])
+            ->whereDate('payment_date', '>=', $from)
+            ->whereDate('payment_date', '<=', $to)
             ->sum('amount');
         $customerReceipts = Receipt::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->whereNotNull('customer_id')
-            ->whereBetween('receipt_date', [$from, $to])
+            ->whereDate('receipt_date', '>=', $from)
+            ->whereDate('receipt_date', '<=', $to)
             ->sum('amount');
         $customerPayments = Payment::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->whereNotNull('customer_id')
-            ->whereBetween('payment_date', [$from, $to])
+            ->whereDate('payment_date', '>=', $from)
+            ->whereDate('payment_date', '<=', $to)
             ->sum('amount');
         $vendorPayments = Payment::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->whereNotNull('vendor_id')
-            ->whereBetween('payment_date', [$from, $to])
+            ->whereDate('payment_date', '>=', $from)
+            ->whereDate('payment_date', '<=', $to)
             ->sum('amount');
         $vendorReceipts = Receipt::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->whereNotNull('vendor_id')
-            ->whereBetween('receipt_date', [$from, $to])
+            ->whereDate('receipt_date', '>=', $from)
+            ->whereDate('receipt_date', '<=', $to)
             ->sum('amount');
         $settlementRefunds = InvoiceSettlement::query()
             ->where('tenant_id', $tenantId)
             ->where('status', 'confirmed')
-            ->whereBetween('settlement_date', [$from, $to])
+            ->whereDate('settlement_date', '>=', $from)
+            ->whereDate('settlement_date', '<=', $to)
             ->sum('amount_refunded');
         $refundOrders = Order::query()
             ->where('tenant_id', $tenantId)
@@ -685,7 +702,8 @@ class ReportService
             ->join('invoices', 'invoices.order_id', '=', 'orders.id')
             ->where('order_vendor_costs.tenant_id', $tenantId)
             ->where('orders.company_id', $companyId)
-            ->whereBetween('invoices.invoice_date', [$from, $to])
+            ->whereDate('invoices.invoice_date', '>=', $from)
+            ->whereDate('invoices.invoice_date', '<=', $to)
             ->whereNotIn('invoices.status', ['void', 'cancel'])
             ->whereNotIn('orders.status', ['cancel', 'void']);
 
@@ -706,17 +724,19 @@ class ReportService
         $receiptsByDate = Receipt::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereBetween('receipt_date', [$cashflowFrom, $cashflowTo])
-            ->selectRaw('receipt_date as date, COALESCE(SUM(amount), 0) as total')
-            ->groupBy('receipt_date')
+            ->whereDate('receipt_date', '>=', $cashflowFrom)
+            ->whereDate('receipt_date', '<=', $cashflowTo)
+            ->selectRaw('DATE(receipt_date) as date, COALESCE(SUM(amount), 0) as total')
+            ->groupByRaw('DATE(receipt_date)')
             ->pluck('total', 'date');
 
         $paymentsByDate = Payment::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereBetween('payment_date', [$cashflowFrom, $cashflowTo])
-            ->selectRaw('payment_date as date, COALESCE(SUM(amount), 0) as total')
-            ->groupBy('payment_date')
+            ->whereDate('payment_date', '>=', $cashflowFrom)
+            ->whereDate('payment_date', '<=', $cashflowTo)
+            ->selectRaw('DATE(payment_date) as date, COALESCE(SUM(amount), 0) as total')
+            ->groupByRaw('DATE(payment_date)')
             ->pluck('total', 'date');
 
         $cashflow = collect(range(0, 9))->map(function (int $index) use ($cashflowFrom, $receiptsByDate, $paymentsByDate) {
@@ -777,7 +797,8 @@ class ReportService
             ->where('company_id', $companyId)
             ->whereNotIn('status', ['cancel', 'void'])
             ->whereHas('invoice', fn ($invoice) => $invoice
-                ->whereBetween('invoice_date', [$from, $to])
+                ->whereDate('invoice_date', '>=', $from)
+                ->whereDate('invoice_date', '<=', $to)
                 ->whereNotIn('status', ['void', 'cancel']))
             ->with(['invoice:id,order_id,invoice_date', 'vendorCosts'])
             ->get()
@@ -978,7 +999,8 @@ class ReportService
                     $invoice->whereNotIn('status', ['void', 'cancel']);
 
                     if ($dateBy === 'invoice') {
-                        $invoice->whereBetween('invoice_date', [$fromDate, $toDate]);
+                        $invoice->whereDate('invoice_date', '>=', $fromDate)
+                            ->whereDate('invoice_date', '<=', $toDate);
                     }
                 })->orWhere(function ($refundQuery) use ($fromDate, $toDate, $dateBy): void {
                     $refundQuery->whereIn('status', ['refund_request', 'partial_refund', 'refund']);
@@ -996,7 +1018,6 @@ class ReportService
                 Carbon::parse($toDate)->endOfDay(),
             ]))
             ->when($entityId && $groupBy === 'customer', fn ($query) => $query->where('customer_id', $entityId))
-            ->when($entityId && $groupBy === 'staff', fn ($query) => $query->where('created_by_user_id', $entityId))
             ->when($entityId && $groupBy === 'vendor', function ($query) use ($entityId) {
                 $query->where(function ($vendorQuery) use ($entityId) {
                     $vendorQuery->where('vendor_id', $entityId)
@@ -1018,7 +1039,7 @@ class ReportService
                 'vendor:id,name',
                 'createdBy:id,name',
                 'vendorCosts.vendor:id,name',
-                'invoice:id,order_id,invoice_number,invoice_date,status',
+                'invoice:id,order_id,invoice_number,invoice_date,status,currency_code',
             ])
             ->orderByDesc(
                 Invoice::select('invoice_date')
@@ -1034,6 +1055,14 @@ class ReportService
                 ->values();
         }
 
+        $profitShares = ProfitShare::query()
+            ->with(['fromUser:id,name', 'toUser:id,name'])
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereIn('invoice_id', $orders->pluck('invoice.id')->filter()->unique()->values())
+            ->get()
+            ->groupBy('invoice_id');
+
         $detailRows = collect();
 
         foreach ($orders as $order) {
@@ -1044,8 +1073,11 @@ class ReportService
             }
             $currency = $order->currency_code;
             $date = $order->invoice?->invoice_date?->toDateString() ?? $order->issue_date?->toDateString() ?? $order->created_at->toDateString();
+            $invoiceShares = $profitShares->get($order->invoice?->id, collect());
 
             if ($groupBy === 'vendor') {
+                $sharing = $this->profitShareTotals($invoiceShares);
+
                 if ($order->vendorCosts->isEmpty()) {
                     if ($entityId && (int) $order->vendor_id !== $entityId) {
                         continue;
@@ -1060,7 +1092,9 @@ class ReportService
                         $date,
                         $currency,
                         $revenue,
-                        $fallbackCost
+                        $fallbackCost,
+                        $sharing['shared_out'],
+                        $sharing['shared_in']
                     ));
                     continue;
                 }
@@ -1073,6 +1107,7 @@ class ReportService
                 foreach ($costByVendor as $vendorId => $costRows) {
                     $vendorCost = (float) $costRows->sum('amount');
                     $allocatedRevenue = $cost != 0.0 ? $revenue * (abs($vendorCost) / abs($cost)) : 0.0;
+                    $shareRatio = $cost != 0.0 ? abs($vendorCost) / abs($cost) : 0.0;
                     $detailRows->push($this->profitRow(
                         $order,
                         'vendor',
@@ -1081,18 +1116,46 @@ class ReportService
                         $date,
                         $currency,
                         $allocatedRevenue,
-                        $vendorCost
+                        $vendorCost,
+                        $sharing['shared_out'] * $shareRatio,
+                        $sharing['shared_in'] * $shareRatio
                     ));
                 }
                 continue;
             }
 
-            $entityId = $groupBy === 'staff' ? $order->created_by_user_id : $order->customer_id;
+            $rowGroupId = $groupBy === 'staff' ? $order->created_by_user_id : $order->customer_id;
             $entityName = $groupBy === 'staff'
                 ? ($order->createdBy?->name ?? 'Unassigned staff')
                 : ($order->customer?->name ?? 'Unassigned customer');
+            $sharing = $groupBy === 'staff'
+                ? $this->profitShareTotals($invoiceShares, $rowGroupId)
+                : $this->profitShareTotals($invoiceShares);
 
-            $detailRows->push($this->profitRow($order, $groupBy, $entityId, $entityName, $date, $currency, $revenue, $cost));
+            $detailRows->push($this->profitRow($order, $groupBy, $rowGroupId, $entityName, $date, $currency, $revenue, $cost, $sharing['shared_out'], $sharing['shared_in']));
+
+            if ($groupBy === 'staff') {
+                $invoiceShares
+                    ->flatMap(fn (ProfitShare $share) => [$share->fromUser, $share->toUser])
+                    ->filter()
+                    ->unique('id')
+                    ->reject(fn (User $user) => (int) $user->id === (int) $rowGroupId)
+                    ->each(function (User $user) use ($order, $date, $currency, $invoiceShares, $detailRows): void {
+                        $sharing = $this->profitShareTotals($invoiceShares, (int) $user->id);
+
+                        if ($sharing['shared_out'] == 0.0 && $sharing['shared_in'] == 0.0) {
+                            return;
+                        }
+
+                        $detailRows->push($this->profitRow($order, 'staff', $user->id, $user->name, $date, $currency, 0.0, 0.0, $sharing['shared_out'], $sharing['shared_in']));
+                    });
+            }
+        }
+
+        if ($entityId && $groupBy === 'staff') {
+            $detailRows = $detailRows
+                ->filter(fn (array $row) => (int) $row['group_id'] === $entityId)
+                ->values();
         }
 
         $groups = $detailRows
@@ -1100,6 +1163,10 @@ class ReportService
             ->map(function (Collection $rows) {
                 $revenue = (float) $rows->sum('revenue');
                 $cost = (float) $rows->sum('cost');
+                $profit = (float) $rows->sum('profit');
+                $sharedOut = (float) $rows->sum('shared_out');
+                $sharedIn = (float) $rows->sum('shared_in');
+                $profitAfterSharing = $profit - $sharedOut + $sharedIn;
 
                 return [
                     'key' => $rows->first()['group_id'] . '-' . $rows->first()['currency_code'],
@@ -1109,11 +1176,16 @@ class ReportService
                     'order_count' => $rows->pluck('order_id')->unique()->count(),
                     'revenue' => round($revenue, 4),
                     'cost' => round($cost, 4),
-                    'profit' => round($revenue - $cost, 4),
-                    'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
+                    'profit' => round($profit, 4),
+                    'shared_out' => round($sharedOut, 4),
+                    'shared_in' => round($sharedIn, 4),
+                    'sharing_net' => round($sharedIn - $sharedOut, 4),
+                    'profit_after_sharing' => round($profitAfterSharing, 4),
+                    'profit_margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
+                    'profit_after_sharing_margin' => $revenue > 0 ? round(($profitAfterSharing / $revenue) * 100, 2) : 0,
                 ];
             })
-            ->sortByDesc('profit')
+            ->sortByDesc('profit_after_sharing')
             ->values();
 
         $currencySummary = $detailRows
@@ -1121,13 +1193,22 @@ class ReportService
             ->map(function (Collection $rows, string $currency) {
                 $revenue = (float) $rows->sum('revenue');
                 $cost = (float) $rows->sum('cost');
+                $profit = (float) $rows->sum('profit');
+                $sharedOut = (float) $rows->sum('shared_out');
+                $sharedIn = (float) $rows->sum('shared_in');
+                $profitAfterSharing = $profit - $sharedOut + $sharedIn;
 
                 return [
                     'currency_code' => $currency,
                     'revenue' => round($revenue, 4),
                     'cost' => round($cost, 4),
-                    'profit' => round($revenue - $cost, 4),
-                    'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
+                    'profit' => round($profit, 4),
+                    'shared_out' => round($sharedOut, 4),
+                    'shared_in' => round($sharedIn, 4),
+                    'sharing_net' => round($sharedIn - $sharedOut, 4),
+                    'profit_after_sharing' => round($profitAfterSharing, 4),
+                    'profit_margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
+                    'profit_after_sharing_margin' => $revenue > 0 ? round(($profitAfterSharing / $revenue) * 100, 2) : 0,
                 ];
             })
             ->values();
@@ -1222,10 +1303,14 @@ class ReportService
         string $date,
         string $currency,
         float $revenue,
-        float $cost
+        float $cost,
+        float $sharedOut = 0.0,
+        float $sharedIn = 0.0
     ): array {
         $departureDate = $this->voucherDates($order, 'flights', 'date');
         $checkinDate = $this->voucherDates($order, 'hotels', 'check_in');
+        $profit = $revenue - $cost;
+        $profitAfterSharing = $profit - $sharedOut + $sharedIn;
 
         return [
             'key' => $groupBy . '-' . ($groupId ?? 0) . '-' . $order->id . '-' . $currency,
@@ -1248,8 +1333,30 @@ class ReportService
             'currency_code' => $currency,
             'revenue' => round($revenue, 4),
             'cost' => round($cost, 4),
-            'profit' => round($revenue - $cost, 4),
-            'profit_margin' => $revenue > 0 ? round((($revenue - $cost) / $revenue) * 100, 2) : 0,
+            'profit' => round($profit, 4),
+            'shared_out' => round($sharedOut, 4),
+            'shared_in' => round($sharedIn, 4),
+            'sharing_net' => round($sharedIn - $sharedOut, 4),
+            'profit_after_sharing' => round($profitAfterSharing, 4),
+            'profit_margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
+            'profit_after_sharing_margin' => $revenue > 0 ? round(($profitAfterSharing / $revenue) * 100, 2) : 0,
+        ];
+    }
+
+    private function profitShareTotals(Collection $shares, ?int $userId = null): array
+    {
+        if (!$userId) {
+            $total = (float) $shares->sum('amount');
+
+            return [
+                'shared_out' => $total,
+                'shared_in' => $total,
+            ];
+        }
+
+        return [
+            'shared_out' => (float) $shares->where('from_user_id', $userId)->sum('amount'),
+            'shared_in' => (float) $shares->where('to_user_id', $userId)->sum('amount'),
         ];
     }
 

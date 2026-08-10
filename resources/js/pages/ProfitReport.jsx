@@ -114,18 +114,21 @@ export default function ProfitReport() {
 
     const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
     const rows = [
-      [`${groupLabel}`, 'Currency', 'Orders', 'Cost', 'Profit', 'Revenue', 'Margin'],
+      [`${groupLabel}`, 'Currency', 'Orders', 'Cost', 'Gross Profit', 'Shared Out', 'Shared In', 'Profit After Sharing', 'Revenue', 'Margin After Sharing'],
       ...report.data.map((row) => [
         row.group_name,
         row.currency_code,
         row.order_count,
         row.cost,
         row.profit,
+        row.shared_out,
+        row.shared_in,
+        row.profit_after_sharing,
         row.revenue,
-        row.profit_margin,
+        row.profit_after_sharing_margin,
       ]),
       [],
-      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Cost', 'Profit', 'Revenue', 'Margin'],
+      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Cost', 'Gross Profit', 'Shared Out', 'Shared In', 'Profit After Sharing', 'Revenue', 'Margin After Sharing'],
       ...(report.details || []).map((row) => [
         dateOnly(row.date),
         dateOnly(row.creation_date),
@@ -143,8 +146,11 @@ export default function ProfitReport() {
         row.currency_code,
         row.cost,
         row.profit,
+        row.shared_out,
+        row.shared_in,
+        row.profit_after_sharing,
         row.revenue,
-        row.profit_margin,
+        row.profit_after_sharing_margin,
       ]),
     ];
 
@@ -169,8 +175,17 @@ export default function ProfitReport() {
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
+    { title: 'Shared Out', dataIndex: 'shared_out', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    { title: 'Shared In', dataIndex: 'shared_in', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    {
+      title: 'After Sharing',
+      dataIndex: 'profit_after_sharing',
+      width: 160,
+      align: 'right',
+      render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
+    },
     { title: 'Revenue', dataIndex: 'revenue', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
-    { title: 'Margin', dataIndex: 'profit_margin', width: 110, align: 'right', render: margin },
+    { title: 'Margin', dataIndex: 'profit_after_sharing_margin', width: 110, align: 'right', render: margin },
   ];
 
   const detailColumns = [
@@ -195,6 +210,15 @@ export default function ProfitReport() {
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
+    { title: 'Shared Out', dataIndex: 'shared_out', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    { title: 'Shared In', dataIndex: 'shared_in', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    {
+      title: 'After Sharing',
+      dataIndex: 'profit_after_sharing',
+      width: 155,
+      align: 'right',
+      render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
+    },
     { title: 'Revenue', dataIndex: 'revenue', fixed: 'right', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
   ];
 
@@ -202,7 +226,7 @@ export default function ProfitReport() {
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
         <Title level={2}>Profit Report</Title>
-        <Paragraph>Check gross profit by customer, vendor, or staff using invoiced order revenue minus supplier costs.</Paragraph>
+        <Paragraph>Check gross profit and profit after sharing by customer, vendor, or staff.</Paragraph>
 
         <Row gutter={[12, 12]} align="bottom">
           <Col xs={24} lg={6}>
@@ -268,12 +292,12 @@ export default function ProfitReport() {
             {report.summary.by_currency.map((item) => (
               <Statistic
                 key={item.currency_code}
-                title={`${item.currency_code} profit`}
-                value={item.profit}
+                title={`${item.currency_code} after sharing`}
+                value={item.profit_after_sharing}
                 precision={2}
                 prefix={item.currency_code}
-                valueStyle={{ color: Number(item.profit) < 0 ? themeToken.colorError : themeToken.colorSuccess }}
-                suffix={<Text type="secondary"> {margin(item.profit_margin)}</Text>}
+                valueStyle={{ color: Number(item.profit_after_sharing) < 0 ? themeToken.colorError : themeToken.colorSuccess }}
+                suffix={<Text type="secondary"> {margin(item.profit_after_sharing_margin)}</Text>}
               />
             ))}
           </Space>
@@ -290,7 +314,7 @@ export default function ProfitReport() {
         ) : !loading && report?.data?.length === 0 ? (
           <Empty description="No matching profit data" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1010 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1440 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
         )}
       </Card>
 
@@ -300,7 +324,7 @@ export default function ProfitReport() {
         ) : !loading && report?.details?.length === 0 ? (
           <Empty description="No matching orders" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2060 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2490 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
         )}
       </Card>
     </div>
