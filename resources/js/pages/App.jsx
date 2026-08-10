@@ -23,6 +23,7 @@ import {
   VerticalAlignTopOutlined,
   CalculatorOutlined,
   SearchOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
@@ -33,6 +34,7 @@ import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
 import ProfitReport from './ProfitReport';
+import ProfitShares from './ProfitShares';
 import PaymentReport from './PaymentReport';
 import InvoiceDetail from './InvoiceDetail';
 import VoucherDetail from './VoucherDetail';
@@ -559,6 +561,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/reference-search" element={<ReferenceSearch />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/payments" element={canAccessPayments ? <Payments /> : <Navigate to="/" replace />} />
+              <Route path="/profit-shares" element={canAccessPayments ? <ProfitShares /> : <Navigate to="/" replace />} />
               <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
               <Route path="/vendor-payments" element={canAccessPayments ? <VendorPayments /> : <Navigate to="/" replace />} />
               <Route path="/vendor-receipts" element={canAccessPayments ? <CounterpartyTransaction direction="receipt" partyType="vendor" /> : <Navigate to="/" replace />} />
@@ -768,6 +771,11 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           key: '/payments',
           label: <Link to="/payments">Customer Receipts</Link>,
           icon: <BankOutlined />,
+        },
+        {
+          key: '/profit-shares',
+          label: <Link to="/profit-shares">Profit Shares</Link>,
+          icon: <SwapOutlined />,
         },
         {
           key: '/customer-payments',

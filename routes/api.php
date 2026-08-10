@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\StatementController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\MasterDataController;
+use App\Http\Controllers\Api\ProfitShareController;
 use App\Http\Controllers\Api\CompanyUserController;
 use App\Http\Controllers\Api\CompanyProfileController;
 use App\Http\Controllers\Api\InternalPortalController;
@@ -152,6 +153,13 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         // Balance & ledger
         Route::get('/{accountType}/{accountId}/balance', 'balance')->name('accounts.balance');
         Route::get('/{accountType}/{accountId}/ledger-entries', 'ledgerEntries')->name('accounts.ledgerEntries');
+    });
+
+    Route::prefix('profit-shares')->controller(ProfitShareController::class)->middleware('role:admin,accounts')->group(function () {
+        Route::get('/', 'index')->name('profitShares.list');
+        Route::post('/', 'store')->middleware('throttle:sensitive-write')->name('profitShares.create');
+        Route::patch('/{uid}', 'update')->middleware('throttle:sensitive-write')->name('profitShares.update');
+        Route::delete('/{uid}', 'destroy')->middleware('throttle:sensitive-write')->name('profitShares.delete');
     });
 
     // ========== REPORTS ==========

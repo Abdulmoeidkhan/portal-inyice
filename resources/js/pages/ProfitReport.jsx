@@ -33,7 +33,7 @@ export default function ProfitReport() {
     to_date: dateString(new Date()),
     date_by: 'invoice',
     group_by: 'customer',
-    entity_id: null,
+    entity_id: 'all',
     search: '',
   });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -102,8 +102,12 @@ export default function ProfitReport() {
   }, [filters.group_by]);
 
   useEffect(() => {
-    if (hasEntitySelection) fetchReport();
-  }, [filters.entity_id]);
+    if (!hasEntitySelection) return undefined;
+
+    const timeoutId = window.setTimeout(fetchReport, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [filters.entity_id, filters.from_date, filters.to_date, filters.date_by, filters.group_by, filters.search]);
 
   const exportCsv = () => {
     if (!report?.data?.length) return;
@@ -206,7 +210,7 @@ export default function ProfitReport() {
             <Segmented
               block
               value={filters.group_by}
-              onChange={(value) => setFilters((current) => ({ ...current, group_by: value, entity_id: null }))}
+              onChange={(value) => setFilters((current) => ({ ...current, group_by: value, entity_id: 'all' }))}
               options={[
                 { label: 'Customer', value: 'customer' },
                 { label: 'Vendor', value: 'vendor' },
