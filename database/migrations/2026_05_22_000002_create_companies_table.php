@@ -27,6 +27,7 @@ return new class extends Migration
             $table->unsignedInteger('order_limit')->nullable();
             $table->unsignedInteger('user_limit')->default(2);
             $table->boolean('is_paid')->default(false);
+            $table->boolean('sales_can_edit_cost')->default(false);
             $table->string('logo_path')->nullable();
             $table->string('footer_logo_path')->nullable();
             $table->boolean('is_active')->default(true);
