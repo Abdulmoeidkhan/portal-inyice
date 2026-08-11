@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { acquireEditLock, releaseEditLock } from '../services/editLocks';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;

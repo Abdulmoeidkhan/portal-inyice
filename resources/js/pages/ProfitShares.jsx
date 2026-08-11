@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 

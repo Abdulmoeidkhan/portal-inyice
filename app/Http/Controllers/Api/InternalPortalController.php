@@ -76,6 +76,7 @@ class InternalPortalController extends Controller
             'order_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
             'user_limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
             'is_paid' => ['sometimes', 'boolean'],
+            'sales_can_edit_cost' => ['sometimes', 'boolean'],
         ]);
 
         $validated['monthly_invoice_limit'] = null;
@@ -303,6 +304,7 @@ class InternalPortalController extends Controller
             'order_limit' => $company->order_limit,
             'user_limit' => (int) ($company->user_limit ?: 2),
             'is_paid' => (bool) $company->is_paid,
+            'sales_can_edit_cost' => (bool) $company->sales_can_edit_cost,
             'is_active' => (bool) $company->is_active,
             'counts' => [
                 'users' => (int) ($company->users_count ?? 0),
@@ -408,6 +410,7 @@ class InternalPortalController extends Controller
                 'order_limit' => null,
                 'user_limit' => 2,
                 'is_paid' => true,
+                'sales_can_edit_cost' => true,
                 'is_active' => true,
             ]
         );

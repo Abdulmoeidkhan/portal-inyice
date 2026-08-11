@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, Grid } from 'antd';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Tag, Tooltip, Typography, Grid } from 'antd';
 import { CheckCircleOutlined, CrownOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, StopOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -89,6 +90,7 @@ export default function CompanyUsers() {
 
   const openEdit = (record) => {
     setEditing(record);
+    editForm.resetFields();
     editForm.setFieldsValue({
       name: record.name,
       email: record.email,
@@ -106,6 +108,10 @@ export default function CompanyUsers() {
 
     try {
       const values = await editForm.validateFields();
+      if (!values.password) {
+        delete values.password;
+        delete values.password_confirmation;
+      }
       const response = await fetch(`/api/v1/company-users/${editing.uid}`, {
         method: 'PATCH',
         headers: authHeaders(true),
@@ -302,7 +308,7 @@ export default function CompanyUsers() {
             label="Password"
             rules={[{ required: true, min: 8, message: 'Use at least 8 characters' }]}
           >
-            <Input.Password placeholder="Temporary password" />
+            <Input.Password placeholder="Temporary password" autoComplete="new-password" />
           </Form.Item>
           <Form.Item
             name="password_confirmation"
@@ -321,7 +327,7 @@ export default function CompanyUsers() {
               }),
             ]}
           >
-            <Input.Password placeholder="Repeat temporary password" />
+            <Input.Password placeholder="Repeat temporary password" autoComplete="new-password" />
           </Form.Item>
           <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving} disabled={!canCreate}>
             {compactActions ? null : 'Create User'}
@@ -358,7 +364,7 @@ export default function CompanyUsers() {
             <Select options={[{ value: true, label: 'Active' }, { value: false, label: 'Inactive' }]} />
           </Form.Item>
           <Form.Item name="password" label="New Password" rules={[{ min: 8, message: 'Use at least 8 characters' }]}>
-            <Input.Password placeholder="Leave blank to keep current password" />
+            <Input.Password placeholder="Leave blank to keep current password" autoComplete="new-password" />
           </Form.Item>
           <Form.Item
             name="password_confirmation"
@@ -376,7 +382,7 @@ export default function CompanyUsers() {
               }),
             ]}
           >
-            <Input.Password placeholder="Repeat new password" />
+            <Input.Password placeholder="Repeat new password" autoComplete="new-password" />
           </Form.Item>
         </Form>
       </Modal>

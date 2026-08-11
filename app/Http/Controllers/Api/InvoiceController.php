@@ -189,6 +189,9 @@ class InvoiceController extends Controller
 
         if ($user?->hasRole('sales') === true) {
             $invoice->setRelation('settlements', collect());
+        }
+
+        if ($this->shouldHideCostProfit($user)) {
             $this->stripOrderCostProfitForSales($invoice);
         }
 
@@ -244,8 +247,13 @@ class InvoiceController extends Controller
         });
         $invoice->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
         $invoice->order?->setVisible(['order_number', 'booking_reference']);
-        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url', 'is_paid']);
+        $invoice->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'logo_url', 'footer_logo_url', 'is_paid', 'sales_can_edit_cost']);
         return response()->json($this->normalizeResponseText($invoice->toArray()));
+    }
+
+    private function shouldHideCostProfit($user): bool
+    {
+        return $user?->hasRole('sales') === true && $user?->company()->value('sales_can_edit_cost') !== true;
     }
 
     private function stripOrderCostProfitForSales(Invoice $invoice): void

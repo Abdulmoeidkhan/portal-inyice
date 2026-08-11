@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -14,7 +14,6 @@ import {
   Segmented,
   Space,
   Switch,
-  Table,
   Tabs,
   Tag,
   Tooltip,
@@ -41,6 +40,7 @@ import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import VoucherPreview from './sales-flow/VoucherPreview';
 import CancelledReport from './CancelledReport';
+import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -150,6 +150,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       limitForm.setFieldsValue({
         user_limit: data.company.user_limit,
         is_paid: Boolean(data.company.is_paid),
+        sales_can_edit_cost: Boolean(data.company.sales_can_edit_cost),
       });
     } catch (error) {
       message.error(error.message || 'Unable to load company details');
@@ -219,6 +220,18 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
     };
 
     limitForm.setFieldsValue({ is_paid: checked });
+    saveLimits(values);
+  };
+
+  const saveSalesCostAccess = (checked) => {
+    if (!detail?.uid || savingLimits) return;
+
+    const values = {
+      ...limitForm.getFieldsValue(),
+      sales_can_edit_cost: checked,
+    };
+
+    limitForm.setFieldsValue({ sales_can_edit_cost: checked });
     saveLimits(values);
   };
 
@@ -685,6 +698,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                             { key: 'currency', label: 'Currency', children: detail.base_currency_code },
                             { key: 'status', label: 'Status', children: <Tag color={detail.is_active ? 'success' : 'default'}>{detail.is_active ? 'Active' : 'Inactive'}</Tag> },
                             { key: 'paid', label: 'Paid customer', children: <Tag color={detail.is_paid ? 'success' : 'warning'}>{detail.is_paid ? 'Paid' : 'Unpaid'}</Tag> },
+                            { key: 'sales-cost', label: 'Sales cost access', children: <Tag color={detail.sales_can_edit_cost ? 'success' : 'default'}>{detail.sales_can_edit_cost ? 'Allowed' : 'Sales only'}</Tag> },
                             { key: 'address', label: 'Address', children: detail.address || '-', span: 2 },
                           ]}
                         />
@@ -695,6 +709,14 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                               unCheckedChildren="Unpaid"
                               loading={savingLimits}
                               onChange={savePaidStatus}
+                            />
+                          </Form.Item>
+                          <Form.Item name="sales_can_edit_cost" label="Sales cost" valuePropName="checked">
+                            <Switch
+                              checkedChildren="Allowed"
+                              unCheckedChildren="Sales only"
+                              loading={savingLimits}
+                              onChange={saveSalesCostAccess}
                             />
                           </Form.Item>
                           <Form.Item

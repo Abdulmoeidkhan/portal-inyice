@@ -426,6 +426,39 @@ class FinancialApiTest extends TestCase
         $balance->assertJsonPath('account_type', 'bank');
     }
 
+    public function test_cancelled_invoices_cannot_receive_customer_receipts_or_advances(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        Invoice::where('uid', $invoice['uid'])->update([
+            'status' => 'cancel',
+            'outstanding_amount' => 1000,
+            'advance_balance' => 200,
+        ]);
+        $ctx['order']->update(['status' => 'cancel']);
+
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 100,
+            'payment_method' => 'cash',
+        ])->assertStatus(422);
+
+        $this->postJson('/api/v1/receipts/customer/advance', [
+            'invoice_uid' => $invoice['uid'],
+            'amount' => 100,
+            'payment_method' => 'cash',
+        ])->assertStatus(422);
+
+        $this->postJson('/api/v1/payments/apply-advance', [
+            'invoice_uid' => $invoice['uid'],
+            'advance_amount' => 50,
+        ])->assertStatus(422);
+    }
+
     public function test_customer_advance_receipt_can_be_recorded_without_invoice(): void
     {
         $ctx = $this->seedTenantContext();
@@ -770,6 +803,33 @@ class FinancialApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('outstanding_total', 500);
+    }
+
+    public function test_cancelled_orders_are_not_available_for_vendor_payment_allocation(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        Invoice::where('uid', $invoice['uid'])->update(['status' => 'cancel']);
+        $ctx['order']->update(['status' => 'cancel']);
+
+        $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('outstanding_total', 0);
+
+        $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 100,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-19',
+            'allocations' => [
+                ['order_id' => $ctx['order']->id, 'amount' => 100],
+            ],
+        ])->assertStatus(422);
     }
 
     public function test_payments_can_be_reallocated_deleted_refunded_and_invoices_shared(): void
@@ -1462,6 +1522,43 @@ class FinancialApiTest extends TestCase
         $this->assertSame('500', $order['meta']['pricing'][0]['flight_sales']);
         $this->assertArrayNotHasKey('flight_cost', $order['meta']['pricing'][0]);
         $this->assertArrayNotHasKey('flight_profit', $order['meta']['pricing'][0]);
+    }
+
+    public function test_sales_role_can_view_cost_profit_when_company_allows_sales_cost_access(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $ctx['company']->update(['sales_can_edit_cost' => true]);
+
+        DB::table('orders')
+            ->where('id', $ctx['order']->id)
+            ->update([
+                'meta' => addslashes(json_encode([
+                    'pricing' => [[
+                        'pax_name' => 'Allowed Passenger',
+                        'flight_cost' => '350',
+                        'flight_profit' => '150',
+                        'flight_sales' => '500',
+                    ]],
+                    'active_sections' => ['flights'],
+                    'flights' => [[
+                        'from' => 'KHI',
+                        'to' => 'JED',
+                        'flight_no' => 'SV705',
+                    ]],
+                ], JSON_THROW_ON_ERROR)),
+            ]);
+
+        Sanctum::actingAs($this->salesUserForContext($ctx));
+
+        $order = $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonPath('uid', $ctx['order']->uid)
+            ->json();
+
+        $this->assertSame('Allowed Passenger', $order['meta']['pricing'][0]['pax_name']);
+        $this->assertSame('350', $order['meta']['pricing'][0]['flight_cost']);
+        $this->assertSame('150', $order['meta']['pricing'][0]['flight_profit']);
+        $this->assertSame('500', $order['meta']['pricing'][0]['flight_sales']);
     }
 
     public function test_sales_role_can_view_invoice_with_legacy_escaped_order_fields(): void

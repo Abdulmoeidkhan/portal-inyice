@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { DownloadOutlined, ReloadOutlined, RetweetOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Empty, Input, Popconfirm, Row, Statistic, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined, RetweetOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Empty, Input, Popconfirm, Row, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -69,38 +70,6 @@ export default function CancelledReport({ embedded = false }) {
     fetchReport();
   }, []);
 
-  const exportCsv = () => {
-    if (!report?.data?.length) return;
-    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const rows = [
-      ['Type', 'Invoice', 'Date', 'Agency', 'Company', 'Customer', 'Order', 'Booking Ref', 'Cancelled By', 'Cancelled User ID', 'New Order', 'Currency', 'Amount', 'Outstanding', 'Notes'],
-      ...report.data.map((row) => [
-        row.document_type,
-        row.invoice_number,
-        dateOnly(row.invoice_date),
-        row.tenant_name,
-        row.company_name,
-        row.customer_name,
-        row.order_number,
-        row.booking_reference,
-        row.cancelled_by,
-        row.cancelled_by_user_id,
-        row.linked_new_order_number,
-        row.currency_code,
-        row.total_amount,
-        row.outstanding_amount,
-        row.notes,
-      ]),
-    ];
-    const blob = new Blob([rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `cancelled-report-${filters.from_date}-to-${filters.to_date}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   const columns = [
     { title: 'Type', dataIndex: 'document_type', width: 95, render: (value) => <Tag color={value === 'Order' ? 'orange' : 'default'}>{value || 'Invoice'}</Tag> },
     { title: 'Invoice', dataIndex: 'invoice_number', width: 165, render: (value) => value || '-' },
@@ -163,7 +132,7 @@ export default function CancelledReport({ embedded = false }) {
         </Row>
       )}
 
-      <Card title="Cancelled records" extra={<Button icon={<DownloadOutlined />} disabled={!report?.data?.length} onClick={exportCsv}>Export CSV</Button>}>
+      <Card title="Cancelled records">
         {!loading && report?.data?.length === 0
           ? <Empty description="No cancelled records" />
           : <Table rowKey="uid" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 'max-content' }} pagination={{ pageSize: 25, showSizeChanger: true }} />}

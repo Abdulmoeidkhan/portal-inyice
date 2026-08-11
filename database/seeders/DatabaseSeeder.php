@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
                 'order_limit' => null,
                 'user_limit' => 2,
                 'is_paid' => false,
+                'sales_can_edit_cost' => false,
                 'is_active' => true,
             ]
         );
@@ -81,6 +82,7 @@ class DatabaseSeeder extends Seeder
                 'order_limit' => null,
                 'user_limit' => 2,
                 'is_paid' => true,
+                'sales_can_edit_cost' => true,
                 'is_active' => true,
             ]
         );

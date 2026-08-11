@@ -20,6 +20,9 @@ use Illuminate\Http\JsonResponse;
 
 class PaymentController extends Controller
 {
+    private const CLOSED_INVOICE_STATUSES = ['paid', 'void', 'cancel'];
+    private const CANCELLED_FINANCIAL_STATUSES = ['void', 'cancel'];
+
     public function __construct(
         private PaymentService $paymentService,
         private LedgerService $ledgerService,
@@ -184,6 +187,7 @@ class PaymentController extends Controller
         $invoices = Invoice::where('tenant_id', $receipt->tenant_id)
             ->where('company_id', $receipt->company_id)
             ->where('customer_id', $receipt->customer_id)
+            ->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES)
             ->whereIn('id', collect($validated['allocations'])->pluck('invoice_id'))->get();
         if ($invoices->count() !== count($validated['allocations'])) {
             return response()->json(['error' => 'One or more invoices are unavailable.'], 422);
@@ -219,7 +223,7 @@ class PaymentController extends Controller
             ->where('company_id', $receipt->company_id)
             ->where('customer_id', $receipt->customer_id)
             ->where('currency_code', $receipt->currency_code)
-            ->whereNotIn('status', ['paid', 'void'])
+            ->whereNotIn('status', self::CLOSED_INVOICE_STATUSES)
             ->where('outstanding_amount', '>', 0)
             ->whereIn('id', collect($validated['allocations'])->pluck('invoice_id'))
             ->get();
@@ -265,7 +269,12 @@ class PaymentController extends Controller
             'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
             'allocations.*.amount' => 'required|numeric|min:0.01',
         ]);
-        $orders = Order::where('tenant_id', $payment->tenant_id)->where('company_id', $payment->company_id)->whereIn('id', collect($validated['allocations'])->pluck('order_id'))->get();
+        $orders = Order::where('tenant_id', $payment->tenant_id)
+            ->where('company_id', $payment->company_id)
+            ->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES)
+            ->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES))
+            ->whereIn('id', collect($validated['allocations'])->pluck('order_id'))
+            ->get();
         if ($orders->count() !== count($validated['allocations'])) return response()->json(['error' => 'One or more orders are unavailable.'], 422);
         foreach ($validated['allocations'] as $allocation) {
             $order = $orders->firstWhere('id', (int) $allocation['order_id']);
@@ -308,7 +317,8 @@ class PaymentController extends Controller
             ->findOrFail($vendorId);
         $orders = Order::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->whereHas('invoice', fn ($invoice) => $invoice->where('status', '!=', 'void'))
+            ->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES)
+            ->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES))
             ->with('invoice:id,order_id,invoice_date')
             ->orderBy('created_at')
             ->get()
@@ -471,9 +481,9 @@ class PaymentController extends Controller
             ], 422);
         }
 
-        if (in_array($invoice->status, ['paid', 'void'], true)) {
+        if (in_array($invoice->status, self::CLOSED_INVOICE_STATUSES, true)) {
             return response()->json([
-                'error' => 'Payments cannot be recorded against a paid or void invoice.',
+                'error' => 'Payments cannot be recorded against a paid, void, or cancelled invoice.',
             ], 422);
         }
 
@@ -521,7 +531,7 @@ class PaymentController extends Controller
         $invoices = Invoice::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->whereIn('uid', $invoiceUids)
-            ->whereNotIn('status', ['paid', 'void'])
+            ->whereNotIn('status', self::CLOSED_INVOICE_STATUSES)
             ->where('outstanding_amount', '>', 0)
             ->orderBy('invoice_date')
             ->orderBy('id')
@@ -606,8 +616,8 @@ class PaymentController extends Controller
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
-        if ($invoice->status === 'void') {
-            return response()->json(['error' => 'A void invoice cannot be refunded.'], 422);
+        if (in_array($invoice->status, self::CANCELLED_FINANCIAL_STATUSES, true)) {
+            return response()->json(['error' => 'A void or cancelled invoice cannot be refunded.'], 422);
         }
 
         try {
@@ -677,6 +687,10 @@ class PaymentController extends Controller
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
 
+        if (in_array($invoice->status, self::CANCELLED_FINANCIAL_STATUSES, true)) {
+            return response()->json(['error' => 'Advance cannot be recorded against a void or cancelled invoice.'], 422);
+        }
+
         if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $invoice->company_id, $invoice->currency_code)) {
             return response()->json(['error' => 'The selected account is unavailable for this customer advance receipt.'], 422);
         }
@@ -710,6 +724,10 @@ class PaymentController extends Controller
             ->where('company_id', auth()->user()->company_id)
             ->where('uid', $validated['invoice_uid'])
             ->firstOrFail();
+
+        if (in_array($invoice->status, self::CANCELLED_FINANCIAL_STATUSES, true)) {
+            return response()->json(['error' => 'Advance cannot be applied to a void or cancelled invoice.'], 422);
+        }
 
         if ((float)$invoice->advance_balance < (float)$validated['advance_amount']) {
             return response()->json([

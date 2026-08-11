@@ -112,6 +112,10 @@ const buildPrintHtml = (source, title) => {
       max-height: none !important;
     }
 
+    .print-document-root .csv-table-download-button {
+      display: none !important;
+    }
+
     .print-document-root,
     .print-document-root *,
     .print-document-root .ant-typography,

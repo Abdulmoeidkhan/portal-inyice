@@ -1,0 +1,118 @@
+import React from 'react';
+import { DownloadOutlined } from '@ant-design/icons';
+import { Button, Space, Table as AntTable } from 'antd';
+
+const getCurrentUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const isPaidAgency = () => getCurrentUser().company_is_paid === true;
+
+const valueAtPath = (record, dataIndex) => {
+  if (Array.isArray(dataIndex)) {
+    return dataIndex.reduce((current, key) => current?.[key], record);
+  }
+
+  if (typeof dataIndex === 'string' && dataIndex.includes('.')) {
+    return dataIndex.split('.').reduce((current, key) => current?.[key], record);
+  }
+
+  return dataIndex ? record?.[dataIndex] : undefined;
+};
+
+const nodeToText = (node) => {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).filter(Boolean).join(' ');
+  if (React.isValidElement(node)) return nodeToText(node.props?.children);
+
+  return String(node);
+};
+
+const columnTitle = (column) => {
+  const title = typeof column.title === 'function' ? column.key || column.dataIndex : column.title;
+  const text = nodeToText(title);
+
+  if (text) return text;
+  if (Array.isArray(column.dataIndex)) return column.dataIndex.join('.');
+
+  return column.dataIndex || column.key || '';
+};
+
+const flattenColumns = (columns = []) => columns.flatMap((column) => {
+  if (column.hidden) return [];
+  if (Array.isArray(column.children)) return flattenColumns(column.children);
+  if (!column.dataIndex && !column.key) return [];
+
+  return [column];
+});
+
+const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+
+const downloadCsv = ({ columns, dataSource, fileName }) => {
+  const exportColumns = flattenColumns(columns).filter((column) => columnTitle(column));
+  if (!exportColumns.length || !dataSource?.length) return;
+
+  const rows = [
+    exportColumns.map(columnTitle),
+    ...dataSource.map((record, rowIndex) => exportColumns.map((column) => {
+      const rawValue = valueAtPath(record, column.dataIndex);
+      const renderedValue = typeof column.render === 'function'
+        ? column.render(rawValue, record, rowIndex)
+        : rawValue;
+
+      return nodeToText(renderedValue);
+    })),
+  ];
+
+  const blob = new Blob([rows.map((row) => row.map(escapeCsvValue).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
+const defaultFileName = () => {
+  const pageName = (document.title || 'table').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'table';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+  return `${pageName}-${timestamp}.csv`;
+};
+
+function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, ...props }) {
+  const rows = Array.isArray(dataSource) ? dataSource : [];
+  const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
+
+  const renderTitle = showCsvButton || title
+    ? (currentPageData) => (
+      <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
+        <span>{typeof title === 'function' ? title(currentPageData) : title}</span>
+        {showCsvButton && (
+          <Button
+            className="csv-table-download-button"
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={() => downloadCsv({ columns, dataSource: rows, fileName: csvFileName || defaultFileName() })}
+          >
+            CSV
+          </Button>
+        )}
+      </Space>
+    )
+    : undefined;
+
+  return <AntTable {...props} columns={columns} dataSource={dataSource} title={renderTitle} />;
+}
+
+CsvTable.Summary = AntTable.Summary;
+CsvTable.Column = AntTable.Column;
+CsvTable.ColumnGroup = AntTable.ColumnGroup;
+
+export default CsvTable;
+

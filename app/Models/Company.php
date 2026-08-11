@@ -28,6 +28,7 @@ class Company extends Model
         'order_limit',
         'user_limit',
         'is_paid',
+        'sales_can_edit_cost',
         'logo_path',
         'footer_logo_path',
         'is_active',
@@ -41,6 +42,7 @@ class Company extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_paid' => 'boolean',
+        'sales_can_edit_cost' => 'boolean',
         'monthly_invoice_limit' => 'integer',
         'order_limit' => 'integer',
         'user_limit' => 'integer',
@@ -51,6 +53,7 @@ class Company extends Model
         static::creating(function (Company $company): void {
             $company->user_limit ??= 2;
             $company->is_paid ??= false;
+            $company->sales_can_edit_cost ??= false;
         });
     }
 

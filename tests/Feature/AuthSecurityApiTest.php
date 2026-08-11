@@ -138,6 +138,52 @@ class AuthSecurityApiTest extends TestCase
         $this->assertSame(0, Invoice::count());
     }
 
+    public function test_company_setting_controls_sales_cost_profit_write_access(): void
+    {
+        $ctx = $this->seedContext('sales');
+        Sanctum::actingAs($ctx['user']);
+
+        $payload = [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'order',
+            'currency_code' => 'PKR',
+            'total_amount' => 750,
+            'notes' => 'Sales cost access check',
+            'voucher' => [
+                'voucher_no' => 'COST-CHECK-001',
+                'active_sections' => ['flights'],
+                'flights' => [],
+                'passengers' => [],
+                'pricing' => [[
+                    'pax_name' => 'Cost Tester',
+                    'flight_cost' => 500,
+                    'flight_profit' => 250,
+                    'flight_sales' => 750,
+                ]],
+            ],
+        ];
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, $payload)
+            ->assertOk()
+            ->assertJsonPath('order.meta.pricing.0.flight_sales', 750)
+            ->assertJsonMissingPath('order.meta.pricing.0.flight_cost')
+            ->assertJsonMissingPath('order.meta.pricing.0.flight_profit');
+
+        $this->assertArrayNotHasKey('flight_cost', $ctx['order']->fresh()->meta['pricing'][0]);
+
+        $ctx['company']->update(['sales_can_edit_cost' => true]);
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, $payload)
+            ->assertOk()
+            ->assertJsonPath('order.meta.pricing.0.flight_cost', 500)
+            ->assertJsonPath('order.meta.pricing.0.flight_profit', 250)
+            ->assertJsonPath('order.meta.pricing.0.flight_sales', 750);
+
+        $savedPricing = $ctx['order']->fresh()->meta['pricing'][0];
+        $this->assertSame(500, $savedPricing['flight_cost']);
+        $this->assertSame(250, $savedPricing['flight_profit']);
+    }
+
     public function test_edit_locks_block_other_users_until_released(): void
     {
         $ctx = $this->seedContext('admin');

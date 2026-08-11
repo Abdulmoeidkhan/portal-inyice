@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Typography, Watermark } from 'antd';
+import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Typography, Watermark } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
+import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
 

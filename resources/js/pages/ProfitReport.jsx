@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statistic, Table, Tag, Typography, theme } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statistic, Tag, Typography, theme } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -108,60 +109,6 @@ export default function ProfitReport() {
 
     return () => window.clearTimeout(timeoutId);
   }, [filters.entity_id, filters.from_date, filters.to_date, filters.date_by, filters.group_by, filters.search]);
-
-  const exportCsv = () => {
-    if (!report?.data?.length) return;
-
-    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const rows = [
-      [`${groupLabel}`, 'Currency', 'Orders', 'Cost', 'Gross Profit', 'Shared Out', 'Shared In', 'Profit After Sharing', 'Revenue', 'Margin After Sharing'],
-      ...report.data.map((row) => [
-        row.group_name,
-        row.currency_code,
-        row.order_count,
-        row.cost,
-        row.profit,
-        row.shared_out,
-        row.shared_in,
-        row.profit_after_sharing,
-        row.revenue,
-        row.profit_after_sharing_margin,
-      ]),
-      [],
-      ['Date', 'Creation Date', 'Invoice Date', 'Departure Date', 'Check-in Date', 'Service Date', 'Order', 'Voucher', 'PNR', 'Customer', 'Vendor', 'Staff', 'Status', 'Currency', 'Cost', 'Gross Profit', 'Shared Out', 'Shared In', 'Profit After Sharing', 'Revenue', 'Margin After Sharing'],
-      ...(report.details || []).map((row) => [
-        dateOnly(row.date),
-        dateOnly(row.creation_date),
-        dateOnly(row.invoice_date),
-        dateOnly(row.departure_date),
-        dateOnly(row.checkin_date),
-        dateOnly(row.service_date),
-        row.order_number,
-        row.voucher_no,
-        row.booking_reference,
-        row.customer_name,
-        row.vendor_name,
-        row.staff_name,
-        row.status,
-        row.currency_code,
-        row.cost,
-        row.profit,
-        row.shared_out,
-        row.shared_in,
-        row.profit_after_sharing,
-        row.revenue,
-        row.profit_after_sharing_margin,
-      ]),
-    ];
-
-    const blob = new Blob([rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `profit-report-${filters.group_by}-${filters.from_date}-to-${filters.to_date}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const groupColumns = [
     { title: groupLabel, dataIndex: 'group_name', width: 240 },
@@ -304,11 +251,7 @@ export default function ProfitReport() {
         </Card>
       )}
 
-      <Card
-        title={`Profit by ${groupLabel.toLowerCase()}`}
-        style={{ marginBottom: 16 }}
-        extra={<Button icon={<DownloadOutlined />} disabled={!report?.data?.length} onClick={exportCsv}>Export CSV</Button>}
-      >
+      <Card title={`Profit by ${groupLabel.toLowerCase()}`} style={{ marginBottom: 16 }}>
         {!hasEntitySelection ? (
           <Empty description={`Choose all or one ${groupLabel.toLowerCase()} to view profit data`} />
         ) : !loading && report?.data?.length === 0 ? (

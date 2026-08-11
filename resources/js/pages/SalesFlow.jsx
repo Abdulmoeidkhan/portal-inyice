@@ -49,7 +49,7 @@ const createVoucherWithProfileContact = () => {
 const currentUserCanViewCostProfit = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return user.role !== 'sales';
+    return user.role !== 'sales' || user.company_sales_can_edit_cost === true;
   } catch {
     return true;
   }

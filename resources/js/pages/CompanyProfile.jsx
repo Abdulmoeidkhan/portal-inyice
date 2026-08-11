@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Descriptions, Form, Input, Row, Tag, Typography, Upload } from 'antd';
+import { Button, Card, Col, Descriptions, Form, Input, Row, Switch, Tag, Typography, Upload } from 'antd';
 import { SaveOutlined, UploadOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
@@ -54,7 +54,7 @@ export default function CompanyProfile() {
     try {
       const payload = new FormData();
       Object.entries(values).forEach(([key, value]) => {
-        payload.append(key, value ?? '');
+        payload.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : (value ?? ''));
       });
 
       if (logoFile) {
@@ -81,6 +81,7 @@ export default function CompanyProfile() {
         ...storedUser,
         company_name: data.company.display_name,
         company_is_paid: data.company.is_paid === true,
+        company_sales_can_edit_cost: data.company.sales_can_edit_cost === true,
       }));
 
       setCompany(data.company);
@@ -127,6 +128,9 @@ export default function CompanyProfile() {
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={company?.is_active ? 'success' : 'default'}>{company?.is_active ? 'Active' : 'Inactive'}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Sales Cost Access">
+                <Tag color={company?.sales_can_edit_cost ? 'success' : 'default'}>{company?.sales_can_edit_cost ? 'Allowed' : 'Sales only'}</Tag>
               </Descriptions.Item>
             </Descriptions>
 
@@ -181,6 +185,11 @@ export default function CompanyProfile() {
                   <Col xs={24}>
                     <Form.Item name="address" label="Address">
                       <Input.TextArea rows={3} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item name="sales_can_edit_cost" label="Sales Cost Access" valuePropName="checked">
+                      <Switch checkedChildren="Allowed" unCheckedChildren="Sales only" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={12}>

@@ -12,17 +12,19 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Divider, Form, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, Watermark } from 'antd';
+import { Button, Card, Col, Divider, Form, Grid, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Tabs, Tag, Typography, Watermark } from 'antd';
 import { message } from '../services/feedback';
 import { useSearchParams } from 'react-router-dom';
 import { createCustomerApi } from '../services/salesFlowApi';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatMethod = (value) => String(value || '—').replaceAll('_', ' ').toUpperCase();
+const isAllocatableInvoice = (invoice) => Number(invoice.outstanding_amount) > 0 && !['void', 'cancel'].includes(invoice.status);
 
 export default function Payments() {
   const [searchParams] = useSearchParams();
@@ -93,7 +95,7 @@ export default function Payments() {
       setCustomerId(data.customer_id);
       return fetch(`/api/v1/invoices?customer_id=${data.customer_id}&per_page=200`, { headers });
     }).then((response) => response.json()).then((data) => {
-      const open = (data.data || []).filter((invoice) => Number(invoice.outstanding_amount) > 0 && invoice.status !== 'void');
+      const open = (data.data || []).filter(isAllocatableInvoice);
       setInvoices(open);
       const selected = open.find((invoice) => invoice.uid === invoiceUid);
       if (selected) { setSelectedKeys([selected.id]); setAllocations({ [selected.id]: Number(selected.outstanding_amount) }); }
@@ -111,7 +113,7 @@ export default function Payments() {
       const response = await fetch(`/api/v1/invoices?customer_id=${value}&per_page=200`, { headers });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Could not load customer invoices');
-      setInvoices((data.data || []).filter((invoice) => Number(invoice.outstanding_amount) > 0 && invoice.status !== 'void'));
+      setInvoices((data.data || []).filter(isAllocatableInvoice));
     } catch (error) {
       message.error(error.message);
     } finally {
@@ -219,7 +221,7 @@ export default function Payments() {
       const [receipt, invoiceData] = await Promise.all([receiptResponse.json(), invoiceResponse.json()]);
       if (!receiptResponse.ok || !invoiceResponse.ok) throw new Error('Could not load receipt for editing');
       const oldAllocations = Object.fromEntries(receipt.settlements.map((item) => [item.invoice_id, Number(item.amount_received)]));
-      setEditInvoices((invoiceData.data || []).filter((invoice) => invoice.status !== 'void' && (Number(invoice.outstanding_amount) > 0 || oldAllocations[invoice.id])));
+      setEditInvoices((invoiceData.data || []).filter((invoice) => !['void', 'cancel'].includes(invoice.status) && (Number(invoice.outstanding_amount) > 0 || oldAllocations[invoice.id])));
       setEditing({ ...receipt, date: String(receipt.receipt_date).slice(0, 10), method: receipt.payment_method, reference: receipt.reference_number || '', narration: receipt.description || '', allocations: oldAllocations, originalAllocations: oldAllocations });
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
@@ -255,7 +257,7 @@ export default function Payments() {
       ]);
       const [receipt, invoiceData] = await Promise.all([receiptResponse.json(), invoiceResponse.json()]);
       if (!receiptResponse.ok || !invoiceResponse.ok) throw new Error('Could not load advance receipt for allocation');
-      const openInvoices = (invoiceData.data || []).filter((invoice) => invoice.status !== 'void' && Number(invoice.outstanding_amount) > 0 && invoice.currency_code === receipt.currency_code);
+      const openInvoices = (invoiceData.data || []).filter((invoice) => isAllocatableInvoice(invoice) && invoice.currency_code === receipt.currency_code);
       setAdvanceInvoices(openInvoices);
       setAdvanceAllocating({ ...receipt, date: today(), notes: `Applied from advance receipt ${receipt.receipt_number}`, remaining_amount: receiptRemaining(row), allocations: {} });
     } catch (error) { message.error(error.message); } finally { setSaving(false); }

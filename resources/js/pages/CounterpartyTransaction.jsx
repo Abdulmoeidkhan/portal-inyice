@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { DeleteOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Input, InputNumber, Popconfirm, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Input, InputNumber, Popconfirm, Row, Select, Space, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);

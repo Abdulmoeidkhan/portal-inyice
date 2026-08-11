@@ -56,6 +56,21 @@ class InternalPortalApiTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_internal_portal_can_toggle_sales_cost_access(): void
+    {
+        $ctx = $this->seedInternalContext('support-executive');
+        $company = $this->seedCustomerCompany();
+        Sanctum::actingAs($ctx['user']);
+
+        $this->patchJson('/api/v1/internal/companies/' . $company->uid . '/limits', [
+            'user_limit' => 2,
+            'sales_can_edit_cost' => true,
+        ])->assertOk()
+            ->assertJsonPath('company.sales_can_edit_cost', true);
+
+        $this->assertTrue($company->fresh()->sales_can_edit_cost);
+    }
+
     public function test_super_admin_can_create_internal_staff(): void
     {
         $ctx = $this->seedInternalContext('super-admin');

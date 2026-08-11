@@ -37,6 +37,7 @@ class CompanyProfileController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'country_code' => ['nullable', 'string', 'size:2'],
             'default_timezone' => ['required', 'timezone'],
+            'sales_can_edit_cost' => ['sometimes', 'boolean'],
             'logo' => ['nullable', 'image', 'max:2048'],
             'footer_logo' => ['nullable', 'image', 'max:2048'],
         ]);
@@ -50,6 +51,10 @@ class CompanyProfileController extends Controller
             'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
             'default_timezone' => $validated['default_timezone'],
         ]);
+
+        if (array_key_exists('sales_can_edit_cost', $validated)) {
+            $company->sales_can_edit_cost = (bool) $validated['sales_can_edit_cost'];
+        }
 
         if ($request->hasFile('logo')) {
             $company->logo_path = $this->replaceFile($request, 'logo', $company->logo_path, (int) $company->id);
@@ -94,6 +99,7 @@ class CompanyProfileController extends Controller
             'order_limit' => $company->order_limit,
             'user_limit' => $company->user_limit,
             'is_paid' => (bool) $company->is_paid,
+            'sales_can_edit_cost' => (bool) $company->sales_can_edit_cost,
             'logo_url' => $company->logo_url,
             'footer_logo_url' => $company->footer_logo_url,
             'is_active' => (bool) $company->is_active,

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Select, Space, Tabs, Tag, Typography } from 'antd';
 import { ClearOutlined, EyeOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 

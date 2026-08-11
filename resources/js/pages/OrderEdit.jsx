@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Affix, Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Affix, Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
@@ -26,6 +26,7 @@ import {
 } from './sales-flow/defaults';
 import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -162,7 +163,7 @@ const authHeaders = (json = false) => {
 const currentUserCanViewCostProfit = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return user.role !== 'sales';
+    return user.role !== 'sales' || user.company_sales_can_edit_cost === true;
   } catch {
     return true;
   }

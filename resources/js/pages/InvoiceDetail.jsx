@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Table, Tag, Typography, Watermark } from 'antd';
+import { Alert, Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Tag, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
+import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -77,6 +77,7 @@ class AuthController extends Controller
                 'tenant_name' => $user->tenant?->name,
                 'company_name' => $user->company?->display_name,
                 'company_is_paid' => (bool) $user->company?->is_paid,
+                'company_sales_can_edit_cost' => (bool) $user->company?->sales_can_edit_cost,
             ],
         ]);
     }

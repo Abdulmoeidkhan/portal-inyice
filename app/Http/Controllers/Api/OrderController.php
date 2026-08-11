@@ -420,7 +420,7 @@ class OrderController extends Controller
             ->orderByDesc('id')
             ->paginate(max(1, min(100, (int) $request->query('per_page', 20))));
 
-        if ($this->isSalesStaff($user)) {
+        if ($this->shouldHideCostProfit($user)) {
             $orders->getCollection()->transform(fn (Order $order) => $this->orderForUser($order, $user));
         }
 
@@ -484,7 +484,7 @@ class OrderController extends Controller
             'updated_at',
         ]);
         $order->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
-        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid']);
+        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid', 'sales_can_edit_cost']);
         $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
         return response()->json($this->normalizeResponseText($order->toArray()));
@@ -1589,7 +1589,7 @@ class OrderController extends Controller
 
     private function orderForUser(Order $order, $user): array
     {
-        if (!$this->isSalesStaff($user)) {
+        if (!$this->shouldHideCostProfit($user)) {
             return $this->normalizeResponseText($order->toArray());
         }
 
@@ -1607,7 +1607,7 @@ class OrderController extends Controller
 
     private function voucherForUserWrite(array $voucher, ?array $existingMeta, $user): array
     {
-        if (!$this->isSalesStaff($user)) {
+        if (!$this->shouldHideCostProfit($user)) {
             return $voucher;
         }
 
@@ -1717,6 +1717,11 @@ class OrderController extends Controller
     private function isSalesStaff($user): bool
     {
         return $user?->hasRole('sales') === true;
+    }
+
+    private function shouldHideCostProfit($user): bool
+    {
+        return $this->isSalesStaff($user) && $user?->company()->value('sales_can_edit_cost') !== true;
     }
 
     private function validateCancelPassword($user, ?string $password): ?JsonResponse

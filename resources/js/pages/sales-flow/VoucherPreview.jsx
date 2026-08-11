@@ -1,8 +1,9 @@
 import React from 'react';
-import { Empty, Table, Typography, Watermark } from 'antd';
+import { Empty, Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
 import { getAirportCity } from './airportLookup';
 import { stripUtcMidnightSuffix } from '../../services/dateFormat';
+import Table from '../../components/CsvTable';
 
 const { Text, Title } = Typography;
 

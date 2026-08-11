@@ -427,6 +427,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
           ...storedUser,
           company_name: data.company?.display_name || storedUser.company_name,
           company_is_paid: paid,
+          company_sales_can_edit_cost: data.company?.sales_can_edit_cost === true,
         }));
       })
       .catch(() => { });

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Table, DatePicker, Button, Select, Spin, Skeleton, Empty, Grid, theme } from 'antd';
+import { Card, Row, Col, DatePicker, Button, Select, Spin, Skeleton, Empty, Grid, theme } from 'antd';
 import { message } from '../services/feedback';
 import { DollarOutlined, CheckCircleOutlined, AlertOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const wholeMoney = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });

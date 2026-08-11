@@ -1,5 +1,6 @@
 import React from 'react';
-import { Card, Table, Typography } from 'antd';
+import { Card, Typography } from 'antd';
+import Table from '../../components/CsvTable';
 
 const { Text } = Typography;
 

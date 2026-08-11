@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Empty, Input, Row, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Empty, Input, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -39,14 +40,6 @@ export default function PaymentReport({ direction = 'payment' }) {
     }).catch((error) => message.error(error.message));
   }, [direction]);
 
-  const exportCsv = () => {
-    if (!report?.data?.length) return;
-    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const rows = [['Date', 'Document', 'Counterparty type', 'Counterparty', 'Method', 'Reference', 'Description', 'Currency', 'Amount', 'Created by'], ...report.data.map((row) => [dateOnly(row.date), row.document_number, row.counterparty_type, row.counterparty_name, row.payment_method, row.reference_number, row.description, row.currency_code, row.amount, row.created_by])];
-    const blob = new Blob([rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${direction}-report-${filters.from_date}-to-${filters.to_date}.csv`; anchor.click(); URL.revokeObjectURL(url);
-  };
-
   const columns = [
     { title: 'Date', dataIndex: 'date', width: 115, render: dateOnly }, { title: `${isReceipt ? 'Receipt' : 'Payment'} #`, dataIndex: 'document_number', width: 165 },
     { title: 'Type', dataIndex: 'counterparty_type', width: 110, render: (value) => <Tag color={value === 'customer' ? 'blue' : 'purple'}>{label(value)}</Tag> },
@@ -69,6 +62,6 @@ export default function PaymentReport({ direction = 'payment' }) {
     </div>
     {report && <><Row gutter={[16, 16]} style={{ marginBottom: 16 }}><Col xs={8}><Card><Statistic title="All records" value={report.summary.total_records} /></Card></Col><Col xs={8}><Card><Statistic title="Customer records" value={report.summary.customer_records} /></Card></Col><Col xs={8}><Card><Statistic title="Vendor records" value={report.summary.vendor_records} /></Card></Col></Row>
       {report.summary.by_currency.length > 0 && <Card title={`${isReceipt ? 'Money in' : 'Money out'} by currency`} style={{ marginBottom: 16 }}><Space size="large" wrap>{report.summary.by_currency.map((item) => <Statistic key={item.currency_code} title={`${item.currency_code} · ${item.count} records`} value={item.amount} precision={2} />)}</Space></Card>}</>}
-    <Card title={`${isReceipt ? 'Receipt' : 'Payment'} records`} extra={<Button icon={<DownloadOutlined />} disabled={!report?.data?.length} onClick={exportCsv}>Export CSV</Button>}>{!loading && report?.data?.length === 0 ? <Empty description="No matching records" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1235 }} pagination={{ pageSize: 25, showSizeChanger: true }} />}</Card>
+    <Card title={`${isReceipt ? 'Receipt' : 'Payment'} records`}>{!loading && report?.data?.length === 0 ? <Empty description="No matching records" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1235 }} pagination={{ pageSize: 25, showSizeChanger: true }} />}</Card>
   </div>;
 }

@@ -58,6 +58,26 @@ class CompanyProfileApiTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_agency_owner_can_authorize_sales_cost_access(): void
+    {
+        $ctx = $this->seedCompanyContext('owner');
+        Sanctum::actingAs($ctx['user']);
+
+        $this->postJson('/api/v1/company-profile', [
+            'legal_name' => 'Profile Company Legal',
+            'display_name' => 'Profile Company',
+            'email' => 'profile-company@test.local',
+            'phone' => '+92-300-5555555',
+            'address' => 'Karachi, Pakistan',
+            'country_code' => 'PK',
+            'default_timezone' => 'UTC',
+            'sales_can_edit_cost' => true,
+        ])->assertOk()
+            ->assertJsonPath('company.sales_can_edit_cost', true);
+
+        $this->assertTrue($ctx['company']->fresh()->sales_can_edit_cost);
+    }
+
     /**
      * @return array<string, mixed>
      */

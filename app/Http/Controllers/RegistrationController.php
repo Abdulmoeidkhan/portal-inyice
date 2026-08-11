@@ -83,6 +83,7 @@ class RegistrationController extends Controller
                     'order_limit' => null,
                     'user_limit' => 2,
                     'is_paid' => false,
+                    'sales_can_edit_cost' => false,
                     'is_active' => true,
                 ]);
 
@@ -123,6 +124,7 @@ class RegistrationController extends Controller
                         'email' => $user->email,
                         'role' => $ownerRole->code,
                         'company_is_paid' => false,
+                        'company_sales_can_edit_cost' => false,
                         'company_name' => $company->display_name,
                         'tenant_name' => $tenant->name,
                     ],

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Form, Grid, Input, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd';
+import { Button, Card, Form, Grid, Input, Modal, Popconfirm, Select, Space, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { createCustomerApi, deleteCustomerApi, listCustomersApi, updateCustomerApi } from '../services/salesFlowApi';
+import Table from '../components/CsvTable';
 
 const { Title, Paragraph } = Typography;
 
