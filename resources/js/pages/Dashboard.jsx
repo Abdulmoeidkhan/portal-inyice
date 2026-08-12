@@ -3,8 +3,6 @@ import { Badge, Button, Card, Col, Empty, Grid, Layout, Row, Skeleton, Space, St
 import {
   ArrowRightOutlined,
   DollarOutlined,
-  FileAddOutlined,
-  FileTextOutlined,
   LoginOutlined,
   LogoutOutlined,
   ReloadOutlined,
@@ -170,7 +168,6 @@ export default function Dashboard() {
   const finance = report?.finance;
   const outstanding = finance?.outstanding;
   const user = storedUser();
-  const canAccessPayments = ['owner', 'admin', 'accounts'].includes(user.role);
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
   const expenses = (finance?.expenses?.length ? finance.expenses : finance?.mix || [])
     .filter((item) => Number(item.value) > 0);
@@ -279,31 +276,29 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        <div className="dashboard-action-strip">
-          <Button className="dashboard-action dashboard-action-mint" icon={<FileAddOutlined />} onClick={() => navigate('/sales-flow')}>
-            Create order
-          </Button>
-          <Button className="dashboard-action dashboard-action-blue" icon={<FileTextOutlined />} onClick={() => navigate('/invoices')}>
-            Create invoice
-          </Button>
-          {canAccessPayments && (
-            <>
-              <Button className="dashboard-action dashboard-action-purple" icon={<SwapOutlined />} onClick={() => navigate('/payments')}>
-                Add transaction
-              </Button>
-              <Button className="dashboard-action dashboard-action-peach" icon={<DollarOutlined />} onClick={() => navigate('/vendor-payments')}>
-                Add bill
-              </Button>
-            </>
-          )}
-        </div>
-
         <div className="dashboard-insights-head">
           <Title level={2}>Insights for you</Title>
         </div>
 
         {finance && (
           <>
+            <Row gutter={[14, 14]} className="dashboard-finance-pill-row">
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Invoiced this month" value={finance.summary.invoiced} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Collected this month" value={finance.summary.collected} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Purchase this month" value={finance.summary.purchase} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={5}>
+                <Statistic title="Refund this month" value={finance.summary.refund} formatter={(value) => money(value)} prefix={<SwapOutlined />} />
+              </Col>
+              <Col xs={24} sm={12} xl={4}>
+                <Statistic title="Paid this month" value={finance.summary.paid} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
+              </Col>
+            </Row>
             <Row gutter={[18, 18]} className="dashboard-outstanding-row">
               <Col xs={24} xl={12}>
                 <Card
@@ -412,23 +407,6 @@ export default function Dashboard() {
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No cashflow data" />
                   )}
                 </Card>
-              </Col>
-            </Row>
-            <Row gutter={[14, 14]} className="dashboard-finance-pill-row">
-              <Col xs={24} sm={12} xl={5}>
-                <Statistic title="Invoiced this month" value={finance.summary.invoiced} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
-              </Col>
-              <Col xs={24} sm={12} xl={5}>
-                <Statistic title="Collected this month" value={finance.summary.collected} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
-              </Col>
-              <Col xs={24} sm={12} xl={5}>
-                <Statistic title="Purchase this month" value={finance.summary.purchase} formatter={(value) => money(value)} prefix={<DollarOutlined />} />
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Statistic title="Refund this month" value={finance.summary.refund} formatter={(value) => money(value)} prefix={<SwapOutlined />} />
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Statistic title="Paid this month" value={finance.summary.paid} formatter={(value) => money(value)} prefix={<WalletOutlined />} />
               </Col>
             </Row>
           </>
