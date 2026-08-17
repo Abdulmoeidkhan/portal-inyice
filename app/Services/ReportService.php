@@ -1039,7 +1039,9 @@ class ReportService
                 'vendor:id,name',
                 'createdBy:id,name',
                 'vendorCosts.vendor:id,name',
-                'invoice:id,order_id,invoice_number,invoice_date,status,currency_code',
+                'items:id,order_id,total_price',
+                'invoice:id,order_id,invoice_number,invoice_date,status,currency_code,total_amount',
+                'invoice.lines:id,invoice_id,total_price',
             ])
             ->orderByDesc(
                 Invoice::select('invoice_date')
@@ -1066,7 +1068,8 @@ class ReportService
         $detailRows = collect();
 
         foreach ($orders as $order) {
-            $revenue = (float) $order->total_amount;
+            $revenue = (float) ($order->invoice?->total_amount ?? $order->total_amount);
+            $discount = $this->discountTotalForReport($order);
             $cost = (float) $order->vendorCosts->sum('amount');
             if ($cost == 0.0) {
                 $cost = $this->voucherCostTotal($order);
@@ -1093,6 +1096,7 @@ class ReportService
                         $currency,
                         $revenue,
                         $fallbackCost,
+                        $discount,
                         $sharing['shared_out'],
                         $sharing['shared_in']
                     ));
@@ -1117,6 +1121,7 @@ class ReportService
                         $currency,
                         $allocatedRevenue,
                         $vendorCost,
+                        $discount * $shareRatio,
                         $sharing['shared_out'] * $shareRatio,
                         $sharing['shared_in'] * $shareRatio
                     ));
@@ -1132,7 +1137,7 @@ class ReportService
                 ? $this->profitShareTotals($invoiceShares, $rowGroupId)
                 : $this->profitShareTotals($invoiceShares);
 
-            $detailRows->push($this->profitRow($order, $groupBy, $rowGroupId, $entityName, $date, $currency, $revenue, $cost, $sharing['shared_out'], $sharing['shared_in']));
+            $detailRows->push($this->profitRow($order, $groupBy, $rowGroupId, $entityName, $date, $currency, $revenue, $cost, $discount, $sharing['shared_out'], $sharing['shared_in']));
 
             if ($groupBy === 'staff') {
                 $invoiceShares
@@ -1147,7 +1152,7 @@ class ReportService
                             return;
                         }
 
-                        $detailRows->push($this->profitRow($order, 'staff', $user->id, $user->name, $date, $currency, 0.0, 0.0, $sharing['shared_out'], $sharing['shared_in']));
+                        $detailRows->push($this->profitRow($order, 'staff', $user->id, $user->name, $date, $currency, 0.0, 0.0, 0.0, $sharing['shared_out'], $sharing['shared_in']));
                     });
             }
         }
@@ -1163,6 +1168,7 @@ class ReportService
             ->map(function (Collection $rows) {
                 $revenue = (float) $rows->sum('revenue');
                 $cost = (float) $rows->sum('cost');
+                $discount = (float) $rows->sum('discount');
                 $profit = (float) $rows->sum('profit');
                 $sharedOut = (float) $rows->sum('shared_out');
                 $sharedIn = (float) $rows->sum('shared_in');
@@ -1176,6 +1182,7 @@ class ReportService
                     'order_count' => $rows->pluck('order_id')->unique()->count(),
                     'revenue' => round($revenue, 4),
                     'cost' => round($cost, 4),
+                    'discount' => round($discount, 4),
                     'profit' => round($profit, 4),
                     'shared_out' => round($sharedOut, 4),
                     'shared_in' => round($sharedIn, 4),
@@ -1193,6 +1200,7 @@ class ReportService
             ->map(function (Collection $rows, string $currency) {
                 $revenue = (float) $rows->sum('revenue');
                 $cost = (float) $rows->sum('cost');
+                $discount = (float) $rows->sum('discount');
                 $profit = (float) $rows->sum('profit');
                 $sharedOut = (float) $rows->sum('shared_out');
                 $sharedIn = (float) $rows->sum('shared_in');
@@ -1202,6 +1210,7 @@ class ReportService
                     'currency_code' => $currency,
                     'revenue' => round($revenue, 4),
                     'cost' => round($cost, 4),
+                    'discount' => round($discount, 4),
                     'profit' => round($profit, 4),
                     'shared_out' => round($sharedOut, 4),
                     'shared_in' => round($sharedIn, 4),
@@ -1304,6 +1313,7 @@ class ReportService
         string $currency,
         float $revenue,
         float $cost,
+        float $discount = 0.0,
         float $sharedOut = 0.0,
         float $sharedIn = 0.0
     ): array {
@@ -1333,6 +1343,7 @@ class ReportService
             'currency_code' => $currency,
             'revenue' => round($revenue, 4),
             'cost' => round($cost, 4),
+            'discount' => round($discount, 4),
             'profit' => round($profit, 4),
             'shared_out' => round($sharedOut, 4),
             'shared_in' => round($sharedIn, 4),
@@ -1358,6 +1369,47 @@ class ReportService
             'shared_out' => (float) $shares->where('from_user_id', $userId)->sum('amount'),
             'shared_in' => (float) $shares->where('to_user_id', $userId)->sum('amount'),
         ];
+    }
+
+    private function discountTotalForReport(Order $order): float
+    {
+        if ($order->invoice && $order->invoice->relationLoaded('lines')) {
+            return abs((float) $order->invoice->lines
+                ->filter(fn ($line) => (float) $line->total_price < 0)
+                ->sum(fn ($line) => (float) $line->total_price));
+        }
+
+        if ($order->relationLoaded('items')) {
+            return abs((float) $order->items
+                ->filter(fn ($item) => (float) $item->total_price < 0)
+                ->sum(fn ($item) => (float) $item->total_price));
+        }
+
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $base = (float) $order->total_amount;
+        $discount = 0.0;
+
+        foreach (($meta['discounts'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $remainingBase = max(0, $base - $discount);
+            $type = ($row['discount_type'] ?? 'amount') === 'percentage' ? 'percentage' : 'amount';
+            $value = $type === 'percentage'
+                ? OrderVendorCost::toAmount($row['percentage'] ?? null)
+                : OrderVendorCost::toAmount($row['amount'] ?? null);
+
+            if ($value <= 0) {
+                continue;
+            }
+
+            $discount += $type === 'percentage'
+                ? round($remainingBase * (min($value, 100) / 100), 4)
+                : round(min($value, $remainingBase), 4);
+        }
+
+        return round($discount, 4);
     }
 
     private function voucherCostTotal(Order $order): float

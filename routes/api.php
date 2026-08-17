@@ -77,6 +77,10 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('invoices.share.revoke');
         Route::get('/{uid}', 'show')->name('invoices.show');
         Route::patch('/{uid}/mark-sent', 'markAsSent')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.markAsSent');
+        Route::get('/{uid}/discounts', 'discounts')->middleware('role:admin,accounts')->name('invoices.discounts.list');
+        Route::post('/{uid}/discounts', 'storeDiscount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discounts.create');
+        Route::patch('/{uid}/discounts/{discountUid}', 'updateDiscount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discounts.update');
+        Route::delete('/{uid}/discounts/{discountUid}', 'destroyDiscount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discounts.delete');
         Route::patch('/{uid}/discount', 'discount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discount');
         Route::patch('/{uid}/void', 'void')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.void');
         Route::patch('/{uid}/cancel', 'cancel')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.cancel');
@@ -120,6 +124,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/vendor/payment/{uid}', 'showVendorPayment')->name('payments.vendor.show');
         Route::patch('/vendor/payment/{uid}', 'updateVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.update');
         Route::delete('/vendor/payment/{uid}', 'deleteVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.delete');
+        Route::post('/vendor/payment/{uid}/allocate-advance', 'allocateVendorAdvance')->middleware('throttle:sensitive-write')->name('payments.vendor.allocateAdvance');
         Route::get('/vendor/{vendorId}/payables', 'vendorPayables')->name('payments.vendor.payables');
         Route::post('/vendor', 'recordVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.record');
         Route::get('/customer', 'customerPayments')->name('payments.customer.list');

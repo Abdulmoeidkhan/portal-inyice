@@ -7,6 +7,7 @@ import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
+import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import {
   blankCityTour,
@@ -116,6 +117,14 @@ const sanitizeVoucherForSubmit = (voucher) => {
   };
 };
 
+const orderFormDefaults = (order) => ({
+  customer_id: order?.customer?.id || order?.customer_id,
+  status: order?.status || 'order',
+  currency_code: order?.currency_code || 'PKR',
+  total_amount: Number(order?.total_amount || 0),
+  notes: order?.notes || '',
+});
+
 const voucherFromOrder = (order) => {
   const initialVoucher = createInitialVoucher();
   const meta = order?.meta || {};
@@ -157,6 +166,7 @@ const voucherFromOrder = (order) => {
     city_tours: normalizeRows(meta.city_tours, blankCityTour),
     visa: normalizeRows(meta.visa, blankVisa),
     other_services: normalizeRows(meta.other_services, blankOtherService),
+    discounts: Array.isArray(meta.discounts) ? meta.discounts : [],
   };
 };
 
@@ -207,6 +217,7 @@ export default function OrderEdit() {
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
   const affixTarget = () => document.querySelector('.app-content');
+  const currencyCode = Form.useWatch('currency_code', form) || order?.currency_code || 'PKR';
 
   const parsedHint = useMemo(() => {
     if (!parseResult) {
@@ -335,13 +346,7 @@ export default function OrderEdit() {
           setCustomers((current) => mergeById([detail.customer], current));
         }
         setVoucher(voucherFromOrder(detail));
-        form.setFieldsValue({
-          customer_id: detail.customer?.id || detail.customer_id,
-          status: detail.status || 'order',
-          currency_code: detail.currency_code || 'PKR',
-          total_amount: Number(detail.total_amount || 0),
-          notes: detail.notes || '',
-        });
+        form.setFieldsValue(orderFormDefaults(detail));
       } catch (error) {
         if (cancelled) return;
         if (error.status === 423) {
@@ -492,7 +497,12 @@ export default function OrderEdit() {
   const submitOrder = async (confirmInvoiceRevision = false, password = null) => {
     setSaving(true);
     try {
-      const values = await form.validateFields();
+      const submittedValues = await form.validateFields();
+      const values = {
+        ...orderFormDefaults(order),
+        ...form.getFieldsValue(true),
+        ...submittedValues,
+      };
       const voucherPayload = sanitizeVoucherForSubmit(voucher);
       const isCancellingOrder = values.status === 'cancel' && order?.status !== 'cancel';
 
@@ -628,6 +638,7 @@ export default function OrderEdit() {
             {
               key: 'order-details',
               label: 'Order Details',
+              forceRender: true,
               children: (
                 <>
                   {order?.invoice && (
@@ -731,6 +742,12 @@ export default function OrderEdit() {
           onUseFlightPassengersForVisa={useFlightPassengersForVisa}
           onSetHotelLeadPassenger={setHotelLeadPassenger}
           canViewCostProfit={canViewCostProfit}
+        />
+
+        <VoucherDiscountsCard
+          voucher={voucher}
+          currencyCode={currencyCode}
+          onChangeDiscounts={(discounts) => setVoucherField('discounts', discounts)}
         />
 
         <Collapse

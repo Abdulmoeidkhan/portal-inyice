@@ -37,7 +37,8 @@ class PaymentController extends Controller
     {
         $query = Payment::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
-            ->with(['vendor:id,name', 'allocations.order:id,order_number']);
+            ->with(['vendor:id,name', 'allocations.order:id,order_number'])
+            ->withSum('allocations as allocated_amount', 'amount');
 
         if ($request->filled('vendor_id')) {
             $query->where('vendor_id', (int) $request->query('vendor_id'));
@@ -52,7 +53,13 @@ class PaymentController extends Controller
             });
         }
 
-        return response()->json($query->orderByDesc('payment_date')->orderByDesc('id')->paginate(50));
+        $payments = $query->orderByDesc('payment_date')->orderByDesc('id')->paginate(50);
+        $payments->getCollection()->transform(function (Payment $payment): Payment {
+            $payment->remaining_amount = round(max(0, (float) $payment->amount - (float) ($payment->allocated_amount ?? 0)), 4);
+            return $payment;
+        });
+
+        return response()->json($payments);
     }
 
     /**
@@ -298,6 +305,48 @@ class PaymentController extends Controller
         return response()->json(['success' => true, 'payment' => $payment]);
     }
 
+    public function allocateVendorAdvance(Request $request, string $uid): JsonResponse
+    {
+        $payment = Payment::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->whereNotNull('vendor_id')
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'allocations' => 'required|array|min:1',
+            'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $orders = Order::where('tenant_id', $payment->tenant_id)
+            ->where('company_id', $payment->company_id)
+            ->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES)
+            ->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', self::CANCELLED_FINANCIAL_STATUSES))
+            ->whereIn('id', collect($validated['allocations'])->pluck('order_id'))
+            ->get();
+
+        if ($orders->count() !== count($validated['allocations'])) {
+            return response()->json(['error' => 'One or more orders are unavailable for advance allocation.'], 422);
+        }
+
+        $payables = collect($this->vendorPayables($payment->vendor_id, true)->getData(true)['data'])->keyBy('id');
+        foreach ($validated['allocations'] as $allocation) {
+            $payable = $payables->get((int) $allocation['order_id']);
+            if (!$payable || (float) $allocation['amount'] > (float) $payable['outstanding_amount']) {
+                return response()->json(['error' => 'An allocation exceeds the selected order balance.'], 422);
+            }
+        }
+
+        try {
+            $payment = $this->paymentService->allocateVendorAdvancePayment($payment, $validated['allocations']);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+
+        return response()->json(['success' => true, 'payment' => $payment]);
+    }
+
     public function deleteVendorPayment(string $uid): JsonResponse
     {
         $payment = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->where('uid', $uid)->firstOrFail();
@@ -308,7 +357,7 @@ class PaymentController extends Controller
     /**
      * Return vendor orders with their remaining payable amount.
      */
-    public function vendorPayables(int $vendorId): JsonResponse
+    public function vendorPayables(int $vendorId, bool $ignoreLegacyBalance = false): JsonResponse
     {
         $tenantId = (int) auth()->user()->tenant_id;
         $companyId = (int) auth()->user()->company_id;
@@ -354,14 +403,18 @@ class PaymentController extends Controller
                 ->where('company_id', $companyId)
                 ->where('vendor_id', $vendor->id))
             ->sum('amount');
-        $legacyBalance = max(0, $totalPayments - $totalAllocated);
-        $orders = $orders->map(function (array $order) use (&$legacyBalance): array {
-            $applied = min($legacyBalance, $order['outstanding_amount']);
-            $order['paid_amount'] = round($order['paid_amount'] + $applied, 4);
-            $order['outstanding_amount'] = round($order['outstanding_amount'] - $applied, 4);
-            $legacyBalance -= $applied;
-            return $order;
-        })->filter(fn (array $order) => $order['outstanding_amount'] > 0)->values();
+        if (!$ignoreLegacyBalance && !request()->boolean('ignore_legacy_balance')) {
+            $legacyBalance = max(0, $totalPayments - $totalAllocated);
+            $orders = $orders->map(function (array $order) use (&$legacyBalance): array {
+                $applied = min($legacyBalance, $order['outstanding_amount']);
+                $order['paid_amount'] = round($order['paid_amount'] + $applied, 4);
+                $order['outstanding_amount'] = round($order['outstanding_amount'] - $applied, 4);
+                $legacyBalance -= $applied;
+                return $order;
+            });
+        }
+
+        $orders = $orders->filter(fn (array $order) => $order['outstanding_amount'] > 0)->values();
 
         return response()->json([
             'vendor' => $vendor->only(['id', 'uid', 'name', 'currency_code']),
@@ -422,7 +475,7 @@ class PaymentController extends Controller
             }
         }
 
-        if ((float) $validated['amount'] > $outstanding) {
+        if ($allocations->isNotEmpty() && (float) $validated['amount'] > $outstanding) {
             return response()->json([
                 'error' => 'Vendor payment cannot exceed the outstanding payable balance.',
             ], 422);

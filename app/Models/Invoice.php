@@ -84,6 +84,11 @@ class Invoice extends Model
         return $this->hasMany(InvoiceLine::class);
     }
 
+    public function discounts(): HasMany
+    {
+        return $this->hasMany(InvoiceDiscount::class);
+    }
+
     /**
      * Get all settlements for this invoice
      */

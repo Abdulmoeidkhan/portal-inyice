@@ -114,6 +114,8 @@ export default function ProfitReport() {
     { title: groupLabel, dataIndex: 'group_name', width: 240 },
     { title: 'Currency', dataIndex: 'currency_code', width: 100, render: (value) => <Tag>{value}</Tag> },
     { title: 'Orders', dataIndex: 'order_count', width: 100, align: 'center' },
+    { title: 'Revenue', dataIndex: 'revenue', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    { title: 'Discount', dataIndex: 'discount', width: 140, align: 'right', render: (value, row) => <Text type={Number(value) > 0 ? 'danger' : undefined}>{row.currency_code} {money(value)}</Text> },
     { title: 'Cost', dataIndex: 'cost', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     {
       title: 'Profit',
@@ -131,7 +133,6 @@ export default function ProfitReport() {
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
-    { title: 'Revenue', dataIndex: 'revenue', width: 140, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     { title: 'Margin', dataIndex: 'profit_after_sharing_margin', width: 110, align: 'right', render: margin },
   ];
 
@@ -149,6 +150,8 @@ export default function ProfitReport() {
     { title: 'Vendor', dataIndex: 'vendor_name', width: 180, render: (value) => value || '-' },
     { title: 'Staff', dataIndex: 'staff_name', width: 160, render: (value) => value || '-' },
     { title: 'Status', dataIndex: 'status', width: 125, render: (value) => <Tag>{label(value)}</Tag> },
+    { title: 'Revenue', dataIndex: 'revenue', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
+    { title: 'Discount', dataIndex: 'discount', width: 135, align: 'right', render: (value, row) => <Text type={Number(value) > 0 ? 'danger' : undefined}>{row.currency_code} {money(value)}</Text> },
     { title: 'Cost', dataIndex: 'cost', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
     {
       title: 'Profit',
@@ -166,7 +169,6 @@ export default function ProfitReport() {
       align: 'right',
       render: (value, row) => <Text strong type={Number(value) < 0 ? 'danger' : 'success'}>{row.currency_code} {money(value)}</Text>,
     },
-    { title: 'Revenue', dataIndex: 'revenue', fixed: 'right', width: 135, align: 'right', render: (value, row) => `${row.currency_code} ${money(value)}` },
   ];
 
   return (
@@ -257,7 +259,7 @@ export default function ProfitReport() {
         ) : !loading && report?.data?.length === 0 ? (
           <Empty description="No matching profit data" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1440 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1580 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
         )}
       </Card>
 
@@ -267,7 +269,7 @@ export default function ProfitReport() {
         ) : !loading && report?.details?.length === 0 ? (
           <Empty description="No matching orders" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2490 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2625 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
         )}
       </Card>
     </div>

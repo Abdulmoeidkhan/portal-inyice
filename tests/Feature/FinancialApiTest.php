@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\InvoiceDiscount;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProfitShare;
@@ -97,6 +98,124 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/invoices')
             ->assertOk()
             ->assertJsonPath('total', 0);
+    }
+
+    public function test_invoice_discounts_can_be_added_edited_deleted_and_affect_profit(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $discount = $this->postJson('/api/v1/invoices/' . $invoice['uid'] . '/discounts', [
+            'amount' => 100,
+            'reason' => 'Seasonal adjustment',
+        ])->assertCreated()
+            ->assertJsonPath('invoice.total_amount', '900.0000')
+            ->assertJsonPath('invoice.outstanding_amount', '900.0000')
+            ->json('discount');
+
+        $this->assertSame(1, InvoiceDiscount::count());
+        $this->assertDatabaseHas('invoice_lines', [
+            'invoice_id' => Invoice::where('uid', $invoice['uid'])->value('id'),
+            'unit_price' => -100,
+            'total_price' => -100,
+        ]);
+
+        $updated = $this->patchJson('/api/v1/invoices/' . $invoice['uid'] . '/discounts/' . $discount['uid'], [
+            'discount_type' => 'percentage',
+            'percentage' => 20,
+            'reason' => 'Manager approval',
+        ])->assertOk()
+            ->assertJsonPath('discount.discount_type', 'percentage')
+            ->assertJsonPath('discount.percentage', 20)
+            ->assertJsonPath('discount.amount', 200)
+            ->assertJsonPath('invoice.total_amount', '800.0000')
+            ->assertJsonPath('invoice.outstanding_amount', '800.0000')
+            ->json('discount');
+
+        $this->assertDatabaseHas('invoice_discounts', [
+            'uid' => $updated['uid'],
+            'discount_type' => 'percentage',
+            'percentage' => 20,
+            'amount' => 200,
+        ]);
+
+        $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.revenue', 800)
+            ->assertJsonPath('data.0.discount', 200)
+            ->assertJsonPath('data.0.profit', 800);
+
+        $this->deleteJson('/api/v1/invoices/' . $invoice['uid'] . '/discounts/' . $discount['uid'])
+            ->assertOk()
+            ->assertJsonPath('invoice.total_amount', '1000.0000')
+            ->assertJsonPath('invoice.outstanding_amount', '1000.0000');
+
+        $this->assertSame(0, InvoiceDiscount::count());
+        $this->assertDatabaseMissing('invoice_lines', [
+            'invoice_id' => Invoice::where('uid', $invoice['uid'])->value('id'),
+            'total_price' => -200,
+        ]);
+    }
+
+    public function test_order_voucher_discounts_reduce_invoice_and_show_in_profit_report(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $order = $this->postJson('/api/v1/orders/create-from-voucher', [
+            'customer_id' => $ctx['customer']->id,
+            'currency_code' => 'PKR',
+            'status' => 'order',
+            'voucher' => [
+                'active_sections' => ['flights'],
+                'passengers' => [['name' => 'Discount Passenger']],
+                'flights' => [['flight_no' => 'PK301', 'from' => 'LHE', 'to' => 'JED', 'date' => '2026-09-01']],
+                'pricing' => [[
+                    'pax_name' => 'Discount Passenger',
+                    'vendor_id' => $ctx['vendor']->id,
+                    'vendor_name' => $ctx['vendor']->name,
+                    'flight_cost' => 700,
+                    'flight_profit' => 300,
+                    'flight_sales' => 1000,
+                ]],
+                'discounts' => [[
+                    'discount_type' => 'percentage',
+                    'percentage' => 10,
+                    'reason' => 'Early booking',
+                ]],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('order.total_amount', '900.0000')
+            ->json('order');
+
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order['id'],
+            'description' => 'Discount: Early booking',
+            'total_price' => -100,
+        ]);
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $order['id'],
+        ])->assertCreated()
+            ->assertJsonPath('invoice.subtotal', '1000.0000')
+            ->assertJsonPath('invoice.total_amount', '900.0000')
+            ->json('invoice');
+
+        $this->assertDatabaseHas('invoice_lines', [
+            'invoice_id' => Invoice::where('uid', $invoice['uid'])->value('id'),
+            'description' => 'Discount: Early booking',
+            'total_price' => -100,
+        ]);
+
+        $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.revenue', 900)
+            ->assertJsonPath('data.0.discount', 100)
+            ->assertJsonPath('data.0.cost', 700)
+            ->assertJsonPath('data.0.profit', 200)
+            ->assertJsonPath('details.0.discount', 100);
     }
 
     public function test_company_can_create_more_than_fifty_invoices_per_month(): void
@@ -538,6 +657,59 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/receipts/customer')
             ->assertOk()
             ->assertJsonPath('data.0.remaining_amount', 100);
+    }
+
+    public function test_vendor_advance_payment_can_be_allocated_later(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $advance = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 300,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-23',
+            'narration' => 'Supplier deposit',
+        ])->assertCreated()
+            ->assertJsonPath('payment.amount', '300.0000')
+            ->json('payment');
+
+        $this->assertSame(0, VendorPaymentAllocation::count());
+
+        $this->getJson('/api/v1/payments/vendor')
+            ->assertOk()
+            ->assertJsonPath('data.0.remaining_amount', 300);
+
+        $payable = $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables?ignore_legacy_balance=1')
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 1000)
+            ->json('data.0');
+
+        $this->postJson('/api/v1/payments/vendor/payment/' . $advance['uid'] . '/allocate-advance', [
+            'allocations' => [
+                ['order_id' => $payable['id'], 'amount' => 250],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('payment.allocations.0.amount', '250.0000');
+
+        $this->assertDatabaseHas('vendor_payment_allocations', [
+            'payment_id' => $advance['id'],
+            'order_id' => $payable['id'],
+            'amount' => 250,
+        ]);
+
+        $this->getJson('/api/v1/payments/vendor')
+            ->assertOk()
+            ->assertJsonPath('data.0.remaining_amount', 50);
+
+        $this->postJson('/api/v1/payments/vendor/payment/' . $advance['uid'] . '/allocate-advance', [
+            'allocations' => [
+                ['order_id' => $payable['id'], 'amount' => 75],
+            ],
+        ])->assertStatus(422);
     }
 
     public function test_customer_statement_summary_uses_net_statement_balance(): void

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\InvoiceDiscount;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Services\InvoiceService;
@@ -12,6 +13,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
@@ -184,7 +186,7 @@ class InvoiceController extends Controller
             ->where('uid', $uid)
             ->with($user?->hasRole('sales') === true
                 ? ['lines', 'customer', 'order', 'company']
-                : ['lines', 'customer', 'order', 'company', 'settlements.referenceDocument'])
+                : ['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->firstOrFail();
 
         if ($user?->hasRole('sales') === true) {
@@ -196,6 +198,25 @@ class InvoiceController extends Controller
         }
 
         return response()->json($this->normalizeResponseText($invoice->toArray()));
+    }
+
+    public function discounts(string $uid): JsonResponse
+    {
+        $invoice = $this->invoiceForCurrentUser($uid);
+
+        return response()->json([
+            'data' => $invoice->discounts()
+                ->with(['createdBy:id,name', 'updatedBy:id,name'])
+                ->latest('id')
+                ->get()
+                ->map(fn (InvoiceDiscount $discount) => $this->serializeDiscount($discount))
+                ->values(),
+            'summary' => [
+                'total' => (float) $invoice->discounts()->sum('amount'),
+                'invoice_total' => (float) $invoice->total_amount,
+                'outstanding_amount' => (float) $invoice->outstanding_amount,
+            ],
+        ]);
     }
 
     public function share(string $uid): JsonResponse
@@ -317,12 +338,136 @@ class InvoiceController extends Controller
             ->where('uid', $uid)
             ->firstOrFail();
 
-        $updated = $this->invoiceService->applyDiscount($invoice, (float) $validated['amount'], $validated['reason'] ?? null);
+        $updated = $this->invoiceService->applyDiscount($invoice, (float) $validated['amount'], $validated['reason'] ?? null, $request->user()?->id);
 
         return response()->json([
             'success' => true,
             'invoice' => $updated,
         ]);
+    }
+
+    public function storeDiscount(string $uid, Request $request): JsonResponse
+    {
+        $validated = $this->validatedDiscountPayload($request);
+
+        $invoice = $this->invoiceForCurrentUser($uid);
+        $discount = $this->invoiceService->createDiscount(
+            $invoice,
+            $validated['discount_type'],
+            $this->discountInputValue($validated),
+            $validated['reason'] ?? null,
+            $request->user()?->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Discount added successfully.',
+            'discount' => $this->serializeDiscount($discount),
+            'invoice' => $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']),
+        ], 201);
+    }
+
+    public function updateDiscount(string $uid, string $discountUid, Request $request): JsonResponse
+    {
+        $validated = $this->validatedDiscountPayload($request);
+
+        $invoice = $this->invoiceForCurrentUser($uid);
+        $discount = $this->discountForInvoice($invoice, $discountUid);
+        $discount = $this->invoiceService->updateDiscount(
+            $discount,
+            $validated['discount_type'],
+            $this->discountInputValue($validated),
+            $validated['reason'] ?? null,
+            $request->user()?->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Discount updated successfully.',
+            'discount' => $this->serializeDiscount($discount),
+            'invoice' => $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']),
+        ]);
+    }
+
+    public function destroyDiscount(string $uid, string $discountUid): JsonResponse
+    {
+        $invoice = $this->invoiceForCurrentUser($uid);
+        $discount = $this->discountForInvoice($invoice, $discountUid);
+
+        $this->invoiceService->deleteDiscount($discount);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Discount deleted successfully.',
+            'invoice' => $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']),
+        ]);
+    }
+
+    private function invoiceForCurrentUser(string $uid): Invoice
+    {
+        return Invoice::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+    }
+
+    private function discountForInvoice(Invoice $invoice, string $discountUid): InvoiceDiscount
+    {
+        return InvoiceDiscount::query()
+            ->where('tenant_id', $invoice->tenant_id)
+            ->where('company_id', $invoice->company_id)
+            ->where('invoice_id', $invoice->id)
+            ->where('uid', $discountUid)
+            ->firstOrFail();
+    }
+
+    private function serializeDiscount(InvoiceDiscount $discount): array
+    {
+        return [
+            'uid' => $discount->uid,
+            'discount_type' => $discount->discount_type,
+            'percentage' => $discount->percentage === null ? null : (float) $discount->percentage,
+            'amount' => (float) $discount->amount,
+            'reason' => $discount->reason,
+            'created_by' => $discount->createdBy ? [
+                'id' => $discount->createdBy->id,
+                'name' => $discount->createdBy->name,
+            ] : null,
+            'updated_by' => $discount->updatedBy ? [
+                'id' => $discount->updatedBy->id,
+                'name' => $discount->updatedBy->name,
+            ] : null,
+            'created_at' => optional($discount->created_at)->toISOString(),
+            'updated_at' => optional($discount->updated_at)->toISOString(),
+        ];
+    }
+
+    private function validatedDiscountPayload(Request $request): array
+    {
+        $validated = $request->validate([
+            'discount_type' => ['nullable', 'string', 'in:amount,percentage'],
+            'amount' => ['nullable', 'numeric', 'min:0.01', 'required_if:discount_type,amount'],
+            'percentage' => ['nullable', 'numeric', 'min:0.0001', 'max:100', 'required_if:discount_type,percentage'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $validated['discount_type'] = $validated['discount_type'] ?? 'amount';
+
+        if ($validated['discount_type'] === 'amount' && !isset($validated['amount'])) {
+            throw ValidationException::withMessages(['amount' => 'Discount amount is required.']);
+        }
+
+        if ($validated['discount_type'] === 'percentage' && !isset($validated['percentage'])) {
+            throw ValidationException::withMessages(['percentage' => 'Discount percentage is required.']);
+        }
+
+        return $validated;
+    }
+
+    private function discountInputValue(array $validated): float
+    {
+        return (float) ($validated['discount_type'] === 'percentage'
+            ? $validated['percentage']
+            : $validated['amount']);
     }
 
     /**

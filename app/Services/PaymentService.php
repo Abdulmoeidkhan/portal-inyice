@@ -496,6 +496,42 @@ class PaymentService
         });
     }
 
+    public function allocateVendorAdvancePayment(Payment $payment, array $allocations): Payment
+    {
+        return DB::transaction(function () use ($payment, $allocations): Payment {
+            $payment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+            $requestedTotal = (float) collect($allocations)->sum('amount');
+            $allocated = (float) $payment->allocations()->sum('amount');
+            $remaining = max(0, (float) $payment->amount - $allocated);
+
+            if ($requestedTotal > $remaining) {
+                throw new \InvalidArgumentException('Advance allocation cannot exceed the remaining payment balance.');
+            }
+
+            foreach ($allocations as $allocation) {
+                $existing = VendorPaymentAllocation::where('payment_id', $payment->id)
+                    ->where('order_id', (int) $allocation['order_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    $existing->update(['amount' => (float) $existing->amount + (float) $allocation['amount']]);
+                    continue;
+                }
+
+                VendorPaymentAllocation::create([
+                        'uid' => (string) Str::ulid(),
+                        'tenant_id' => $payment->tenant_id,
+                    'payment_id' => $payment->id,
+                    'order_id' => (int) $allocation['order_id'],
+                    'amount' => (float) $allocation['amount'],
+                ]);
+            }
+
+            return $payment->fresh(['vendor:id,name', 'allocations.order:id,order_number']);
+        });
+    }
+
     public function deleteVendorPayment(Payment $payment): void
     {
         DB::transaction(function () use ($payment): void {

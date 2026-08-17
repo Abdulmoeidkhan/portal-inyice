@@ -285,7 +285,7 @@ class ProfitShareController extends Controller
 
         return $orders
             ->map(function (Order $order) use ($shareTotals): array {
-                $revenue = (float) $order->total_amount;
+                $revenue = (float) ($order->invoice?->total_amount ?? $order->total_amount);
                 $cost = (float) $order->vendorCosts->sum('amount');
 
                 if ($cost == 0.0) {

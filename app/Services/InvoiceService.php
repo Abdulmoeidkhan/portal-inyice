@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use App\Models\InvoiceDiscount;
 use App\Models\InvoiceLine;
 use App\Models\Order;
 use Illuminate\Database\Eloquent\Collection;
@@ -90,10 +91,12 @@ class InvoiceService
         $invoice->due_date = $invoiceDate->copy()->addDays(30)->toDateString();
         $invoice->currency_code = $order->currency_code ?: $order->company->base_currency_code;
         $invoice->invoice_number = $this->generateInvoiceNumber($order->company_id);
-        $invoice->subtotal = $order->total_amount;
+        $subtotal = (float) $order->items->sum(fn ($item) => max(0, (float) $item->total_price));
+        $total = max(0, (float) $order->items->sum('total_price'));
+        $invoice->subtotal = $subtotal;
         $invoice->tax_amount = 0;
-        $invoice->total_amount = $order->total_amount;
-        $invoice->outstanding_amount = $order->total_amount;
+        $invoice->total_amount = $total;
+        $invoice->outstanding_amount = $total;
         $invoice->status = 'issued';
         $invoice->fx_rate_to_base = 1;
         $invoice->save();
@@ -146,55 +149,190 @@ class InvoiceService
         return max(0, (float)$invoice->total_amount - $totalSettled);
     }
 
-    public function applyDiscount(Invoice $invoice, float $amount, ?string $reason = null): Invoice
+    public function applyDiscount(Invoice $invoice, float $amount, ?string $reason = null, ?int $userId = null): Invoice
     {
-        if ($amount <= 0) {
-            throw ValidationException::withMessages(['amount' => 'Discount amount must be greater than zero.']);
-        }
+        $this->createDiscount($invoice, 'amount', $amount, $reason, $userId);
 
-        return DB::transaction(function () use ($invoice, $amount, $reason): Invoice {
+        return $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']);
+    }
+
+    public function createDiscount(Invoice $invoice, string $discountType, float $value, ?string $reason = null, ?int $userId = null): InvoiceDiscount
+    {
+        return DB::transaction(function () use ($invoice, $discountType, $value, $reason, $userId): InvoiceDiscount {
             $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $this->ensureDiscountable($invoice);
+            [$amount, $percentage] = $this->discountAmountFromInput($invoice, $discountType, $value);
 
-            if (in_array($invoice->status, ['paid', 'void', 'cancel'], true)) {
-                throw ValidationException::withMessages(['invoice' => 'Discounts can only be added to open invoices.']);
-            }
-
-            if ($amount > (float) $invoice->outstanding_amount) {
+            if ($amount > $this->maximumNewDiscountAmount($invoice)) {
                 throw ValidationException::withMessages(['amount' => 'Discount cannot exceed the current outstanding balance.']);
             }
 
-            InvoiceLine::create([
+            $line = InvoiceLine::create([
                 'uid' => (string) Str::ulid(),
                 'tenant_id' => $invoice->tenant_id,
                 'invoice_id' => $invoice->id,
-                'description' => trim('Discount' . ($reason ? ': ' . $reason : '')),
+                'description' => $this->discountDescription($reason),
                 'quantity' => 1,
                 'unit_price' => -$amount,
                 'total_price' => -$amount,
             ]);
 
-            $invoice->load('lines');
-            $subtotal = $invoice->lines
-                ->filter(fn (InvoiceLine $line) => (float) $line->total_price > 0)
-                ->sum(fn (InvoiceLine $line) => (float) $line->total_price);
-            $discount = abs($invoice->lines
-                ->filter(fn (InvoiceLine $line) => (float) $line->total_price < 0)
-                ->sum(fn (InvoiceLine $line) => (float) $line->total_price));
-            $total = max(0, $subtotal + (float) $invoice->tax_amount - $discount);
-            $received = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_received');
-            $refunded = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_refunded');
-            $outstanding = max(0, $total - $received + $refunded);
-            $status = $outstanding <= 0 ? 'paid' : ($received > $refunded ? 'partial_paid' : $invoice->status);
-
-            $invoice->update([
-                'subtotal' => $subtotal,
-                'total_amount' => $total,
-                'outstanding_amount' => $outstanding,
-                'status' => $status,
+            $discount = InvoiceDiscount::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $invoice->tenant_id,
+                'company_id' => $invoice->company_id,
+                'invoice_id' => $invoice->id,
+                'invoice_line_id' => $line->id,
+                'discount_type' => $discountType,
+                'percentage' => $percentage,
+                'amount' => $amount,
+                'reason' => $reason,
+                'created_by_user_id' => $userId,
+                'updated_by_user_id' => $userId,
             ]);
 
-            return $invoice->fresh(['lines', 'settlements.referenceDocument']);
+            $this->recalculateInvoiceFinancials($invoice);
+
+            return $discount->fresh(['invoiceLine', 'createdBy:id,name', 'updatedBy:id,name']);
         });
+    }
+
+    public function updateDiscount(InvoiceDiscount $discount, string $discountType, float $value, ?string $reason = null, ?int $userId = null): InvoiceDiscount
+    {
+        return DB::transaction(function () use ($discount, $discountType, $value, $reason, $userId): InvoiceDiscount {
+            $discount = InvoiceDiscount::whereKey($discount->id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::whereKey($discount->invoice_id)->lockForUpdate()->firstOrFail();
+            $this->ensureDiscountable($invoice);
+            [$amount, $percentage] = $this->discountAmountFromInput($invoice, $discountType, $value, $discount);
+
+            if ($amount > $this->maximumNewDiscountAmount($invoice, $discount)) {
+                throw ValidationException::withMessages(['amount' => 'Discount cannot exceed the current outstanding balance.']);
+            }
+
+            $discount->invoiceLine?->update([
+                'description' => $this->discountDescription($reason),
+                'unit_price' => -$amount,
+                'total_price' => -$amount,
+            ]);
+
+            $discount->update([
+                'discount_type' => $discountType,
+                'percentage' => $percentage,
+                'amount' => $amount,
+                'reason' => $reason,
+                'updated_by_user_id' => $userId,
+            ]);
+
+            $this->recalculateInvoiceFinancials($invoice);
+
+            return $discount->fresh(['invoiceLine', 'createdBy:id,name', 'updatedBy:id,name']);
+        });
+    }
+
+    public function deleteDiscount(InvoiceDiscount $discount): void
+    {
+        DB::transaction(function () use ($discount): void {
+            $discount = InvoiceDiscount::whereKey($discount->id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::whereKey($discount->invoice_id)->lockForUpdate()->firstOrFail();
+            $this->ensureDiscountable($invoice);
+            $line = $discount->invoiceLine;
+
+            $discount->delete();
+            $line?->delete();
+
+            $this->recalculateInvoiceFinancials($invoice);
+        });
+    }
+
+    public function recalculateInvoiceFinancials(Invoice $invoice): Invoice
+    {
+        $invoice->load('lines');
+        $subtotal = $invoice->lines
+            ->filter(fn (InvoiceLine $line) => (float) $line->total_price > 0)
+            ->sum(fn (InvoiceLine $line) => (float) $line->total_price);
+        $discount = abs($invoice->lines
+            ->filter(fn (InvoiceLine $line) => (float) $line->total_price < 0)
+            ->sum(fn (InvoiceLine $line) => (float) $line->total_price));
+        $total = max(0, $subtotal + (float) $invoice->tax_amount - $discount);
+        $received = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_received');
+        $refunded = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_refunded');
+        $outstanding = min($total, max(0, $total - $received + $refunded));
+        $status = $outstanding <= 0 ? 'paid' : (($received - $refunded) > 0 ? 'partial_paid' : 'issued');
+
+        $invoice->update([
+            'subtotal' => $subtotal,
+            'total_amount' => $total,
+            'outstanding_amount' => $outstanding,
+            'status' => $status,
+        ]);
+
+        $orderStatus = $refunded > 0
+            ? ($refunded >= $received ? 'refund' : 'partial_refund')
+            : ($status === 'issued' ? 'invoice' : $status);
+        $invoice->order()->update(['status' => $orderStatus]);
+
+        return $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']);
+    }
+
+    private function ensureDiscountable(Invoice $invoice): void
+    {
+        if (in_array($invoice->status, ['void', 'cancel'], true)) {
+            throw ValidationException::withMessages(['invoice' => 'Discounts can only be changed on active invoices.']);
+        }
+    }
+
+    private function maximumNewDiscountAmount(Invoice $invoice, ?InvoiceDiscount $replacing = null): float
+    {
+        $received = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_received');
+        $refunded = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_refunded');
+        $paidNet = max(0, $received - $refunded);
+        $positiveLines = (float) $invoice->lines()->where('total_price', '>', 0)->sum('total_price');
+        $otherDiscounts = (float) $invoice->discounts()
+            ->when($replacing, fn ($query) => $query->whereKeyNot($replacing->id))
+            ->sum('amount');
+
+        return max(0, $positiveLines + (float) $invoice->tax_amount - $paidNet - $otherDiscounts);
+    }
+
+    private function percentageDiscountBase(Invoice $invoice, ?InvoiceDiscount $replacing = null): float
+    {
+        $positiveLines = (float) $invoice->lines()->where('total_price', '>', 0)->sum('total_price');
+        $otherDiscounts = (float) $invoice->discounts()
+            ->when($replacing, fn ($query) => $query->whereKeyNot($replacing->id))
+            ->sum('amount');
+
+        return max(0, $positiveLines + (float) $invoice->tax_amount - $otherDiscounts);
+    }
+
+    private function discountAmountFromInput(Invoice $invoice, string $discountType, float $value, ?InvoiceDiscount $replacing = null): array
+    {
+        if (!in_array($discountType, ['amount', 'percentage'], true)) {
+            throw ValidationException::withMessages(['discount_type' => 'Discount type must be amount or percentage.']);
+        }
+
+        if ($value <= 0) {
+            throw ValidationException::withMessages([$discountType === 'percentage' ? 'percentage' : 'amount' => 'Discount value must be greater than zero.']);
+        }
+
+        if ($discountType === 'percentage') {
+            if ($value > 100) {
+                throw ValidationException::withMessages(['percentage' => 'Percentage discount cannot exceed 100%.']);
+            }
+
+            $amount = round($this->percentageDiscountBase($invoice, $replacing) * ($value / 100), 4);
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['percentage' => 'Percentage discount does not produce a billable discount amount.']);
+            }
+
+            return [$amount, $value];
+        }
+
+        return [$value, null];
+    }
+
+    private function discountDescription(?string $reason): string
+    {
+        return trim('Discount' . ($reason ? ': ' . $reason : ''));
     }
 
     /**

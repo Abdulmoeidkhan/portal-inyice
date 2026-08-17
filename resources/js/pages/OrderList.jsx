@@ -43,6 +43,13 @@ const getStatusColor = (status) => {
 
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const orderFormDefaults = (order) => ({
+  customer_id: order?.customer?.id || order?.customer_id,
+  status: order?.status || 'order',
+  currency_code: order?.currency_code || 'PKR',
+  notes: order?.notes || '',
+});
+
 const formatStatus = (status) => String(status || 'order').replace(/_/g, ' ').toUpperCase();
 const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'];
 const statusFilterOptions = [
@@ -227,12 +234,7 @@ export default function OrderList() {
       const detail = await response.json();
       setEditingOrder(detail);
       form.resetFields();
-      form.setFieldsValue({
-        customer_id: detail.customer?.id || detail.customer_id,
-        status: detail.status || 'order',
-        currency_code: detail.currency_code || 'PKR',
-        notes: detail.notes || '',
-      });
+      form.setFieldsValue(orderFormDefaults(detail));
     } catch (error) {
       if (acquiredLock) {
         releaseEditLock('order', order.uid).catch(() => {});
@@ -265,7 +267,11 @@ export default function OrderList() {
 
     setSaving(true);
     try {
-      const payload = { ...values };
+      const payload = {
+        ...orderFormDefaults(editingOrder),
+        ...form.getFieldsValue(true),
+        ...values,
+      };
       if (payload.status === 'cancel' && editingOrder.status !== 'cancel') {
         payload.cancel_password = password;
       } else {

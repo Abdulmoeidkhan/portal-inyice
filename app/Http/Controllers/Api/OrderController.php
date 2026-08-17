@@ -283,6 +283,11 @@ class OrderController extends Controller
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
             'voucher.other_services.*.amount' => 'nullable|numeric',
+            'voucher.discounts' => 'nullable|array',
+            'voucher.discounts.*.discount_type' => ['nullable', 'string', Rule::in(['amount', 'percentage'])],
+            'voucher.discounts.*.amount' => 'nullable|numeric|min:0',
+            'voucher.discounts.*.percentage' => 'nullable|numeric|min:0|max:100',
+            'voucher.discounts.*.reason' => 'nullable|string|max:500',
         ]);
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
@@ -333,6 +338,7 @@ class OrderController extends Controller
                 'city_tours' => $voucher['city_tours'] ?? [],
                 'visa' => $voucher['visa'] ?? [],
                 'other_services' => $voucher['other_services'] ?? [],
+                'discounts' => $voucher['discounts'] ?? [],
             ];
 
             if ($status === 'cancel') {
@@ -641,6 +647,11 @@ class OrderController extends Controller
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
             'voucher.other_services.*.amount' => 'nullable|numeric',
+            'voucher.discounts' => 'nullable|array',
+            'voucher.discounts.*.discount_type' => ['nullable', 'string', Rule::in(['amount', 'percentage'])],
+            'voucher.discounts.*.amount' => 'nullable|numeric|min:0',
+            'voucher.discounts.*.percentage' => 'nullable|numeric|min:0|max:100',
+            'voucher.discounts.*.reason' => 'nullable|string|max:500',
         ]);
 
         $customer = Customer::where('tenant_id', $tenantId)
@@ -722,6 +733,7 @@ class OrderController extends Controller
                     'city_tours' => $voucher['city_tours'] ?? [],
                     'visa' => $voucher['visa'] ?? [],
                     'other_services' => $voucher['other_services'] ?? [],
+                    'discounts' => $voucher['discounts'] ?? [],
                 ]);
             }
 
@@ -1548,6 +1560,48 @@ class OrderController extends Controller
                 $quantity = max(1, (int) ($otherService['quantity'] ?? 1));
                 $pushItem($description, $amount, ['type' => 'other_service', 'row' => $otherService], $quantity);
             }
+        }
+
+        $discountBase = array_reduce(
+            $items,
+            fn (float $sum, array $item): float => $sum + max(0, (float) $item['total_price']),
+            0.0
+        );
+        $appliedDiscount = 0.0;
+
+        foreach (($voucher['discounts'] ?? []) as $discount) {
+            if (!is_array($discount)) {
+                continue;
+            }
+
+            $discountType = ($discount['discount_type'] ?? 'amount') === 'percentage' ? 'percentage' : 'amount';
+            $value = $discountType === 'percentage'
+                ? $this->toAmount($discount['percentage'] ?? null)
+                : $this->toAmount($discount['amount'] ?? null);
+
+            if ($value <= 0) {
+                continue;
+            }
+
+            $remainingBase = max(0, $discountBase - $appliedDiscount);
+            $amount = $discountType === 'percentage'
+                ? round($remainingBase * (min($value, 100) / 100), 4)
+                : round(min($value, $remainingBase), 4);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $appliedDiscount += $amount;
+            $reason = trim((string) ($discount['reason'] ?? ''));
+            $label = 'Discount' . ($reason !== '' ? ': ' . $reason : '');
+            $pushItem($label, -$amount, [
+                'type' => 'discount',
+                'discount_type' => $discountType,
+                'amount' => $amount,
+                'percentage' => $discountType === 'percentage' ? $value : null,
+                'reason' => $reason,
+            ]);
         }
 
         // Keep at least one line item for traceability even when all prices are empty.

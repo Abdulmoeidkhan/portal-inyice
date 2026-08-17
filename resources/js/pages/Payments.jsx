@@ -420,7 +420,7 @@ export default function Payments() {
             <Text strong>Receipt type</Text>
             <Radio.Group value={form.mode} buttonStyle="solid" onChange={(event) => { setSelectedKeys([]); setAllocations({}); setForm((previous) => ({ ...previous, mode: event.target.value })); }}>
               <Radio.Button value="allocate">Allocate to invoices</Radio.Button>
-              <Radio.Button value="advance">Advance</Radio.Button>
+              <Radio.Button value="advance">Advance/Unallocated</Radio.Button>
             </Radio.Group>
           </Col>
           {form.mode === 'advance' && (

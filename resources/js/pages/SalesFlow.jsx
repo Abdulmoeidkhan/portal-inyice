@@ -15,6 +15,7 @@ import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
+import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import { CreateOrderCard } from './sales-flow/OrderInvoiceCards';
 
@@ -70,6 +71,7 @@ export default function SalesFlow() {
   const canViewCostProfit = currentUserCanViewCostProfit();
   const screens = Grid.useBreakpoint();
   const compactActions = !screens.sm;
+  const currencyCode = Form.useWatch('currency_code', orderForm) || 'PKR';
 
   const parsedHint = useMemo(() => {
     if (!parseResult) {
@@ -313,6 +315,12 @@ export default function SalesFlow() {
                   onUseFlightPassengersForVisa={useFlightPassengersForVisa}
                   onSetHotelLeadPassenger={setHotelLeadPassenger}
                   canViewCostProfit={canViewCostProfit}
+                />
+
+                <VoucherDiscountsCard
+                  voucher={voucher}
+                  currencyCode={currencyCode}
+                  onChangeDiscounts={(discounts) => setVoucherField('discounts', discounts)}
                 />
 
                 <VoucherSummaryCard voucher={voucher} canViewCostProfit={canViewCostProfit} />

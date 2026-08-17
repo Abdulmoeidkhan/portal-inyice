@@ -1,24 +1,9 @@
 import React from 'react';
 import { Card, Typography } from 'antd';
 import Table from '../../components/CsvTable';
+import { calculateVoucherTotals, costAmount, firstFilled, salesAmount, toAmount } from './voucherTotals';
 
 const { Text } = Typography;
-
-const toAmount = (value) => {
-  if (value === null || value === undefined || value === '') {
-    return 0;
-  }
-
-  const normalized = String(value).replace(/[^0-9.-]/g, '');
-  const parsed = Number(normalized);
-
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const firstFilled = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '') || '';
-
-const salesAmount = (row = {}) => toAmount(firstFilled(row.sales, row.amount));
-const costAmount = (row = {}) => toAmount(row.cost);
 
 const money = (value) => {
   const amount = Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -109,6 +94,23 @@ export function buildVoucherSummaryRows(voucher) {
     addAmount(rows, firstPassenger, 'others', amount);
     addProfitAmount(rows, firstPassenger, amount, costAmount(row));
   });
+
+  const totals = calculateVoucherTotals(voucher);
+  if (totals.discountTotal > 0) {
+    rows.set('__discounts__', {
+      key: '__discounts__',
+      passenger_name: 'Discounts',
+      flights: 0,
+      visa: 0,
+      transfer: 0,
+      ziarat: 0,
+      hotels: 0,
+      others: 0,
+      total: -totals.discountTotal,
+      cost: 0,
+      profit: -totals.discountTotal,
+    });
+  }
 
   return Array.from(rows.values());
 }

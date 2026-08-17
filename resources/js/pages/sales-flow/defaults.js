@@ -176,6 +176,13 @@ export const blankOtherService = () => ({
   amount: '',
 });
 
+export const blankDiscount = () => ({
+  discount_type: 'amount',
+  amount: '',
+  percentage: '',
+  reason: '',
+});
+
 const passengerNameFields = {
   passengers: 'name',
   pricing: 'pax_name',
@@ -280,6 +287,7 @@ export const createInitialVoucher = () => ({
   city_tours: [blankCityTour()],
   visa: [blankVisa()],
   other_services: [blankOtherService()],
+  discounts: [],
 });
 
 const firstFilled = (...values) => values.find((value) => value !== undefined && value !== null && value !== '') || '';

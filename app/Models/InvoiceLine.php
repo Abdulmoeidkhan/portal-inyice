@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Traits\TenantAware;
 
 class InvoiceLine extends Model
@@ -40,5 +41,10 @@ class InvoiceLine extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function discount(): HasOne
+    {
+        return $this->hasOne(InvoiceDiscount::class);
     }
 }

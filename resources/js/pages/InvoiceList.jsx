@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
-import { CopyOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Descriptions, Divider, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Popconfirm, Row, Segmented, Select, Space, Spin, Tag, Typography } from 'antd';
+import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
@@ -37,6 +37,10 @@ export default function InvoiceList() {
   const [refundAmount, setRefundAmount] = useState(0);
   const [refundReason, setRefundReason] = useState('');
   const [discountInvoice, setDiscountInvoice] = useState(null);
+  const [discounts, setDiscounts] = useState([]);
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState(null);
+  const [discountType, setDiscountType] = useState('amount');
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountReason, setDiscountReason] = useState('');
   const [deleteInvoice, setDeleteInvoice] = useState(null);
@@ -52,6 +56,8 @@ export default function InvoiceList() {
   const canEditInvoices = canEditInvoiceOrder();
   const canUpdateBookedBy = canChangeBookedBy();
   const compactActions = !screens.sm;
+  const discountLimit = Math.max(0, Number(discountInvoice?.outstanding_amount || 0) + Number(editingDiscount?.amount || 0));
+  const discountInputLimit = discountType === 'percentage' ? 100 : discountLimit;
   const staffOptions = staff.map((user) => ({
     value: user.id,
     label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
@@ -183,25 +189,75 @@ export default function InvoiceList() {
     if (data) { message.success('Refund recorded'); setRefundInvoice(null); setRefundReason(''); fetchInvoices(); }
   };
 
+  const loadDiscounts = async (invoice) => {
+    setDiscountLoading(true);
+    try {
+      const response = await fetch(`/api/v1/invoices/${invoice.uid}/discounts`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Could not load discounts');
+      setDiscounts(data.data || []);
+    } catch (error) {
+      message.error(error.message);
+    } finally {
+      setDiscountLoading(false);
+    }
+  };
+
   const openDiscount = (invoice) => {
     setDiscountInvoice(invoice);
+    setDiscounts([]);
+    setEditingDiscount(null);
+    setDiscountType('amount');
+    setDiscountAmount(0);
+    setDiscountReason('');
+    loadDiscounts(invoice);
+  };
+
+  const resetDiscountForm = () => {
+    setEditingDiscount(null);
+    setDiscountType('amount');
     setDiscountAmount(0);
     setDiscountReason('');
   };
 
-  const applyDiscount = async () => {
+  const saveDiscount = async () => {
     if (!discountInvoice) return;
 
-    const data = await request(`/api/v1/invoices/${discountInvoice.uid}/discount`, 'PATCH', {
-      amount: discountAmount,
+    const endpoint = editingDiscount
+      ? `/api/v1/invoices/${discountInvoice.uid}/discounts/${editingDiscount.uid}`
+      : `/api/v1/invoices/${discountInvoice.uid}/discounts`;
+    const data = await request(endpoint, editingDiscount ? 'PATCH' : 'POST', {
+      discount_type: discountType,
+      ...(discountType === 'percentage' ? { percentage: discountAmount } : { amount: discountAmount }),
       reason: discountReason || undefined,
     }, `${discountInvoice.uid}:discount`);
 
     if (data) {
-      message.success('Discount added');
-      setDiscountInvoice(null);
-      setDiscountAmount(0);
-      setDiscountReason('');
+      message.success(editingDiscount ? 'Discount updated' : 'Discount added');
+      setDiscountInvoice(data.invoice || discountInvoice);
+      resetDiscountForm();
+      loadDiscounts(data.invoice || discountInvoice);
+      fetchInvoices();
+    }
+  };
+
+  const editDiscount = (discount) => {
+    setEditingDiscount(discount);
+    setDiscountType(discount.discount_type || 'amount');
+    setDiscountAmount(Number(discount.discount_type === 'percentage' ? discount.percentage : discount.amount) || 0);
+    setDiscountReason(discount.reason || '');
+  };
+
+  const deleteDiscount = async (discount) => {
+    if (!discountInvoice) return;
+    const data = await request(`/api/v1/invoices/${discountInvoice.uid}/discounts/${discount.uid}`, 'DELETE', undefined, `${discountInvoice.uid}:discount`);
+    if (data) {
+      message.success('Discount deleted');
+      setDiscountInvoice(data.invoice || discountInvoice);
+      resetDiscountForm();
+      loadDiscounts(data.invoice || discountInvoice);
       fetchInvoices();
     }
   };
@@ -316,7 +372,7 @@ export default function InvoiceList() {
         <Dropdown menu={{ items: [
           ...(canEditInvoices ? [
             { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
-            { key: 'discount', icon: <PercentageOutlined />, label: 'Add discount', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['paid', 'void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
+            { key: 'discount', icon: <PercentageOutlined />, label: 'Discounts', disabled: ['void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
           ] : []),
           { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
           { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate order', disabled: !invoice.order?.uid, onClick: () => duplicateInvoiceOrder(invoice) },
@@ -519,26 +575,94 @@ export default function InvoiceList() {
         <Input.TextArea maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
       </Modal>
       <Modal
-        title={`Add discount · ${discountInvoice?.invoice_number || ''}`}
+        title={`Discounts · ${discountInvoice?.invoice_number || ''}`}
         open={!!discountInvoice}
-        onCancel={() => setDiscountInvoice(null)}
-        onOk={applyDiscount}
-        okText="Add discount"
+        onCancel={() => {
+          setDiscountInvoice(null);
+          resetDiscountForm();
+        }}
+        onOk={saveDiscount}
+        okText={editingDiscount ? 'Update discount' : 'Add discount'}
+        width={760}
         confirmLoading={actionLoadingKey === `${discountInvoice?.uid}:discount`}
-        okButtonProps={{ disabled: discountAmount <= 0 || discountAmount > Number(discountInvoice?.outstanding_amount || 0) }}
+        okButtonProps={{ disabled: discountAmount <= 0 || discountAmount > discountInputLimit }}
       >
-        <Typography.Paragraph>Available balance: {discountInvoice?.currency_code} {money(discountInvoice?.outstanding_amount)}</Typography.Paragraph>
-        <Typography.Text strong>Discount amount</Typography.Text>
-        <InputNumber
-          style={{ width: '100%', marginBottom: 12 }}
-          min={0.01}
-          max={Math.max(0, Number(discountInvoice?.outstanding_amount || 0))}
-          precision={2}
-          value={discountAmount}
-          onChange={(value) => setDiscountAmount(Number(value || 0))}
+        <Typography.Paragraph style={{ marginBottom: 12 }}>
+          Invoice total: {discountInvoice?.currency_code} {money(discountInvoice?.total_amount)} · Outstanding: {discountInvoice?.currency_code} {money(discountInvoice?.outstanding_amount)}
+        </Typography.Paragraph>
+        <Table
+          size="small"
+          rowKey="uid"
+          loading={discountLoading}
+          pagination={false}
+          dataSource={discounts}
+          scroll={{ x: 680 }}
+          columns={[
+            { title: 'Reason', dataIndex: 'reason', render: (value) => value || 'Discount' },
+            { title: 'Type', dataIndex: 'discount_type', width: 110, render: (value) => String(value || 'amount').toUpperCase() },
+            { title: 'Value', width: 110, render: (_, row) => row.discount_type === 'percentage' ? `${money(row.percentage).replace(/\.00$/, '')}%` : money(row.amount) },
+            { title: 'Amount', dataIndex: 'amount', align: 'right', width: 130, render: (value) => money(value) },
+            { title: 'By', dataIndex: ['created_by', 'name'], width: 150, render: (value) => value || '-' },
+            {
+              title: 'Action',
+              key: 'action',
+              width: 110,
+              render: (_, row) => (
+                <Space>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => editDiscount(row)} />
+                  <Popconfirm title="Delete this discount?" okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deleteDiscount(row)}>
+                    <Button danger size="small" icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
         />
-        <Typography.Text strong>Reason</Typography.Text>
-        <Input.TextArea maxLength={500} value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} />
+        <Divider style={{ margin: '16px 0 12px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <Typography.Text strong>{editingDiscount ? 'Edit discount' : 'New discount'}</Typography.Text>
+          {editingDiscount && <Button size="small" icon={<PlusOutlined />} onClick={resetDiscountForm}>New discount</Button>}
+        </div>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={10}>
+            <Typography.Text strong>Discount type</Typography.Text>
+            <Segmented
+              block
+              options={[
+                { label: 'Amount', value: 'amount' },
+                { label: 'Percentage', value: 'percentage' },
+              ]}
+              value={discountType}
+              onChange={(value) => {
+                setDiscountType(value);
+                setDiscountAmount(0);
+              }}
+              style={{ marginTop: 6 }}
+            />
+          </Col>
+          <Col xs={24} md={14}>
+            <Typography.Text strong>{discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Typography.Text>
+            <InputNumber
+              style={{ width: '100%', marginTop: 6 }}
+              min={0.01}
+              max={discountInputLimit}
+              precision={2}
+              addonAfter={discountType === 'percentage' ? '%' : discountInvoice?.currency_code}
+              value={discountAmount}
+              onChange={(value) => setDiscountAmount(Number(value || 0))}
+            />
+          </Col>
+          <Col span={24}>
+            <Typography.Text strong>Reason</Typography.Text>
+            <Input.TextArea
+              maxLength={500}
+              rows={3}
+              style={{ marginTop: 6 }}
+              value={discountReason}
+              onChange={(event) => setDiscountReason(event.target.value)}
+            />
+          </Col>
+        </Row>
       </Modal>
       <Modal
         title={`Change booked by · ${bookedByInvoice?.invoice_number || ''}`}
