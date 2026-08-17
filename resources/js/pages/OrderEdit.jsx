@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Affix, Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Affix, Alert, Button, Card, Collapse, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
@@ -214,8 +215,12 @@ export default function OrderEdit() {
   const [pendingCancelSubmit, setPendingCancelSubmit] = useState(null);
   const [cancelPassword, setCancelPassword] = useState('');
   const [lockConflict, setLockConflict] = useState(null);
+  const [invoiceDateOpen, setInvoiceDateOpen] = useState(false);
+  const [invoiceDate, setInvoiceDate] = useState(dayjs());
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
+  const canCreateInvoice = order && !order.invoice && ['quote', 'order', 'confirm'].includes(order.status);
   const affixTarget = () => document.querySelector('.app-content');
   const currencyCode = Form.useWatch('currency_code', form) || order?.currency_code || 'PKR';
 
@@ -331,7 +336,7 @@ export default function OrderEdit() {
         await acquireEditLock('order', uid);
         acquiredLock = true;
         heartbeatTimer = setInterval(() => {
-          heartbeatEditLock('order', uid).catch(() => {});
+          heartbeatEditLock('order', uid).catch(() => { });
         }, 30000);
 
         const response = await fetch(`/api/v1/orders/${uid}`, {
@@ -371,7 +376,7 @@ export default function OrderEdit() {
         clearInterval(heartbeatTimer);
       }
       if (acquiredLock) {
-        releaseEditLock('order', uid).catch(() => {});
+        releaseEditLock('order', uid).catch(() => { });
       }
     };
   }, [uid]);
@@ -546,6 +551,7 @@ export default function OrderEdit() {
           ),
           okText: 'Create New Order',
           cancelText: 'Keep Current Invoice',
+          cancelButtonProps: { danger: true },
           okButtonProps: { danger: true },
           onOk: () => submitOrder(true),
         });
@@ -583,6 +589,53 @@ export default function OrderEdit() {
   };
 
   const handleSave = () => submitOrder(false);
+
+  const openInvoiceDateModal = () => {
+    setInvoiceDate(dayjs());
+    setInvoiceDateOpen(true);
+  };
+
+  const closeInvoiceDateModal = () => {
+    setInvoiceDateOpen(false);
+    setInvoiceDate(dayjs());
+  };
+
+  const createInvoice = async () => {
+    if (!order || !invoiceDate) {
+      message.error('Choose an invoice date');
+      return;
+    }
+
+    setInvoiceSaving(true);
+    try {
+      const response = await fetch('/api/v1/invoices/create-from-order', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          order_id: order.id,
+          invoice_date: invoiceDate.format('YYYY-MM-DD'),
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to create invoice');
+      }
+
+      message.success(`Invoice ${data.invoice?.invoice_number || ''} created`);
+      setOrder((current) => ({
+        ...current,
+        status: 'invoice',
+        invoice: data.invoice,
+        invoices: [data.invoice, ...(current?.invoices || [])],
+      }));
+      closeInvoiceDateModal();
+    } catch (error) {
+      message.error(error.message || 'Failed to create invoice');
+    } finally {
+      setInvoiceSaving(false);
+    }
+  };
 
   if (lockConflict) {
     const userName = lockConflict.locked_by?.name || 'Another user';
@@ -623,7 +676,12 @@ export default function OrderEdit() {
       <Affix className="edit-order-action-affix" offsetTop={10} target={affixTarget}>
         <Card className="edit-order-action-card border-beam-aurora" style={{ marginBottom: 16 }}>
           <Space className="edit-order-actions">
-            <Button onClick={() => navigate('/orders')}>Cancel</Button>
+            <Button danger onClick={() => navigate('/orders')}>Cancel</Button>
+            {canCreateInvoice && (
+              <Button type="default" icon={<FileTextOutlined />} loading={invoiceSaving} onClick={openInvoiceDateModal}>
+                Invoice
+              </Button>
+            )}
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
               Save Order
             </Button>
@@ -662,7 +720,6 @@ export default function OrderEdit() {
                             { label: 'Quote', value: 'quote' },
                             { label: 'Order', value: 'order' },
                             { label: 'Cancel', value: 'cancel' },
-                            { label: 'Invoice', value: 'invoice' },
                             { label: 'Void', value: 'void' },
                             { label: 'Refund Request', value: 'refund_request' },
                             { label: 'Refund', value: 'refund' },
@@ -749,7 +806,7 @@ export default function OrderEdit() {
           currencyCode={currencyCode}
           onChangeDiscounts={(discounts) => setVoucherField('discounts', discounts)}
         />
-
+        <br />
         <Collapse
           className="edit-order-collapse border-beam-aurora"
           items={[
@@ -766,6 +823,7 @@ export default function OrderEdit() {
         title="Confirm Order Cancellation"
         open={cancelConfirmOpen}
         okText="Cancel Order"
+        cancelButtonProps={{ danger: true }}
         okButtonProps={{ danger: true, loading: saving }}
         confirmLoading={saving}
         onOk={confirmCancelOrder}
@@ -782,6 +840,30 @@ export default function OrderEdit() {
             value={cancelPassword}
             onChange={(event) => setCancelPassword(event.target.value)}
             onPressEnter={confirmCancelOrder}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={order ? `Create invoice for ${order.order_number}` : 'Create Invoice'}
+        open={invoiceDateOpen}
+        okText="Create Invoice"
+        cancelButtonProps={{ danger: true }}
+        confirmLoading={invoiceSaving}
+        okButtonProps={{ disabled: !invoiceDate }}
+        onOk={createInvoice}
+        onCancel={closeInvoiceDateModal}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text type="secondary">Choose the invoice date used for invoice registers and reports.</Text>
+          <DatePicker
+            autoFocus
+            allowClear={false}
+            value={invoiceDate}
+            format="YYYY-MM-DD"
+            onChange={(value) => setInvoiceDate(value)}
+            style={{ width: '100%' }}
           />
         </Space>
       </Modal>

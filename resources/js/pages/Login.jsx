@@ -36,6 +36,7 @@ export default function Login({ onLoginSuccess }) {
             content: error.message || 'This user is already logged in on another device. Sign out the old session to continue.',
             okText: 'Sign out old',
             cancelText: 'Cancel',
+            cancelButtonProps: { danger: true },
             onOk: () => submitLogin(values, true),
           });
           return;

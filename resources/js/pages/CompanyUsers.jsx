@@ -340,6 +340,7 @@ export default function CompanyUsers() {
         open={!!editing}
         onOk={handleUpdate}
         onCancel={() => { setEditing(null); editForm.resetFields(); }}
+        cancelButtonProps={{ danger: true }}
         confirmLoading={saving}
         okText="Save changes"
       >

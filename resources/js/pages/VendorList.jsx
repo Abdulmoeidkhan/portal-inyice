@@ -177,6 +177,7 @@ export default function VendorList() {
         open={modalOpen}
         onOk={handleSave}
         onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }}
+        cancelButtonProps={{ danger: true }}
         confirmLoading={saving}
         okText={editing ? 'Save changes' : 'Create vendor'}
       >

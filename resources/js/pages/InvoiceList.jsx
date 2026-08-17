@@ -381,14 +381,14 @@ export default function InvoiceList() {
           ] : []),
           ...(canEditInvoices ? [
             { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
-            { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
+            { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', cancelButtonProps: { danger: true }, okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
           ] : []),
           { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
           ...(canEditInvoices ? [
             { type: 'divider' },
             { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => openOrderEdit(invoice) },
             { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
-            { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
+            { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', cancelButtonProps: { danger: true }, okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
           ] : []),
         ] }}>
           <Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>
@@ -567,7 +567,7 @@ export default function InvoiceList() {
           </Space>
         )}
       </Drawer>
-      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoadingKey === `${refundInvoice?.uid}:refund`} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
+      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} cancelButtonProps={{ danger: true }} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoadingKey === `${refundInvoice?.uid}:refund`} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
         <Typography.Paragraph>Refundable: {refundInvoice?.currency_code} {money(Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))}</Typography.Paragraph>
         <Typography.Text strong>Amount</Typography.Text>
         <InputNumber style={{ width: '100%', marginBottom: 12 }} min={0.01} max={Math.max(0, Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))} precision={2} value={refundAmount} onChange={(value) => setRefundAmount(Number(value || 0))} />
@@ -581,6 +581,7 @@ export default function InvoiceList() {
           setDiscountInvoice(null);
           resetDiscountForm();
         }}
+        cancelButtonProps={{ danger: true }}
         onOk={saveDiscount}
         okText={editingDiscount ? 'Update discount' : 'Add discount'}
         width={760}
@@ -671,6 +672,7 @@ export default function InvoiceList() {
           setBookedByInvoice(null);
           setBookedByUserId(null);
         }}
+        cancelButtonProps={{ danger: true }}
         onOk={updateBookedBy}
         okText="Save"
         confirmLoading={actionLoadingKey === `${bookedByInvoice?.uid}:booked-by`}
@@ -691,6 +693,7 @@ export default function InvoiceList() {
         title={`Delete invoice · ${deleteInvoice?.invoice_number || ''}`}
         open={!!deleteInvoice}
         onCancel={() => setDeleteInvoice(null)}
+        cancelButtonProps={{ danger: true }}
         onOk={cancelInvoice}
         okText="Delete"
         confirmLoading={actionLoadingKey === `${deleteInvoice?.uid}:delete`}

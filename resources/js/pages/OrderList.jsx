@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
-import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined } from '@ant-design/icons';
+import { Button, Card, DatePicker, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
+import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { acquireEditLock, releaseEditLock } from '../services/editLocks';
@@ -108,6 +109,9 @@ export default function OrderList() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [pendingCancelValues, setPendingCancelValues] = useState(null);
   const [cancelPassword, setCancelPassword] = useState('');
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [invoiceDate, setInvoiceDate] = useState(dayjs());
+  const [invoiceLoadingKey, setInvoiceLoadingKey] = useState('');
   const screens = Grid.useBreakpoint();
   const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
@@ -341,6 +345,7 @@ export default function OrderList() {
       title: 'Duplicate this order?',
       content: `Create a new editable order copied from ${order.order_number}.`,
       okText: 'Duplicate',
+      cancelButtonProps: { danger: true },
       onOk: async () => {
         setDuplicateLoadingKey(order.uid);
         try {
@@ -368,8 +373,71 @@ export default function OrderList() {
     });
   };
 
+  const canCreateInvoice = (order) => {
+    if (!order) {
+      return false;
+    }
+
+    return !order.invoice && ['quote', 'order', 'confirm'].includes(order.status);
+  };
+
+  const openInvoiceModal = (order) => {
+    setInvoiceOrder(order);
+    setInvoiceDate(dayjs());
+  };
+
+  const closeInvoiceModal = () => {
+    setInvoiceOrder(null);
+    setInvoiceDate(dayjs());
+  };
+
+  const createInvoice = async () => {
+    if (!invoiceOrder || !invoiceDate) {
+      message.error('Choose an invoice date');
+      return;
+    }
+
+    setInvoiceLoadingKey(invoiceOrder.uid);
+    try {
+      const response = await fetch('/api/v1/invoices/create-from-order', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          order_id: invoiceOrder.id,
+          invoice_date: invoiceDate.format('YYYY-MM-DD'),
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to create invoice');
+      }
+
+      message.success(`Invoice ${data.invoice?.invoice_number || ''} created`);
+      closeInvoiceModal();
+      fetchOrders(pagination.current);
+      if (selectedOrder?.uid === invoiceOrder.uid) {
+        fetchOrderDetail(invoiceOrder);
+      }
+    } catch (error) {
+      message.error(error.message || 'Failed to create invoice');
+    } finally {
+      setInvoiceLoadingKey('');
+    }
+  };
+
   const renderOrderActions = (record, { showLabels = !compactActions } = {}) => (
     <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={false}>
+      <Button
+        size="small"
+        type="default"
+        icon={<FileTextOutlined />}
+        disabled={!canCreateInvoice(record)}
+        loading={invoiceLoadingKey === record.uid}
+        onClick={() => openInvoiceModal(record)}
+      >
+        {showLabels ? 'Invoice' : null}
+      </Button>
       <Button
         size="small"
         icon={<EditOutlined />}
@@ -466,7 +534,7 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: compactActions ? 132 : 250,
+      width: compactActions ? 180 : 360,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
       onCell: () => ({ onClick: (event) => event.stopPropagation() }),
@@ -587,7 +655,7 @@ export default function OrderList() {
             >
               Open Full Form
             </Button>
-            <Button onClick={closeEditDrawer}>Cancel</Button>
+            <Button danger onClick={closeEditDrawer}>Cancel</Button>
             <Button type="primary" loading={saving} onClick={handleEdit}>Save Order</Button>
           </Space>
         }
@@ -619,7 +687,6 @@ export default function OrderList() {
                       {
                         label: 'Invoice Section',
                         options: [
-                          { label: 'Invoice', value: 'invoice' },
                           { label: 'Void', value: 'void' },
                           { label: 'Refund Request', value: 'refund_request' },
                           { label: 'Refund', value: 'refund' },
@@ -668,6 +735,7 @@ export default function OrderList() {
         title="Confirm Order Cancellation"
         open={cancelConfirmOpen}
         okText="Cancel Order"
+        cancelButtonProps={{ danger: true }}
         okButtonProps={{ danger: true, loading: saving }}
         confirmLoading={saving}
         onOk={confirmCancelOrder}
@@ -684,6 +752,30 @@ export default function OrderList() {
             value={cancelPassword}
             onChange={(event) => setCancelPassword(event.target.value)}
             onPressEnter={confirmCancelOrder}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={invoiceOrder ? `Create invoice for ${invoiceOrder.order_number}` : 'Create Invoice'}
+        open={Boolean(invoiceOrder)}
+        okText="Create Invoice"
+        cancelButtonProps={{ danger: true }}
+        confirmLoading={Boolean(invoiceLoadingKey)}
+        okButtonProps={{ disabled: !invoiceDate }}
+        onOk={createInvoice}
+        onCancel={closeInvoiceModal}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text type="secondary">Choose the invoice date used for invoice registers and reports.</Text>
+          <DatePicker
+            autoFocus
+            allowClear={false}
+            value={invoiceDate}
+            format="YYYY-MM-DD"
+            onChange={(value) => setInvoiceDate(value)}
+            style={{ width: '100%' }}
           />
         </Space>
       </Modal>

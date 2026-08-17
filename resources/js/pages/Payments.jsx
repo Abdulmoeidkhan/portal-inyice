@@ -548,6 +548,7 @@ export default function Payments() {
         open={customerModalOpen}
         onOk={handleCreateCustomer}
         onCancel={() => setCustomerModalOpen(false)}
+        cancelButtonProps={{ danger: true }}
         confirmLoading={savingCustomer}
       >
         <Form layout="vertical" form={customerForm} initialValues={{ type: 'B2C' }}>
@@ -568,7 +569,7 @@ export default function Payments() {
           </Form.Item>
         </Form>
       </Modal>
-      <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
+      <Modal width={900} title={`Edit and reallocate ${editing?.receipt_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} cancelButtonProps={{ danger: true }} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
           <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} /></Col>
           <Col xs={12} md={5}><Text strong>Method</Text><Select value={editing.method} onChange={(value) => setEditing((current) => ({ ...current, method: value, account_id: null }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: value.replaceAll('_', ' ').toUpperCase() }))} /></Col>
@@ -582,7 +583,7 @@ export default function Payments() {
           { title: 'Allocation', key: 'allocation', align: 'right', render: (_, invoice) => <InputNumber min={0} max={Number(invoice.outstanding_amount) + Number(editing.originalAllocations[invoice.id] || 0)} precision={2} value={editing.allocations[invoice.id] || 0} onChange={(value) => setEditing((current) => ({ ...current, allocations: { ...current.allocations, [invoice.id]: Number(value || 0) } }))} /> },
         ]} /></>}
       </Modal>
-      <Modal width={940} title={`Allocate advance ${advanceAllocating?.receipt_number || ''}`} open={!!advanceAllocating} onCancel={() => setAdvanceAllocating(null)} onOk={saveAdvanceAllocation} confirmLoading={saving} okText="Apply advance">
+      <Modal width={940} title={`Allocate advance ${advanceAllocating?.receipt_number || ''}`} open={!!advanceAllocating} onCancel={() => setAdvanceAllocating(null)} cancelButtonProps={{ danger: true }} onOk={saveAdvanceAllocation} confirmLoading={saving} okText="Apply advance">
         {advanceAllocating && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
           <Col xs={12} md={5}><Text strong>Date</Text><Input type="date" value={advanceAllocating.date} onChange={(event) => setAdvanceAllocating((current) => ({ ...current, date: event.target.value }))} /></Col>
           <Col xs={12} md={5}><Text strong>Available</Text><Input readOnly value={`${advanceAllocating.currency_code} ${money(receiptRemaining(advanceAllocating))}`} /></Col>

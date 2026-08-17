@@ -160,6 +160,7 @@ export default function ProfitShares() {
       title: 'Delete profit share?',
       content: `${record.currency_code} ${money(record.amount)} from ${record.from_user?.name || '-'} to ${record.to_user?.name || '-'}`,
       okText: 'Delete',
+      cancelButtonProps: { danger: true },
       okButtonProps: { danger: true },
       onOk: async () => {
         const response = await fetch(`/api/v1/profit-shares/${record.uid}`, {
@@ -318,6 +319,7 @@ export default function ProfitShares() {
         title={editingShare ? 'Edit Profit Share' : 'Record Profit Share'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
+        cancelButtonProps={{ danger: true }}
         onOk={() => form.submit()}
         confirmLoading={saving}
         okText={editingShare ? 'Save' : 'Record'}

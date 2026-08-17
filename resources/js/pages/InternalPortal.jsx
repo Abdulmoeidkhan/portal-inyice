@@ -848,6 +848,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         title="Add Internal User"
         open={staffModalOpen}
         onCancel={() => setStaffModalOpen(false)}
+        cancelButtonProps={{ danger: true }}
         onOk={() => staffForm.submit()}
         confirmLoading={savingStaff}
         destroyOnClose
@@ -890,6 +891,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
           resetPasswordForm.resetFields();
           setResetPasswordModal({ open: false, user: null });
         }}
+        cancelButtonProps={{ danger: true }}
         onOk={() => resetPasswordForm.submit()}
         confirmLoading={savingResetPassword}
         destroyOnClose

@@ -8,6 +8,7 @@ use App\Models\InvoiceLine;
 use App\Models\Order;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -16,9 +17,9 @@ class InvoiceService
     /**
      * Create invoice from order
      */
-    public function createFromOrder(Order $order): Invoice
+    public function createFromOrder(Order $order, ?string $invoiceDate = null): Invoice
     {
-        return DB::transaction(function () use ($order): Invoice {
+        return DB::transaction(function () use ($order, $invoiceDate): Invoice {
             $existingInvoice = Invoice::where('tenant_id', $order->tenant_id)
                 ->where('company_id', $order->company_id)
                 ->where('order_id', $order->id)
@@ -32,7 +33,7 @@ class InvoiceService
 
             $order->loadMissing(['company', 'items']);
 
-            $invoice = $this->createFreshInvoice($order);
+            $invoice = $this->createFreshInvoice($order, $invoiceDate);
 
             $order->update(['status' => 'invoice']);
 
@@ -76,11 +77,11 @@ class InvoiceService
         });
     }
 
-    private function createFreshInvoice(Order $order): Invoice
+    private function createFreshInvoice(Order $order, ?string $invoiceDate = null): Invoice
     {
         $order->loadMissing(['company', 'items']);
 
-        $invoiceDate = now();
+        $invoiceDate = $invoiceDate ? Carbon::parse($invoiceDate) : now();
         $invoice = new Invoice();
         $invoice->uid = (string) Str::ulid();
         $invoice->tenant_id = $order->tenant_id;

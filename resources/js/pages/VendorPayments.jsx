@@ -258,7 +258,7 @@ export default function VendorPayments() {
       </Card>
 
       <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={payments} scroll={{ x: 900 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} /></Card>
-      <Modal width={980} title={`Edit and reallocate ${editing?.payment_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
+      <Modal width={980} title={`Edit and reallocate ${editing?.payment_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} cancelButtonProps={{ danger: true }} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
           <Col xs={24} sm={12} md={6}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} style={{ width: '100%', marginTop: 4 }} /></Col>
           <Col xs={24} sm={12} md={6}><Text strong>Method</Text><Select value={editing.method} onChange={(value) => setEditing((current) => ({ ...current, method: value, account_id: null }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: value.replaceAll('_', ' ').toUpperCase() }))} style={{ width: '100%', marginTop: 4 }} /></Col>
@@ -271,7 +271,7 @@ export default function VendorPayments() {
           { title: 'Allocation', key: 'allocation', width: 180, align: 'right', render: (_, order) => <InputNumber min={0} max={Number(order.outstanding_amount || 0) + Number(editing.originalAllocations[order.id] || 0)} precision={2} controls={false} value={editing.allocations[order.id] || 0} onChange={(value) => setEditing((current) => ({ ...current, allocations: { ...current.allocations, [order.id]: Number(value || 0) } }))} style={{ width: 150 }} /> },
         ]} /></>}
       </Modal>
-      <Modal width={940} title={`Allocate advance ${advanceAllocating?.payment_number || ''}`} open={!!advanceAllocating} onCancel={() => setAdvanceAllocating(null)} onOk={saveAdvanceAllocation} confirmLoading={saving} okText="Apply advance">
+      <Modal width={940} title={`Allocate advance ${advanceAllocating?.payment_number || ''}`} open={!!advanceAllocating} onCancel={() => setAdvanceAllocating(null)} cancelButtonProps={{ danger: true }} onOk={saveAdvanceAllocation} confirmLoading={saving} okText="Apply advance">
         {advanceAllocating && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
           <Col xs={12} md={5}><Text strong>Available</Text><Input readOnly value={`${advanceAllocating.currency_code} ${money(paymentRemaining(advanceAllocating))}`} /></Col>
           <Col xs={24} md={8}><Text strong>Allocation total</Text><Input readOnly value={`${advanceAllocating.currency_code} ${money(advanceAllocationTotal)}`} /></Col>

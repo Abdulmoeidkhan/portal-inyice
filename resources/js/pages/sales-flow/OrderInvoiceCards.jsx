@@ -112,6 +112,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
         open={customerModalOpen}
         onOk={handleCreateCustomer}
         onCancel={() => setCustomerModalOpen(false)}
+        cancelButtonProps={{ danger: true }}
         confirmLoading={savingCustomer}
       >
         <Form layout="vertical" form={customerForm} initialValues={{ type: 'B2C' }}>
@@ -152,4 +153,3 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
     </Card>
   );
 }
-

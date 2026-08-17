@@ -677,6 +677,12 @@ class OrderController extends Controller
         $previousStatus = (string) $order->status;
         $isCancellingOrder = $validated['status'] === 'cancel' && $previousStatus !== 'cancel';
 
+        if ($validated['status'] === 'invoice' && !$this->isInvoiceSectionStatus($previousStatus)) {
+            return response()->json([
+                'error' => 'Create invoices from the order invoicing action so an invoice date can be recorded.',
+            ], 422);
+        }
+
         if ($isCancellingOrder) {
             $passwordResponse = $this->validateCancelPassword($user, $validated['cancel_password'] ?? null);
             if ($passwordResponse) {
@@ -830,9 +836,6 @@ class OrderController extends Controller
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
-            if ($validated['status'] === 'invoice' && !$this->isInvoiceSectionStatus($previousStatus)) {
-                $createdInvoice = $this->invoiceService->createFromOrder($order->fresh());
-            }
         });
 
         $responseOrder = $createdOrder
