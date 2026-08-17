@@ -39,10 +39,11 @@ class AuthSecurityApiTest extends TestCase
     {
         $ctx = $this->seedContext('admin');
 
-        $this->postJson('/api/v1/auth/login', [
+        $firstLogin = $this->postJson('/api/v1/auth/login', [
             'email' => $ctx['user']->email,
             'password' => 'password123',
-        ])->assertOk();
+        ]);
+        $firstLogin->assertOk();
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $ctx['user']->email,
@@ -50,13 +51,22 @@ class AuthSecurityApiTest extends TestCase
         ])->assertStatus(409)
             ->assertJsonPath('session_conflict', true);
 
-        $this->postJson('/api/v1/auth/login', [
+        $forcedLogin = $this->postJson('/api/v1/auth/login', [
             'email' => $ctx['user']->email,
             'password' => 'password123',
             'force_logout' => true,
-        ])->assertOk();
+        ]);
+        $forcedLogin->assertOk();
 
         $this->assertDatabaseCount('personal_access_tokens', 1);
+
+        $this->withHeader('Authorization', 'Bearer ' . $firstLogin->json('token'))
+            ->getJson('/api/v1/user')
+            ->assertUnauthorized();
+
+        $this->withHeader('Authorization', 'Bearer ' . $forcedLogin->json('token'))
+            ->getJson('/api/v1/user')
+            ->assertOk();
     }
 
     public function test_signin_is_rate_limited_after_too_many_attempts(): void

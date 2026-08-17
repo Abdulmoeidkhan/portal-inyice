@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton, Drawer, Modal } from 'antd';
 import {
@@ -62,6 +62,7 @@ const { Text } = Typography;
 const AUTH_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const AUTH_LAST_ACTIVITY_KEY = 'auth_last_activity_at';
 const AUTH_ACTIVITY_THROTTLE_MS = 60 * 1000;
+const AUTH_UNAUTHORIZED_EVENT = 'inyice:auth-unauthorized';
 const CALCULATOR_HISTORY_KEY = 'calculator_history';
 
 const calculate = (left, operator, right) => {
@@ -104,6 +105,24 @@ function clearAuthStorage() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+}
+
+function isProtectedApiRequest(input) {
+  const url = input instanceof URL ? input.toString() : typeof input === 'string' ? input : input?.url;
+  if (!url) return false;
+
+  let path = url;
+
+  try {
+    path = new URL(url, window.location.origin).pathname;
+  } catch {
+    return false;
+  }
+
+  return path.startsWith('/api/v1/')
+    && !path.startsWith('/api/v1/auth/login')
+    && !path.startsWith('/api/v1/auth/logout')
+    && !path.startsWith('/api/v1/shared-');
 }
 
 const NotFound = () => (
@@ -450,7 +469,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: 'User Profile',
+      label: `${user?.name || 'User '} Profile`,
       onClick: () => navigate('/profile/user'),
     },
     {
@@ -630,7 +649,18 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
     setLoading(false);
   }, []);
 
-  const handleLogout = async ({ revokeToken = true } = {}) => {
+  const signOutLocally = useCallback(({ notify = false } = {}) => {
+    clearAuthStorage();
+    setIsAuthenticated(false);
+
+    if (notify) {
+      message.info('You were signed out because this account is active on another device.');
+    }
+
+    navigate('/login', { replace: true });
+  }, [navigate]);
+
+  const handleLogout = useCallback(async ({ revokeToken = true } = {}) => {
     const token = useAuthToken();
 
     try {
@@ -644,11 +674,41 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         });
       }
     } finally {
-      clearAuthStorage();
-      setIsAuthenticated(false);
-      navigate('/login');
+      signOutLocally();
     }
-  };
+  }, [signOutLocally]);
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+
+      if (
+        useAuthToken()
+        && isProtectedApiRequest(args[0])
+        && [401, 419].includes(response.status)
+      ) {
+        window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+      }
+
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => signOutLocally({ notify: true });
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
+  }, [signOutLocally]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -715,7 +775,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       });
       window.removeEventListener('storage', handleStorage);
     };
-  }, [isAuthenticated, navigate]);
+  }, [handleLogout, isAuthenticated, navigate, signOutLocally]);
 
   if (loading) {
     return (

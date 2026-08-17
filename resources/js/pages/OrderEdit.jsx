@@ -68,6 +68,15 @@ const sectionValueKeys = {
 };
 
 const normalizeRows = (rows, factory) => (Array.isArray(rows) && rows.length ? rows : [factory()]);
+const mergeById = (...lists) => {
+  const rows = new Map();
+
+  lists.flat().filter((item) => item?.id).forEach((item) => {
+    rows.set(Number(item.id), item);
+  });
+
+  return Array.from(rows.values());
+};
 
 const rowHasValue = (row, keys) => keys.some((key) => {
   const value = row?.[key];
@@ -209,7 +218,7 @@ export default function OrderEdit() {
     return `Parsed ${passengerCount} passenger(s) and ${segmentCount} flight segment(s).`;
   }, [parseResult]);
 
-  const customerOptions = customers.map((customer) => ({
+  const customerOptions = mergeById(customers, order?.customer ? [order.customer] : []).map((customer) => ({
     value: customer.id,
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
   }));
@@ -278,7 +287,9 @@ export default function OrderEdit() {
       });
 
       if (!response.ok) throw new Error('Unable to load customers');
-      setCustomers(await response.json());
+      const data = await response.json();
+      const selectedCustomerId = Number(form.getFieldValue('customer_id'));
+      setCustomers((current) => mergeById(data, current.filter((customer) => Number(customer.id) === selectedCustomerId)));
     } catch (error) {
       message.error(error.message || 'Unable to load customers');
     }
@@ -320,6 +331,9 @@ export default function OrderEdit() {
         const detail = await response.json();
         if (cancelled) return;
         setOrder(detail);
+        if (detail.customer?.id) {
+          setCustomers((current) => mergeById([detail.customer], current));
+        }
         setVoucher(voucherFromOrder(detail));
         form.setFieldsValue({
           customer_id: detail.customer?.id || detail.customer_id,

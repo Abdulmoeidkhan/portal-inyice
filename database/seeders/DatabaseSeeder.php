@@ -59,7 +59,7 @@ class DatabaseSeeder extends Seeder
             'tenant_id' => $tenant->id,
             'company_id' => $company->id,
             'role_id' => $ownerRole->id,
-            'name' => 'Owner User',
+            'name' => 'Owner',
             'password' => 'password123',
             'email_verified_at' => now(),
             'is_active' => true,
