@@ -57,12 +57,8 @@ export default function VendorStatement() {
     { title: 'Type', dataIndex: 'type', render: (value) => <Tag color={String(value).includes('payment') ? 'green' : 'orange'}>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     { title: 'Reference', dataIndex: 'reference', key: 'reference' },
     { title: 'Narration', dataIndex: 'description', key: 'description' },
-    { title: 'Payables', dataIndex: 'vendor_payables', align: 'right', render: money },
-    { title: 'Refunds', dataIndex: 'vendor_refunds', align: 'right', render: money },
-    { title: 'Payments', dataIndex: 'vendor_payments', align: 'right', render: money },
-    { title: 'Receipts', dataIndex: 'vendor_receipts', align: 'right', render: money },
-    { title: 'Payable', dataIndex: 'debit', align: 'right', render: money },
-    { title: 'Paid', dataIndex: 'credit', align: 'right', render: money },
+    { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
+    { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
   const totals = statementTotals(statement?.transactions || []);
@@ -111,10 +107,10 @@ export default function VendorStatement() {
                 pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={8}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={4}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={5} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={6} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
                   </Table.Summary.Row>
                 )}
               />

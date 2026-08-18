@@ -76,10 +76,6 @@ export default function CustomerStatement() {
     { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name' }] : []),
     { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description' },
-    { title: 'Sales', dataIndex: 'sales', align: 'right', render: money },
-    { title: 'Refunds', dataIndex: 'refunds', align: 'right', render: money },
-    { title: 'Receipts', dataIndex: 'customer_receipts', align: 'right', render: money },
-    { title: 'Payments', dataIndex: 'customer_payments', align: 'right', render: money },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
@@ -163,10 +159,10 @@ export default function CustomerStatement() {
                 pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 9 : 8}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 9 : 8} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 10 : 9} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 11 : 10} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 5 : 4}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 5 : 4} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
                   </Table.Summary.Row>
                 )}
               />

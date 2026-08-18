@@ -29,6 +29,7 @@ const nodeToText = (node) => {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(nodeToText).filter(Boolean).join(' ');
   if (React.isValidElement(node)) return nodeToText(node.props?.children);
+  if (typeof node === 'object' && 'children' in node) return nodeToText(node.children);
 
   return String(node);
 };
@@ -52,6 +53,66 @@ const flattenColumns = (columns = []) => columns.flatMap((column) => {
 });
 
 const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+
+const normalizeSortValue = (value) => {
+  const text = nodeToText(value).trim();
+  if (!text) return { type: 'empty', value: '' };
+
+  const numericText = text.replace(/,/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(numericText)) {
+    return { type: 'number', value: Number(numericText) };
+  }
+
+  const timestamp = Date.parse(text);
+  if (!Number.isNaN(timestamp) && /[a-zA-Z]|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/.test(text)) {
+    return { type: 'date', value: timestamp };
+  }
+
+  return { type: 'text', value: text.toLowerCase() };
+};
+
+const compareSortValues = (left, right) => {
+  if (left.type === 'empty' && right.type === 'empty') return 0;
+  if (left.type === 'empty') return 1;
+  if (right.type === 'empty') return -1;
+
+  if (left.type === right.type && (left.type === 'number' || left.type === 'date')) {
+    return left.value - right.value;
+  }
+
+  return String(left.value).localeCompare(String(right.value), undefined, { numeric: true, sensitivity: 'base' });
+};
+
+const columnSortValue = (column, record, rowIndex) => {
+  const rawValue = valueAtPath(record, column.dataIndex);
+  const renderedValue = typeof column.render === 'function'
+    ? column.render(rawValue, record, rowIndex)
+    : rawValue;
+
+  return normalizeSortValue(renderedValue);
+};
+
+const sortableColumn = (column, rows) => {
+  if (column.hidden || column.sorter !== undefined) return column;
+
+  if (Array.isArray(column.children)) {
+    return {
+      ...column,
+      children: column.children.map((child) => sortableColumn(child, rows)),
+    };
+  }
+
+  return {
+    ...column,
+    sorter: (left, right) => compareSortValues(
+      columnSortValue(column, left, rows.indexOf(left)),
+      columnSortValue(column, right, rows.indexOf(right)),
+    ),
+    sortDirections: column.sortDirections || ['ascend', 'descend'],
+  };
+};
+
+const sortableColumns = (columns = [], rows = []) => columns.map((column) => sortableColumn(column, rows));
 
 const downloadCsv = ({ columns, dataSource, fileName }) => {
   const exportColumns = flattenColumns(columns).filter((column) => columnTitle(column));
@@ -87,6 +148,7 @@ const defaultFileName = () => {
 
 function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, ...props }) {
   const rows = Array.isArray(dataSource) ? dataSource : [];
+  const enhancedColumns = React.useMemo(() => sortableColumns(columns, rows), [columns, rows]);
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title
@@ -107,7 +169,7 @@ function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownlo
     )
     : undefined;
 
-  return <AntTable {...props} columns={columns} dataSource={dataSource} title={renderTitle} />;
+  return <AntTable {...props} columns={enhancedColumns} dataSource={dataSource} title={renderTitle} />;
 }
 
 CsvTable.Summary = AntTable.Summary;
