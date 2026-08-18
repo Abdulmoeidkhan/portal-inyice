@@ -147,6 +147,29 @@ class ReportController extends Controller
         return response()->json($report);
     }
 
+    public function discountReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+            'discount_type' => 'nullable|in:amount,percentage',
+            'customer_id' => 'nullable|integer|min:1',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        $report = $this->reportService->discountReport(
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
+            $validated['from_date'],
+            $validated['to_date'],
+            $validated['discount_type'] ?? null,
+            isset($validated['customer_id']) ? (int) $validated['customer_id'] : null,
+            isset($validated['search']) ? trim($validated['search']) : null,
+        );
+
+        return response()->json($report);
+    }
+
     /**
      * Get customer summary report
      */

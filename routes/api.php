@@ -183,6 +183,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
         Route::get('/profit', 'profitReport')->name('reports.profit');
+        Route::get('/discounts', 'discountReport')->name('reports.discounts');
         Route::get('/payments', 'paymentReport')->name('reports.payments');
         Route::get('/receipts', 'receiptReport')->name('reports.receipts');
         Route::get('/customer-summary', 'customerSummaryReport')->name('reports.customerSummary');

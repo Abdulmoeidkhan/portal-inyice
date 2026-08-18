@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use App\Models\InvoiceDiscount;
 use App\Models\InvoiceSettlement;
 use App\Models\Customer;
 use App\Models\Order;
@@ -81,6 +82,94 @@ class ReportService
                 'customer_records' => $records->where('counterparty_type', 'customer')->count(),
                 'vendor_records' => $records->where('counterparty_type', 'vendor')->count(),
                 'by_currency' => $byCurrency->all(),
+            ],
+        ];
+    }
+
+    public function discountReport(
+        int $tenantId,
+        int $companyId,
+        string $fromDate,
+        string $toDate,
+        ?string $discountType = null,
+        ?int $customerId = null,
+        ?string $search = null
+    ): array {
+        $query = InvoiceDiscount::query()
+            ->where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate)
+            ->when($discountType, fn ($q) => $q->where('discount_type', $discountType))
+            ->whereHas('invoice')
+            ->with([
+                'invoice:id,uid,order_id,customer_id,invoice_number,invoice_date,status,currency_code,total_amount',
+                'invoice.customer:id,name',
+                'invoice.order:id,uid,order_number,booking_reference',
+                'createdBy:id,name',
+            ])
+            ->when($customerId, fn ($q) => $q->whereHas('invoice', fn ($invoice) => $invoice->where('customer_id', $customerId)))
+            ->when($search, function ($q, $search): void {
+                $q->where(function ($nested) use ($search): void {
+                    $nested->where('reason', 'like', "%{$search}%")
+                        ->orWhereHas('invoice', function ($invoice) use ($search): void {
+                            $invoice->where('invoice_number', 'like', "%{$search}%")
+                                ->orWhere('status', 'like', "%{$search}%")
+                                ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%"))
+                                ->orWhereHas('order', fn ($order) => $order->where('order_number', 'like', "%{$search}%")->orWhere('booking_reference', 'like', "%{$search}%"));
+                        })
+                        ->orWhereHas('createdBy', fn ($user) => $user->where('name', 'like', "%{$search}%"));
+                });
+            });
+
+        $records = $query->orderByDesc('created_at')->orderByDesc('id')->get()->map(fn (InvoiceDiscount $discount): array => [
+            'key' => 'discount-' . $discount->id,
+            'uid' => $discount->uid,
+            'discount_date' => $discount->created_at?->toDateString(),
+            'invoice_uid' => $discount->invoice?->uid,
+            'invoice_number' => $discount->invoice?->invoice_number,
+            'invoice_date' => $discount->invoice?->invoice_date?->toDateString(),
+            'invoice_status' => $discount->invoice?->status,
+            'order_uid' => $discount->invoice?->order?->uid,
+            'order_number' => $discount->invoice?->order?->order_number,
+            'booking_reference' => $discount->invoice?->order?->booking_reference,
+            'customer_name' => $discount->invoice?->customer?->name,
+            'discount_type' => $discount->discount_type,
+            'percentage' => $discount->percentage === null ? null : (float) $discount->percentage,
+            'amount' => (float) $discount->amount,
+            'currency_code' => $discount->invoice?->currency_code,
+            'invoice_total' => (float) ($discount->invoice?->total_amount ?? 0),
+            'reason' => $discount->reason,
+            'created_by' => $discount->createdBy?->name,
+        ]);
+
+        $byCurrency = $records->groupBy('currency_code')->map(fn (Collection $rows, string $currency) => [
+            'currency_code' => $currency,
+            'amount' => round((float) $rows->sum('amount'), 4),
+            'count' => $rows->count(),
+        ])->values();
+
+        $byType = $records->groupBy('discount_type')->map(fn (Collection $rows, string $type) => [
+            'discount_type' => $type,
+            'amount' => round((float) $rows->sum('amount'), 4),
+            'count' => $rows->count(),
+        ])->values();
+
+        return [
+            'report_date' => now()->toDateString(),
+            'company_id' => $companyId,
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'filters' => [
+                'discount_type' => $discountType,
+                'customer_id' => $customerId,
+                'search' => $search,
+            ],
+            'data' => $records->all(),
+            'summary' => [
+                'total_records' => $records->count(),
+                'total_discount' => round((float) $records->sum('amount'), 4),
+                'by_currency' => $byCurrency->all(),
+                'by_type' => $byType->all(),
             ],
         ];
     }

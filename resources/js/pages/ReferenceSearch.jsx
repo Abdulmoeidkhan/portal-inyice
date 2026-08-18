@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Row, Select, Space, Tabs, Tag, Typography } from 'antd';
-import { ClearOutlined, EyeOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons';
+import { ClearOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
@@ -13,7 +13,6 @@ const folderFields = [
   field('pnr', 'PNR'),
   field('airline_pnr', 'Airline PNR'),
   field('internal_ref', 'Inet Ref'),
-  field('folder_no', 'Folder No'),
   field('order_no', 'Order No'),
   field('lead_passenger', 'Lead Passenger'),
   field('passenger_phone', 'Passenger Phone'),
@@ -32,7 +31,6 @@ const advancedFields = [
   field('invoice_no', 'Invoice No.'),
   field('customer_name', 'Customer Name'),
   field('passenger_name', 'Passenger Name'),
-  field('folder_no', 'Folder No'),
   field('pnr', 'PNR'),
   field('ticket_no', 'Ticket No.'),
   field('destination', 'Destination'),
@@ -120,27 +118,26 @@ export default function ReferenceSearch() {
       title: 'Open',
       key: 'open',
       fixed: 'right',
-      width: 175,
-      render: (_, row) => {
-        if (row.type === 'Invoice') {
-          return (
-            <Button size="small" icon={<EyeOutlined />} disabled={!row.invoice_uid} onClick={() => navigate(`/invoices/${row.invoice_uid}`)}>
-              Open
+      width: 270,
+      render: (_, row) => (
+        <Space wrap size={[6, 6]}>
+          {row.invoice_uid && (
+            <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${row.invoice_uid}`)}>
+              Invoice
             </Button>
-          );
-        }
-
-        return (
-          <Space>
-            <Button size="small" icon={<FileSearchOutlined />} disabled={!row.order_uid} onClick={() => navigate(`/orders/${row.order_uid}/voucher`)}>
+          )}
+          {row.order_uid && (
+            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${row.order_uid}/voucher`)}>
               Voucher
             </Button>
-            <Button size="small" icon={<EyeOutlined />} disabled={!row.order_uid} onClick={() => navigate(`/orders/${row.order_uid}/edit`)}>
+          )}
+          {row.order_uid && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${row.order_uid}/edit`)}>
               Edit
             </Button>
-          </Space>
-        );
-      },
+          )}
+        </Space>
+      ),
     },
   ];
 
@@ -149,7 +146,7 @@ export default function ReferenceSearch() {
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
         <Title level={2} style={{ margin: 0 }}>Reference Search</Title>
         <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-          Search PNRs, invoice numbers, tickets, passengers, customers, folders, amounts, dates, and other references.
+          Search PNRs, invoice numbers, tickets, passengers, customers, amounts, dates, and other references.
         </Paragraph>
       </div>
 

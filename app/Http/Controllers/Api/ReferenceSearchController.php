@@ -22,7 +22,6 @@ class ReferenceSearchController extends Controller
             'pnr' => ['nullable', 'string', 'max:120'],
             'airline_pnr' => ['nullable', 'string', 'max:120'],
             'internal_ref' => ['nullable', 'string', 'max:120'],
-            'folder_no' => ['nullable', 'string', 'max:120'],
             'order_no' => ['nullable', 'string', 'max:120'],
             'lead_passenger' => ['nullable', 'string', 'max:120'],
             'passenger_name' => ['nullable', 'string', 'max:120'],
@@ -96,6 +95,7 @@ class ReferenceSearchController extends Controller
         $query = Order::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
+            ->whereDoesntHave('invoice')
             ->with(['customer:id,name,phone,email,postal_code', 'invoice:id,order_id,uid,invoice_number,status,total_amount,outstanding_amount']);
 
         $this->applyOrderFilters($query, $filters, $terms);
@@ -124,7 +124,7 @@ class ReferenceSearchController extends Controller
         $query = Invoice::query()
             ->where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
-            ->with(['customer:id,name,phone,email,postal_code', 'order:id,uid,order_number,booking_reference']);
+            ->with(['customer:id,name,phone,email,postal_code', 'order:id,uid,order_number,booking_reference,status']);
 
         $this->applyInvoiceFilters($query, $filters, $terms);
 
@@ -135,7 +135,7 @@ class ReferenceSearchController extends Controller
                 'reference' => $invoice->invoice_number,
                 'secondary_reference' => $invoice->order?->order_number ?: $invoice->order?->booking_reference,
                 'customer' => $invoice->customer?->name,
-                'status' => $invoice->status,
+                'status' => $this->invoiceSearchStatus($invoice, $filters),
                 'date' => optional($invoice->invoice_date)->toDateString(),
                 'amount' => (float) $invoice->total_amount,
                 'currency_code' => $invoice->currency_code,
@@ -271,13 +271,13 @@ class ReferenceSearchController extends Controller
             'emergency_contact',
             'notes',
             'gds_source',
+            'status',
             'meta',
         ], $terms);
 
         $this->whereAnyLike($query, ['booking_reference', 'meta'], $filters['pnr'] ?? null);
         $this->whereLike($query, 'meta', $filters['airline_pnr'] ?? null);
         $this->whereLike($query, 'order_number', $filters['order_no'] ?? null);
-        $this->whereAnyLike($query, ['voucher_no', 'order_number', 'booking_reference'], $filters['folder_no'] ?? null);
         $this->whereAnyLike($query, ['notes', 'booking_reference', 'voucher_no'], $filters['internal_ref'] ?? null);
         $this->whereAnyLike($query, ['notes', 'booking_reference', 'voucher_no'], $filters['your_ref'] ?? null);
         $this->whereLike($query, 'meta', $filters['lead_passenger'] ?? null);
@@ -325,8 +325,30 @@ class ReferenceSearchController extends Controller
 
     private function applyInvoiceFilters(Builder $query, array $filters, array $terms): void
     {
-        $this->applyTextSearch($query, ['invoice_number', 'status', 'notes'], $terms);
+        if ($terms !== []) {
+            $query->where(function (Builder $textQuery) use ($terms): void {
+                $this->applyTextSearch($textQuery, ['invoice_number', 'status', 'notes'], $terms);
+
+                foreach ($terms as $term) {
+                    $textQuery->orWhereHas('order', function (Builder $orderQuery) use ($term): void {
+                        $this->whereAnyLike($orderQuery, [
+                            'order_number',
+                            'voucher_no',
+                            'booking_reference',
+                            'package_type',
+                            'emergency_contact',
+                            'notes',
+                            'gds_source',
+                            'status',
+                            'meta',
+                        ], $term);
+                    });
+                }
+            });
+        }
+
         $this->whereLike($query, 'invoice_number', $filters['invoice_no'] ?? null);
+        $this->applyCombinedStatusFilter($query, $filters);
         $this->whereLike($query, 'status', $filters['pay_status'] ?? null);
         $this->applyDateRange($query, $filters, 'invoice_date', 'invoice_date_from', 'invoice_date_to');
         $this->applyAmountRange($query, $filters, 'total_amount');
@@ -338,15 +360,98 @@ class ReferenceSearchController extends Controller
             });
         }
 
-        foreach (['pnr', 'order_no', 'folder_no', 'ticket_no', 'destination', 'passenger_name'] as $key) {
-            if (empty($filters[$key])) {
-                continue;
+        $this->applyInvoiceOrderFilters($query, $filters);
+    }
+
+    private function applyInvoiceOrderFilters(Builder $query, array $filters): void
+    {
+        $orderFilters = [
+            'pnr',
+            'airline_pnr',
+            'internal_ref',
+            'order_no',
+            'lead_passenger',
+            'passenger_name',
+            'passenger_phone',
+            'passenger_email',
+            'passenger_postcode',
+            'ticket_no',
+            'destination',
+            'your_ref',
+            'booked_by',
+            'departure_date_from',
+            'departure_date_to',
+            'creation_date_from',
+            'creation_date_to',
+            'quote_convert_date_from',
+            'quote_convert_date_to',
+        ];
+
+        if (!collect($orderFilters)->contains(fn (string $key): bool => !empty($filters[$key]))) {
+            return;
+        }
+
+        $query->whereHas('order', function (Builder $orderQuery) use ($filters): void {
+            $this->whereAnyLike($orderQuery, ['booking_reference', 'meta'], $filters['pnr'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['airline_pnr'] ?? null);
+            $this->whereLike($orderQuery, 'order_number', $filters['order_no'] ?? null);
+            $this->whereAnyLike($orderQuery, ['notes', 'booking_reference', 'voucher_no'], $filters['internal_ref'] ?? null);
+            $this->whereAnyLike($orderQuery, ['notes', 'booking_reference', 'voucher_no'], $filters['your_ref'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['lead_passenger'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['passenger_name'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['passenger_phone'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['passenger_email'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['passenger_postcode'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['destination'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['departure_date_from'] ?? null);
+            $this->whereLike($orderQuery, 'meta', $filters['departure_date_to'] ?? null);
+            $this->whereLike($orderQuery, 'created_by_user_id', $filters['booked_by'] ?? null);
+
+            if (!empty($filters['ticket_no'])) {
+                $orderQuery->where(function (Builder $ticketQuery) use ($filters): void {
+                    $this->orWhereLike($ticketQuery, 'meta', $filters['ticket_no']);
+                    $ticketQuery->orWhereHas('items', function (Builder $itemQuery) use ($filters): void {
+                        $this->whereAnyLike($itemQuery, ['description', 'gds_data'], $filters['ticket_no']);
+                    });
+                });
             }
 
-            $query->whereHas('order', function (Builder $orderQuery) use ($filters, $key): void {
-                $this->whereAnyLike($orderQuery, ['order_number', 'booking_reference', 'voucher_no', 'meta'], $filters[$key]);
-            });
+            $this->applyDateRange($orderQuery, $filters, 'created_at', 'creation_date_from', 'creation_date_to');
+            $this->applyDateRange($orderQuery, $filters, 'updated_at', 'quote_convert_date_from', 'quote_convert_date_to');
+        });
+    }
+
+    private function applyCombinedStatusFilter(Builder $query, array $filters): void
+    {
+        if (empty($filters['status'])) {
+            return;
         }
+
+        $query->where(function (Builder $statusQuery) use ($filters): void {
+            $this->whereLike($statusQuery, 'status', $filters['status']);
+            $statusQuery->orWhereHas('order', function (Builder $orderQuery) use ($filters): void {
+                $this->whereLike($orderQuery, 'status', $filters['status']);
+            });
+        });
+    }
+
+    private function invoiceSearchStatus(Invoice $invoice, array $filters): ?string
+    {
+        $status = trim((string) ($filters['status'] ?? ''));
+
+        if ($status === '') {
+            return $invoice->status;
+        }
+
+        if (stripos((string) $invoice->status, $status) !== false) {
+            return $invoice->status;
+        }
+
+        if ($invoice->order && stripos((string) $invoice->order->status, $status) !== false) {
+            return $invoice->order->status;
+        }
+
+        return $invoice->status;
     }
 
     private function applyPeopleFilters(Builder $query, array $filters, array $terms): void

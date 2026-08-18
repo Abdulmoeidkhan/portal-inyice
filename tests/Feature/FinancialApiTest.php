@@ -148,6 +148,17 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('data.0.discount', 200)
             ->assertJsonPath('data.0.profit', 800);
 
+        $this->getJson('/api/v1/reports/discounts?from_date=2020-01-01&to_date=2030-12-31&discount_type=percentage&customer_id=' . $ctx['customer']->id . '&search=Manager')
+            ->assertOk()
+            ->assertJsonPath('summary.total_records', 1)
+            ->assertJsonPath('summary.total_discount', 200)
+            ->assertJsonPath('data.0.invoice_number', $invoice['invoice_number'])
+            ->assertJsonPath('data.0.order_number', $ctx['order']->order_number)
+            ->assertJsonPath('data.0.customer_name', 'Test Customer')
+            ->assertJsonPath('data.0.discount_type', 'percentage')
+            ->assertJsonPath('data.0.amount', 200)
+            ->assertJsonPath('data.0.reason', 'Manager approval');
+
         $this->deleteJson('/api/v1/invoices/' . $invoice['uid'] . '/discounts/' . $discount['uid'])
             ->assertOk()
             ->assertJsonPath('invoice.total_amount', '1000.0000')
@@ -1106,17 +1117,49 @@ class FinancialApiTest extends TestCase
             'order_id' => $ctx['order']->id,
         ])->assertCreated()->json('invoice');
 
-        $this->getJson('/api/v1/reference-search?pnr=REFPNR1')
+        $pnrResults = $this->getJson('/api/v1/reference-search?pnr=REFPNR1')
             ->assertOk()
-            ->assertJsonFragment(['type' => 'Order', 'reference' => $ctx['order']->order_number]);
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']])
+            ->json('data');
+
+        $this->assertFalse(collect($pnrResults)->contains(fn (array $row): bool => $row['type'] === 'Order' && $row['reference'] === $ctx['order']->order_number));
 
         $this->getJson('/api/v1/reference-search?invoice_no=' . urlencode($invoice['invoice_number']))
             ->assertOk()
             ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
 
-        $this->getJson('/api/v1/reference-search?ticket_no=TICKET-778899')
+        $this->getJson('/api/v1/reference-search?order_no=' . urlencode($ctx['order']->order_number))
             ->assertOk()
-            ->assertJsonFragment(['reference' => $ctx['order']->order_number]);
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
+
+        $this->getJson('/api/v1/reference-search?q=' . urlencode($ctx['order']->order_number))
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
+
+        $this->getJson('/api/v1/reference-search?q=invoice')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
+
+        $ticketResults = $this->getJson('/api/v1/reference-search?ticket_no=TICKET-778899')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']])
+            ->json('data');
+
+        $this->assertFalse(collect($ticketResults)->contains(fn (array $row): bool => $row['type'] === 'Order' && $row['reference'] === $ctx['order']->order_number));
+
+        $this->getJson('/api/v1/reference-search?passenger_phone=03001234567')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number']]);
+
+        $this->getJson('/api/v1/reference-search?status=issued')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number'], 'status' => 'issued']);
+
+        $ctx['order']->update(['status' => 'cancel']);
+
+        $this->getJson('/api/v1/reference-search?status=cancel')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'Invoice', 'reference' => $invoice['invoice_number'], 'status' => 'cancel']);
 
         $this->getJson('/api/v1/reference-search?q=' . urlencode($ctx['customer']->name))
             ->assertOk()
