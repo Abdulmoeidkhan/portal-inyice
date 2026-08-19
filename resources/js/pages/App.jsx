@@ -135,7 +135,7 @@ const NotFound = () => (
   </div>
 );
 
-function useAuthToken() {
+function getAuthToken() {
   return localStorage.getItem('auth_token') || localStorage.getItem('token');
 }
 
@@ -430,7 +430,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   }, [location.pathname]);
 
   useEffect(() => {
-    const token = useAuthToken();
+    const token = getAuthToken();
     if (!token) return;
 
     fetch('/api/v1/company-profile', {
@@ -484,7 +484,6 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
     <>
       <div className="brand-block">
         <div className="brand-glow" />
-        {/* <img className="brand-logo" src="/images/icons/icon-512x512.png" alt="InYice OS" /> */}
         <h2>InYice OS</h2>
         <Text className="brand-caption">Travel Finance OS</Text>
       </div>
@@ -628,13 +627,13 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (useAuthToken() && hasAuthIdleExpired()) {
+    if (getAuthToken() && hasAuthIdleExpired()) {
       clearAuthStorage();
-    } else if (useAuthToken()) {
+    } else if (getAuthToken()) {
       markAuthActivity(true);
     }
 
-    setIsAuthenticated(!!useAuthToken());
+    setIsAuthenticated(!!getAuthToken());
     setLoading(false);
   }, []);
 
@@ -650,7 +649,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
   }, [navigate]);
 
   const handleLogout = useCallback(async ({ revokeToken = true } = {}) => {
-    const token = useAuthToken();
+    const token = getAuthToken();
 
     try {
       if (token && revokeToken) {
@@ -674,7 +673,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       const response = await originalFetch(...args);
 
       if (
-        useAuthToken()
+        getAuthToken()
         && isProtectedApiRequest(args[0])
         && [401, 419].includes(response.status)
       ) {

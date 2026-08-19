@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -152,7 +153,7 @@ class CompanyUserController extends Controller
 
     private function effectiveUserLimit(?int $configuredLimit): int
     {
-        return max((int) ($configuredLimit ?: 2), 1);
+        return max((int) ($configuredLimit ?: Company::DEFAULT_USER_LIMIT), 1);
     }
 
     private function availableRoles(int $tenantId)

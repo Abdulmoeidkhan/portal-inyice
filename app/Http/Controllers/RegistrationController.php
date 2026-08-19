@@ -81,7 +81,7 @@ class RegistrationController extends Controller
                     'default_timezone' => $validated['timezone'],
                     'monthly_invoice_limit' => null,
                     'order_limit' => null,
-                    'user_limit' => 2,
+                    'user_limit' => Company::DEFAULT_USER_LIMIT,
                     'is_paid' => false,
                     'sales_can_edit_cost' => false,
                     'is_active' => true,

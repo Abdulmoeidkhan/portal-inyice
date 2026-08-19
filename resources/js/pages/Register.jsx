@@ -59,8 +59,8 @@ export default function Register({ onRegistered }) {
         const tzData = await tzRes.json();
         setTimezones(tzData);
       }
-    } catch (error) {
-      console.error('Failed to load options:', error);
+    } catch {
+      message.warning('Could not load registration options. Please refresh and try again.');
     }
   };
 
@@ -79,8 +79,7 @@ export default function Register({ onRegistered }) {
       if (normalizeAgencyCode(form.getFieldValue('agency_code')).trim() === code) {
         setAgencyCodeAvailable(data.available);
       }
-    } catch (error) {
-      console.error('Error checking code:', error);
+    } catch {
       setAgencyCodeAvailable(null);
     }
   };
@@ -102,7 +101,6 @@ export default function Register({ onRegistered }) {
       setFormData({ ...formData, ...values });
 
       if (current === 2) {
-        // Submit registration
         await submitRegistration({ ...formData, ...values });
       } else {
         setCurrent(current + 1);

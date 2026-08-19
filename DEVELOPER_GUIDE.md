@@ -124,7 +124,7 @@ Company user management:
 - `GET /api/v1/company-users`
 - `POST /api/v1/company-users`
 
-Only owner/admin users can list and create company users. New company users can be assigned `admin`, `sales`, or `accounts`. The company `user_limit` controls capacity; the default is 4 users unless changed by the internal portal.
+Only owner/admin users can list and create company users. New company users can be assigned `admin`, `sales`, or `accounts`. The company `user_limit` controls capacity; the default is 2 users unless changed by the internal portal.
 
 ## Multi-Tenant Rules
 

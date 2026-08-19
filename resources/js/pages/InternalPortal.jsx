@@ -54,7 +54,10 @@ const authHeaders = (json = false) => {
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
 const limitLabel = (value) => value ?? 'Unlimited';
+const DEFAULT_USER_LIMIT = 2;
+const MAX_USER_LIMIT = 500;
 const seatLimit = (company) => Math.max(Number(company?.counts?.users || 1), 1);
+const seatLimitMax = (company) => (company?.is_paid ? MAX_USER_LIMIT : DEFAULT_USER_LIMIT);
 
 function RecordTable({ data, columns }) {
   return (
@@ -713,7 +716,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           >
                             <InputNumber
                               min={seatLimit(detail)}
-                              max={500}
+                              max={seatLimitMax(detail)}
                               step={1}
                               precision={0}
                               disabled={savingLimits}

@@ -74,7 +74,7 @@ class InternalPortalController extends Controller
         $validated = $request->validate([
             'monthly_invoice_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
             'order_limit' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
-            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
+            'user_limit' => ['sometimes', 'integer', 'min:1', 'max:'.Company::MAX_USER_LIMIT],
             'is_paid' => ['sometimes', 'boolean'],
             'sales_can_edit_cost' => ['sometimes', 'boolean'],
         ]);
@@ -83,11 +83,22 @@ class InternalPortalController extends Controller
         $validated['order_limit'] = null;
 
         if (array_key_exists('user_limit', $validated)) {
+            $requestedUserLimit = (int) $validated['user_limit'];
+            $isPaid = array_key_exists('is_paid', $validated)
+                ? (bool) $validated['is_paid']
+                : (bool) $company->is_paid;
+
+            if (!$isPaid && $requestedUserLimit > Company::DEFAULT_USER_LIMIT) {
+                return response()->json([
+                    'error' => 'Unpaid companies are limited to '.Company::DEFAULT_USER_LIMIT.' users.',
+                ], 422);
+            }
+
             $currentUsers = User::withoutGlobalScopes()
                 ->where('company_id', $company->id)
                 ->count();
 
-            if ((int) $validated['user_limit'] < $currentUsers) {
+            if ($requestedUserLimit < $currentUsers) {
                 return response()->json([
                     'error' => "User limit cannot be lower than the company's current {$currentUsers} users.",
                 ], 422);
@@ -302,7 +313,7 @@ class InternalPortalController extends Controller
             'base_currency_code' => $company->base_currency_code,
             'monthly_invoice_limit' => $company->monthly_invoice_limit,
             'order_limit' => $company->order_limit,
-            'user_limit' => (int) ($company->user_limit ?: 2),
+            'user_limit' => (int) ($company->user_limit ?: Company::DEFAULT_USER_LIMIT),
             'is_paid' => (bool) $company->is_paid,
             'sales_can_edit_cost' => (bool) $company->sales_can_edit_cost,
             'is_active' => (bool) $company->is_active,
@@ -408,7 +419,7 @@ class InternalPortalController extends Controller
                 'default_timezone' => 'UTC',
                 'monthly_invoice_limit' => null,
                 'order_limit' => null,
-                'user_limit' => 2,
+                'user_limit' => Company::DEFAULT_USER_LIMIT,
                 'is_paid' => true,
                 'sales_can_edit_cost' => true,
                 'is_active' => true,

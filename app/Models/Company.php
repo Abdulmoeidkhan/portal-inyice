@@ -13,6 +13,10 @@ class Company extends Model
 {
     use HasFactory, TenantAware;
 
+    public const DEFAULT_USER_LIMIT = 2;
+
+    public const MAX_USER_LIMIT = 500;
+
     protected $fillable = [
         'tenant_id',
         'uid',
@@ -51,7 +55,7 @@ class Company extends Model
     protected static function booted(): void
     {
         static::creating(function (Company $company): void {
-            $company->user_limit ??= 2;
+            $company->user_limit ??= self::DEFAULT_USER_LIMIT;
             $company->is_paid ??= false;
             $company->sales_can_edit_cost ??= false;
         });

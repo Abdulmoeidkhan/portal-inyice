@@ -223,17 +223,6 @@ body {
   overflow: hidden;
 }
 
-.brand-logo {
-  position: relative;
-  display: block;
-  width: 138px;
-  max-width: 100%;
-  height: 44px;
-  margin: 0 0 10px -8px;
-  object-fit: contain;
-  object-position: left center;
-}
-
 .brand-block h2 {
   color: var(--app-text);
   margin: 0;
@@ -2353,7 +2342,6 @@ body {
   background: radial-gradient(circle, rgba(14, 165, 161, 0.3), transparent 68%);
 }
 
-[data-theme='dark'] .brand-logo,
 [data-theme='dark'] .auth-logo {
   filter: invert(1) brightness(1.35);
 }
