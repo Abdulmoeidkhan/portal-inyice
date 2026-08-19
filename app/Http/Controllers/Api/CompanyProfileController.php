@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Storage;
 
 class CompanyProfileController extends Controller
 {
+    private const ALLOWED_IMAGE_EXTENSIONS = 'jpg,jpeg,png,webp';
+    private const ALLOWED_IMAGE_MIME_TYPES = 'image/jpeg,image/png,image/webp';
+
     public function show(Request $request): JsonResponse
     {
         $company = Company::query()
@@ -38,8 +41,8 @@ class CompanyProfileController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'],
             'default_timezone' => ['required', 'timezone'],
             'sales_can_edit_cost' => ['sometimes', 'boolean'],
-            'logo' => ['nullable', 'image', 'max:2048'],
-            'footer_logo' => ['nullable', 'image', 'max:2048'],
+            'logo' => $this->imageUploadRules(),
+            'footer_logo' => $this->imageUploadRules(),
         ]);
 
         $company->fill([
@@ -79,6 +82,22 @@ class CompanyProfileController extends Controller
         }
 
         return $request->file($field)->store("company-assets/{$companyId}", 'public');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function imageUploadRules(): array
+    {
+        return [
+            'nullable',
+            'file',
+            'image',
+            'mimes:' . self::ALLOWED_IMAGE_EXTENSIONS,
+            'mimetypes:' . self::ALLOWED_IMAGE_MIME_TYPES,
+            'extensions:' . self::ALLOWED_IMAGE_EXTENSIONS,
+            'max:2048',
+        ];
     }
 
     private function serializeCompany(Company $company): array

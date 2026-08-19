@@ -5,6 +5,9 @@
 
     RewriteEngine On
 
+    # Block executable files everywhere under public except Laravel's front controller.
+    RewriteRule (?i)^(?!index\.php$).*\.(?:php[0-9]?|phtml|phar|cgi|pl|py|sh|bat|cmd|exe|dll)$ - [F,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

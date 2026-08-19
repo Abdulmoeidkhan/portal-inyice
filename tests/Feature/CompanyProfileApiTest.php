@@ -23,17 +23,10 @@ class CompanyProfileApiTest extends TestCase
         $ctx = $this->seedCompanyContext('owner');
         Sanctum::actingAs($ctx['user']);
 
-        $response = $this->post('/api/v1/company-profile', [
-            'legal_name' => 'Updated Legal Travel',
-            'display_name' => 'Updated Travel',
-            'email' => 'updated@test.local',
-            'phone' => '+92-300-9999999',
-            'address' => 'Updated address',
-            'country_code' => 'pk',
-            'default_timezone' => 'Asia/Karachi',
+        $response = $this->post('/api/v1/company-profile', $this->validProfilePayload([
             'logo' => UploadedFile::fake()->image('logo.png', 240, 120),
             'footer_logo' => UploadedFile::fake()->image('qr.png', 180, 180),
-        ], ['Accept' => 'application/json']);
+        ]), ['Accept' => 'application/json']);
 
         $response->assertOk()
             ->assertJsonPath('company.display_name', 'Updated Travel')
@@ -44,6 +37,28 @@ class CompanyProfileApiTest extends TestCase
         $this->assertNotNull($company->footer_logo_path);
         Storage::disk('public')->assertExists($company->logo_path);
         Storage::disk('public')->assertExists($company->footer_logo_path);
+    }
+
+    public function test_company_profile_rejects_disallowed_brand_asset_upload_types(): void
+    {
+        Storage::fake('public');
+        $ctx = $this->seedCompanyContext('owner');
+        Sanctum::actingAs($ctx['user']);
+
+        $this->post('/api/v1/company-profile', $this->validProfilePayload([
+            'logo' => UploadedFile::fake()->create('shell.php', 1, 'application/x-php'),
+        ]), ['Accept' => 'application/json'])->assertUnprocessable()
+            ->assertJsonValidationErrors('logo');
+
+        $this->post('/api/v1/company-profile', $this->validProfilePayload([
+            'logo' => UploadedFile::fake()->image('logo.gif'),
+        ]), ['Accept' => 'application/json'])->assertUnprocessable()
+            ->assertJsonValidationErrors('logo');
+
+        $this->post('/api/v1/company-profile', $this->validProfilePayload([
+            'footer_logo' => UploadedFile::fake()->create('footer.pdf', 100, 'application/pdf'),
+        ]), ['Accept' => 'application/json'])->assertUnprocessable()
+            ->assertJsonValidationErrors('footer_logo');
     }
 
     public function test_non_owner_cannot_update_company_profile(): void
@@ -130,5 +145,22 @@ class CompanyProfileApiTest extends TestCase
             'role' => $role,
             'user' => $user,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function validProfilePayload(array $overrides = []): array
+    {
+        return array_merge([
+            'legal_name' => 'Updated Legal Travel',
+            'display_name' => 'Updated Travel',
+            'email' => 'updated@test.local',
+            'phone' => '+92-300-9999999',
+            'address' => 'Updated address',
+            'country_code' => 'pk',
+            'default_timezone' => 'Asia/Karachi',
+        ], $overrides);
     }
 }

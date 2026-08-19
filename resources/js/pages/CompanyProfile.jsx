@@ -96,9 +96,18 @@ export default function CompanyProfile() {
     }
   };
 
+  const allowedImageTypes = 'image/jpeg,image/png,image/webp';
+  const allowedImageExtensions = '.jpg,.jpeg,.png,.webp';
+
   const uploadProps = (setter) => ({
     maxCount: 1,
+    accept: allowedImageExtensions,
     beforeUpload: (file) => {
+      if (!allowedImageTypes.split(',').includes(file.type)) {
+        message.error('Only JPG, PNG, and WEBP images are allowed');
+        return Upload.LIST_IGNORE;
+      }
+
       setter(file);
       return false;
     },
@@ -194,14 +203,14 @@ export default function CompanyProfile() {
                   </Col>
                   <Col xs={24} md={12}>
                     <Form.Item label="Header Logo">
-                      <Upload {...uploadProps(setLogoFile)} accept="image/*">
+                      <Upload {...uploadProps(setLogoFile)}>
                         <Button icon={<UploadOutlined />}>Choose Logo</Button>
                       </Upload>
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={12}>
                     <Form.Item label="Voucher Footer Logo / QR">
-                      <Upload {...uploadProps(setFooterLogoFile)} accept="image/*">
+                      <Upload {...uploadProps(setFooterLogoFile)}>
                         <Button icon={<UploadOutlined />}>Choose Footer Asset</Button>
                       </Upload>
                     </Form.Item>
