@@ -1266,6 +1266,7 @@ class OrderController extends Controller
             'unit_price' => 0,
             'total_price' => 0,
         ]);
+        $this->invoiceService->releaseReceiptAllocations($invoice);
 
         $invoice->update([
             'subtotal' => 0,
@@ -1291,6 +1292,7 @@ class OrderController extends Controller
             'unit_price' => 0,
             'total_price' => 0,
         ]);
+        $this->invoiceService->releaseReceiptAllocations($invoice);
 
         $invoice->update([
             'subtotal' => 0,

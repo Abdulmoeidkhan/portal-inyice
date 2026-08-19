@@ -11,7 +11,6 @@ import {
   Modal,
   Popconfirm,
   Select,
-  Segmented,
   Space,
   Switch,
   Tabs,
@@ -26,18 +25,17 @@ import {
   DollarCircleOutlined,
   LockOutlined,
   LogoutOutlined,
-  MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   StopOutlined,
-  SunOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import ThemeMenuButton from '../components/ThemeMenuButton';
 import VoucherPreview from './sales-flow/VoucherPreview';
 import CancelledReport from './CancelledReport';
 import Table from '../components/CsvTable';
@@ -71,7 +69,7 @@ function RecordTable({ data, columns }) {
   );
 }
 
-export default function InternalPortal({ onLogout, themeMode, themeStyle, onChangeThemeStyle, onToggleTheme }) {
+export default function InternalPortal({ onLogout, themeMode, themeStyle, onChangeThemeMode, onChangeThemeStyle }) {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const [companies, setCompanies] = useState([]);
   const [selectedUid, setSelectedUid] = useState(null);
@@ -573,23 +571,12 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
             </div>
           </Space>
           <Space className="internal-header-actions">
-            <Segmented
-              size="small"
-              value={themeStyle}
-              onChange={onChangeThemeStyle}
-              options={[
-                { label: 'Ocean', value: 'ocean' },
-                { label: 'Slate', value: 'slate' },
-                { label: 'Sand', value: 'sand' },
-              ]}
+            <ThemeMenuButton
+              themeMode={themeMode}
+              themeStyle={themeStyle}
+              onChangeThemeMode={onChangeThemeMode}
+              onChangeThemeStyle={onChangeThemeStyle}
             />
-            <Button
-              className="theme-toggle-btn"
-              icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-              onClick={onToggleTheme}
-            >
-              <span className="button-label">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
-            </Button>
             <Tag color="purple">{currentUser.role_name || currentUser.role}</Tag>
             <Button icon={<LogoutOutlined />} onClick={onLogout}>Logout</Button>
           </Space>

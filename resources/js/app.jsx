@@ -7,6 +7,7 @@ import enUS from 'antd/locale/en_US';
 import '../css/app.css';
 import MainApp from './pages/App';
 import { setFeedbackMessage } from './services/feedback';
+import { THEME_STYLE_TOKENS } from './themeOptions';
 
 const container = document.getElementById('root');
 const root = window.__inyiceRoot || ReactDOM.createRoot(container);
@@ -43,13 +44,7 @@ function RootApp() {
   }, [compactTheme]);
 
   const styleTokens = useMemo(() => {
-    const tokenMap = {
-      ocean: { colorPrimary: '#1f7ae0' },
-      slate: { colorPrimary: '#64748b' },
-      sand: { colorPrimary: '#b97316' },
-    };
-
-    return tokenMap[themeStyle] || tokenMap.ocean;
+    return THEME_STYLE_TOKENS[themeStyle] || THEME_STYLE_TOKENS.ocean;
   }, [themeStyle]);
 
   const readabilityTokens = useMemo(() => {
@@ -80,7 +75,7 @@ function RootApp() {
         token: {
           fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
           borderRadius: 12,
-          colorPrimary: styleTokens.colorPrimary,
+          ...styleTokens,
           ...readabilityTokens,
         },
       }}
@@ -92,8 +87,8 @@ function RootApp() {
             themeMode={themeMode}
             themeStyle={themeStyle}
             compactTheme={compactTheme}
+            onChangeThemeMode={setThemeMode}
             onChangeThemeStyle={setThemeStyle}
-            onToggleTheme={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
             onToggleCompactTheme={() => setCompactTheme((prev) => !prev)}
           />
         </BrowserRouter>

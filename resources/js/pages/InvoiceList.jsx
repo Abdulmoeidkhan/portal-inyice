@@ -575,6 +575,7 @@ export default function InvoiceList() {
         <Input.TextArea maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
       </Modal>
       <Modal
+        className="discounts-modal"
         title={`Discounts · ${discountInvoice?.invoice_number || ''}`}
         open={!!discountInvoice}
         onCancel={() => {
@@ -624,44 +625,48 @@ export default function InvoiceList() {
           <Typography.Text strong>{editingDiscount ? 'Edit discount' : 'New discount'}</Typography.Text>
           {editingDiscount && <Button size="small" icon={<PlusOutlined />} onClick={resetDiscountForm}>New discount</Button>}
         </div>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={10}>
-            <Typography.Text strong>Discount type</Typography.Text>
-            <Segmented
-              block
-              options={[
-                { label: 'Amount', value: 'amount' },
-                { label: 'Percentage', value: 'percentage' },
-              ]}
-              value={discountType}
-              onChange={(value) => {
-                setDiscountType(value);
-                setDiscountAmount(0);
-              }}
-              style={{ marginTop: 6 }}
-            />
+        <Row className="discount-editor-grid" gutter={[12, 12]}>
+          <Col xs={24} md={12}>
+            <div className="discount-editor-field">
+              <Typography.Text strong>Discount type</Typography.Text>
+              <Segmented
+                block
+                options={[
+                  { label: 'Amount', value: 'amount' },
+                  { label: 'Percentage', value: 'percentage' },
+                ]}
+                value={discountType}
+                onChange={(value) => {
+                  setDiscountType(value);
+                  setDiscountAmount(0);
+                }}
+              />
+            </div>
           </Col>
-          <Col xs={24} md={14}>
-            <Typography.Text strong>{discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Typography.Text>
-            <InputNumber
-              style={{ width: '100%', marginTop: 6 }}
-              min={0.01}
-              max={discountInputLimit}
-              precision={2}
-              addonAfter={discountType === 'percentage' ? '%' : discountInvoice?.currency_code}
-              value={discountAmount}
-              onChange={(value) => setDiscountAmount(Number(value || 0))}
-            />
+          <Col xs={24} md={12}>
+            <div className="discount-editor-field">
+              <Typography.Text strong>{discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Typography.Text>
+              <InputNumber
+                className="discount-value-input"
+                min={0.01}
+                max={discountInputLimit}
+                precision={2}
+                addonAfter={discountType === 'percentage' ? '%' : discountInvoice?.currency_code}
+                value={discountAmount}
+                onChange={(value) => setDiscountAmount(Number(value || 0))}
+              />
+            </div>
           </Col>
           <Col span={24}>
-            <Typography.Text strong>Reason</Typography.Text>
-            <Input.TextArea
-              maxLength={500}
-              rows={3}
-              style={{ marginTop: 6 }}
-              value={discountReason}
-              onChange={(event) => setDiscountReason(event.target.value)}
-            />
+            <div className="discount-editor-field">
+              <Typography.Text strong>Reason</Typography.Text>
+              <Input.TextArea
+                maxLength={500}
+                rows={3}
+                value={discountReason}
+                onChange={(event) => setDiscountReason(event.target.value)}
+              />
+            </div>
           </Col>
         </Row>
       </Modal>

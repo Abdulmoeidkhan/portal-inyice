@@ -556,6 +556,7 @@ class InvoiceController extends Controller
                 'status' => 'cancel',
                 'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote,
             ]);
+            $this->invoiceService->releaseReceiptAllocations($invoice);
             $invoice->order()->update(['status' => 'cancel']);
 
             return response()->json([

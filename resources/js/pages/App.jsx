@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, Segmented, FloatButton, Drawer, Modal } from 'antd';
+import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Modal } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -15,8 +15,6 @@ import {
   UsergroupAddOutlined,
   LogoutOutlined,
   UserOutlined,
-  SunOutlined,
-  MoonOutlined,
   MenuOutlined,
   CompressOutlined,
   ExpandOutlined,
@@ -26,6 +24,7 @@ import {
   SwapOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import ThemeMenuButton from '../components/ThemeMenuButton';
 
 // Components
 import InvoiceList from './InvoiceList';
@@ -375,7 +374,7 @@ function AppCalculator({ open, onClose }) {
   );
 }
 
-function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compactTheme, onChangeThemeStyle, onToggleTheme, onToggleCompactTheme }) {
+function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compactTheme, onChangeThemeMode, onChangeThemeStyle, onToggleCompactTheme }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -535,24 +534,12 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             onClick={() => setMobileNavOpen(true)}
           />
           <Space className="header-actions" size="small">
-            <Segmented
-              size="small"
-              value={themeStyle}
-              onChange={onChangeThemeStyle}
-              options={[
-                { label: 'Ocean', value: 'ocean' },
-                { label: 'Slate', value: 'slate' },
-                { label: 'Sand', value: 'sand' },
-              ]}
+            <ThemeMenuButton
+              themeMode={themeMode}
+              themeStyle={themeStyle}
+              onChangeThemeMode={onChangeThemeMode}
+              onChangeThemeStyle={onChangeThemeStyle}
             />
-            <Button
-              className="theme-toggle-btn"
-              type="default"
-              icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-              onClick={onToggleTheme}
-            >
-              <span className="button-label">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
-            </Button>
             <Dropdown menu={{ items: profileMenu }} trigger={['click']}>
               <Button type="text" className="profile-btn">
                 <Space>
@@ -635,7 +622,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   );
 }
 
-export default function App({ themeMode, themeStyle, compactTheme, onChangeThemeStyle, onToggleTheme, onToggleCompactTheme }) {
+export default function App({ themeMode, themeStyle, compactTheme, onChangeThemeMode, onChangeThemeStyle, onToggleCompactTheme }) {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
@@ -946,8 +933,8 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         onLogout={handleLogout}
         themeMode={themeMode}
         themeStyle={themeStyle}
+        onChangeThemeMode={onChangeThemeMode}
         onChangeThemeStyle={onChangeThemeStyle}
-        onToggleTheme={onToggleTheme}
       />
     );
 
@@ -972,7 +959,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeStyle={onChangeThemeStyle} onToggleTheme={onToggleTheme} onToggleCompactTheme={onToggleCompactTheme} />} />
+      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} />} />
     </Routes>
   );
 }

@@ -282,6 +282,13 @@ class FinancialApiTest extends TestCase
             'order_id' => $ctx['order']->id,
         ])->assertCreated()->json('invoice');
 
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $originalInvoice['uid'],
+            'amount' => 400,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+        $receipt = Receipt::where('customer_id', $ctx['customer']->id)->firstOrFail();
+
         $payload = [
             'customer_id' => $ctx['customer']->id,
             'status' => 'invoice',
@@ -336,6 +343,15 @@ class FinancialApiTest extends TestCase
             'status' => 'order',
             'total_amount' => 1250,
         ]);
+        $this->assertDatabaseMissing('invoice_settlements', [
+            'invoice_id' => $originalInvoice['id'],
+            'reference_document_id' => $receipt->id,
+            'reference_document_type' => Receipt::class,
+        ]);
+        $this->getJson('/api/v1/receipts/customer')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $receipt->uid)
+            ->assertJsonPath('data.0.remaining_amount', 400);
         $this->assertSame(1, Invoice::count());
         $this->assertDatabaseHas('invoice_lines', [
             'invoice_id' => Invoice::where('uid', $originalInvoice['uid'])->value('id'),
@@ -371,6 +387,19 @@ class FinancialApiTest extends TestCase
             'status' => 'issued',
             'total_amount' => 1250,
             'outstanding_amount' => 1250,
+        ]);
+
+        $this->postJson('/api/v1/receipts/customer/' . $receipt->uid . '/allocate-advance', [
+            'date' => '2026-06-20',
+            'allocations' => [
+                ['invoice_id' => $manualInvoice['id'], 'amount' => 400],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('receipt.settlements.0.invoice.invoice_number', $manualInvoice['invoice_number']);
+        $this->assertDatabaseHas('invoices', [
+            'id' => $manualInvoice['id'],
+            'status' => 'partial_paid',
+            'outstanding_amount' => 850,
         ]);
     }
 

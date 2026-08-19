@@ -60,6 +60,72 @@
   --aurora-c: #c084fc;
 }
 
+[data-style='material'] {
+  --app-bg: #eef6fd;
+  --app-surface: #ffffff;
+  --app-surface-2: #f5f9fd;
+  --app-text: #17212f;
+  --app-muted: #455a64;
+  --app-primary: #1976d2;
+  --app-primary-2: #0288d1;
+  --hero-grad: radial-gradient(circle at 12% 18%, rgba(25, 118, 210, 0.2), transparent 40%),
+    radial-gradient(circle at 88% 12%, rgba(2, 136, 209, 0.18), transparent 42%),
+    linear-gradient(180deg, #f7fbff 0%, #eef6fd 55%, #e3f2fd 100%);
+  --aurora-a: #42a5f5;
+  --aurora-b: #1976d2;
+  --aurora-c: #2e7d32;
+}
+
+[data-style='shadcn'] {
+  --app-bg: #fafafa;
+  --app-surface: #ffffff;
+  --app-surface-2: #f4f4f5;
+  --app-text: #18181b;
+  --app-muted: #52525b;
+  --app-primary: #262626;
+  --app-primary-2: #71717a;
+  --hero-grad: radial-gradient(circle at 12% 18%, rgba(38, 38, 38, 0.1), transparent 40%),
+    radial-gradient(circle at 88% 12%, rgba(113, 113, 122, 0.12), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #fafafa 55%, #f4f4f5 100%);
+  --aurora-a: #a1a1aa;
+  --aurora-b: #52525b;
+  --aurora-c: #18181b;
+}
+
+[data-style='cartoon'] {
+  --app-bg: #fafaee;
+  --app-surface: #fff8dc;
+  --app-surface-2: #f5e8c0;
+  --app-text: #51463b;
+  --app-muted: #7b6957;
+  --app-primary: #225555;
+  --app-primary-2: #9cd3d3;
+  --app-border: rgba(34, 85, 85, 0.32);
+  --hero-grad: radial-gradient(circle at 12% 18%, rgba(246, 216, 120, 0.38), transparent 40%),
+    radial-gradient(circle at 88% 12%, rgba(156, 211, 211, 0.34), transparent 42%),
+    linear-gradient(180deg, #fffbe8 0%, #fafaee 55%, #f5e8c0 100%);
+  --aurora-a: #f6d878;
+  --aurora-b: #9cd3d3;
+  --aurora-c: #da8787;
+}
+
+[data-style='illustration'] {
+  --app-bg: #fff9f0;
+  --app-surface: #ffffff;
+  --app-surface-2: #fff0f6;
+  --app-text: #2c2c2c;
+  --app-muted: #595959;
+  --app-primary: #52c41a;
+  --app-primary-2: #4dabf7;
+  --app-border: rgba(44, 44, 44, 0.28);
+  --hero-grad: radial-gradient(circle at 12% 18%, rgba(82, 196, 26, 0.18), transparent 40%),
+    radial-gradient(circle at 88% 12%, rgba(77, 171, 247, 0.2), transparent 42%),
+    linear-gradient(180deg, #fffdf7 0%, #fff9f0 55%, #fff0f6 100%);
+  --aurora-a: #52c41a;
+  --aurora-b: #4dabf7;
+  --aurora-c: #fa5252;
+}
+
 [data-theme='dark'] {
   --app-bg: #0c1320;
   --app-surface: #101a2c;
@@ -218,6 +284,63 @@ body {
   display: none;
   color: var(--app-text) !important;
   font-size: 18px;
+}
+
+.theme-menu-btn {
+  min-width: 122px;
+  padding-inline: 10px;
+}
+
+.theme-menu-btn .ant-space {
+  line-height: 1;
+}
+
+.theme-menu-style-icon {
+  color: var(--app-primary);
+}
+
+.theme-menu-caret {
+  font-size: 10px;
+}
+
+.theme-menu-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--theme-swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+}
+
+.theme-menu-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 116px;
+}
+
+.discount-editor-grid {
+  align-items: flex-start;
+}
+
+.discount-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.discount-editor-field .ant-segmented,
+.discount-editor-field .ant-input,
+.discount-editor-field .ant-input-number-group-wrapper,
+.discount-editor-field .discount-value-input {
+  display: block;
+  width: 100%;
+}
+
+.discount-editor-field .ant-input-number-group-addon {
+  min-width: 46px;
 }
 
 .mobile-nav-drawer .ant-drawer-body,
@@ -950,7 +1073,7 @@ body {
   flex: 0 0 auto;
 }
 
-.internal-header-actions .ant-segmented {
+.internal-header-actions .theme-menu-btn {
   flex: 0 0 auto;
 }
 
@@ -2402,20 +2525,22 @@ body {
     min-width: 0;
   }
 
-  .header-actions .ant-segmented-item-label {
-    min-height: 26px;
-    padding-inline: 7px;
-    font-size: 12px;
-  }
-
   .button-label,
   .account-name {
     display: none;
   }
 
-  .theme-toggle-btn,
+  .theme-menu-btn,
   .profile-btn {
     padding-inline: 8px;
+  }
+
+  .theme-menu-btn {
+    min-width: 34px;
+  }
+
+  .theme-menu-style-icon {
+    display: none;
   }
 
   .app-content {
@@ -2621,11 +2746,6 @@ body {
 
   .internal-hero h2 {
     font-size: 23px !important;
-  }
-
-  .header-actions .ant-segmented-item-label {
-    padding-inline: 5px;
-    font-size: 11px;
   }
 
   .app-content {

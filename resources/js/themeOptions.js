@@ -1,0 +1,51 @@
+export const THEME_STYLE_OPTIONS = [
+  { label: 'Ocean', value: 'ocean', color: '#1f7ae0' },
+  { label: 'Slate', value: 'slate', color: '#64748b' },
+  { label: 'Sand', value: 'sand', color: '#b97316' },
+  { label: 'Material', value: 'material', color: '#1976d2' },
+  { label: 'Shadcn', value: 'shadcn', color: '#262626' },
+  { label: 'Cartoon', value: 'cartoon', color: '#225555' },
+  { label: 'Illustration', value: 'illustration', color: '#52c41a' },
+];
+
+export const THEME_STYLE_TOKENS = {
+  ocean: { colorPrimary: '#1f7ae0' },
+  slate: { colorPrimary: '#64748b' },
+  sand: { colorPrimary: '#b97316' },
+  material: {
+    colorPrimary: '#1976d2',
+    colorSuccess: '#2e7d32',
+    colorWarning: '#ed6c02',
+    colorError: '#d32f2f',
+    colorInfo: '#0288d1',
+    borderRadius: 4,
+  },
+  shadcn: {
+    colorPrimary: '#262626',
+    colorSuccess: '#22c55e',
+    colorWarning: '#f97316',
+    colorError: '#ef4444',
+    colorInfo: '#262626',
+    borderRadius: 10,
+  },
+  cartoon: {
+    colorPrimary: '#225555',
+    colorSuccess: '#6b9d44',
+    colorWarning: '#f6d878',
+    colorError: '#da8787',
+    colorInfo: '#9cd3d3',
+    colorBorder: '#225555',
+    borderRadius: 18,
+    lineWidth: 2,
+  },
+  illustration: {
+    colorPrimary: '#52c41a',
+    colorSuccess: '#51cf66',
+    colorWarning: '#ffd93d',
+    colorError: '#fa5252',
+    colorInfo: '#4dabf7',
+    colorBorder: '#2c2c2c',
+    borderRadius: 12,
+    lineWidth: 2,
+  },
+};

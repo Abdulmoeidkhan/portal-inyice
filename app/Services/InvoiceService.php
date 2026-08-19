@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceDiscount;
 use App\Models\InvoiceLine;
 use App\Models\Order;
+use App\Models\Receipt;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -60,6 +61,7 @@ class InvoiceService
                 'unit_price' => 0,
                 'total_price' => 0,
             ]);
+            $this->releaseReceiptAllocations($previousInvoice);
 
             $previousInvoice->update([
                 'subtotal' => 0,
@@ -273,6 +275,14 @@ class InvoiceService
         $invoice->order()->update(['status' => $orderStatus]);
 
         return $invoice->fresh(['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'settlements.referenceDocument']);
+    }
+
+    public function releaseReceiptAllocations(Invoice $invoice): void
+    {
+        $invoice->settlements()
+            ->where('reference_document_type', Receipt::class)
+            ->where('amount_received', '>', 0)
+            ->delete();
     }
 
     private function ensureDiscountable(Invoice $invoice): void
