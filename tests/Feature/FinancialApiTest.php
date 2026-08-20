@@ -8,9 +8,12 @@ use App\Models\Invoice;
 use App\Models\InvoiceDiscount;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderVendorCost;
+use App\Models\Payment;
 use App\Models\ProfitShare;
 use App\Models\Role;
 use App\Models\Receipt;
+use App\Models\RefundAllocation;
 use App\Models\VendorPaymentAllocation;
 use App\Models\Tenant;
 use App\Models\User;
@@ -41,6 +44,7 @@ class FinancialApiTest extends TestCase
         $list = $this->getJson('/api/v1/invoices');
         $list->assertOk();
         $list->assertJsonPath('total', 1);
+        $list->assertJsonPath('data.0.can_void_invoice', true);
 
         $show = $this->getJson('/api/v1/invoices/' . $invoiceUid);
         $show->assertOk();
@@ -56,7 +60,54 @@ class FinancialApiTest extends TestCase
 
         $void = $this->patchJson('/api/v1/invoices/' . $invoiceUid . '/void');
         $void->assertOk();
-        $void->assertJsonPath('invoice.status', 'void');
+        $void->assertJsonPath('invoice.status', 'void')
+            ->assertJsonPath('invoice.total_amount', '0.0000')
+            ->assertJsonPath('invoice.outstanding_amount', '0.0000')
+            ->assertJsonPath('invoice.lines.0.total_price', '0.0000');
+
+        $notes = Invoice::where('uid', $invoiceUid)->value('notes');
+        $this->assertStringContainsString('Previous totals:', $notes);
+        $this->assertStringContainsString('- Revenue: PKR 1000.00', $notes);
+        $this->assertStringContainsString('- Cost:', $notes);
+        $this->assertStringContainsString('- Profit:', $notes);
+    }
+
+    public function test_invoice_with_refund_request_cannot_be_voided(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        OrderVendorCost::create([
+            'tenant_id' => $ctx['tenant']->id,
+            'order_id' => $ctx['order']->id,
+            'vendor_id' => $ctx['vendor']->id,
+            'service_type' => 'flight',
+            'service_index' => 0,
+            'amount' => 700,
+        ]);
+
+        $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated();
+
+        $this->getJson('/api/v1/invoices')
+            ->assertOk()
+            ->assertJsonFragment([
+                'uid' => $invoice['uid'],
+                'can_void_invoice' => false,
+            ]);
+
+        $this->patchJson('/api/v1/invoices/' . $invoice['uid'] . '/void')
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'Cannot void this invoice because a refund request or refund order already exists.');
+
+        $this->assertDatabaseHas('invoices', [
+            'uid' => $invoice['uid'],
+            'total_amount' => 1000,
+            'status' => 'issued',
+        ]);
     }
 
     public function test_invoice_delete_requires_password_and_invoice_number_then_cancels_invoice(): void
@@ -98,6 +149,78 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/invoices')
             ->assertOk()
             ->assertJsonPath('total', 0);
+    }
+
+    public function test_paid_or_partial_paid_invoice_cannot_be_deleted_or_voided_until_payment_is_removed(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $partialInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $partialInvoice['uid'],
+            'amount' => 400,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/invoices')
+            ->assertOk()
+            ->assertJsonPath('data.0.status', 'partial_paid')
+            ->assertJsonPath('data.0.can_void_invoice', false)
+            ->assertJsonPath('data.0.can_delete_invoice', false);
+
+        $this->patchJson('/api/v1/invoices/' . $partialInvoice['uid'] . '/void')
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'Remove payments from this invoice before deleting or voiding it.');
+
+        $this->patchJson('/api/v1/invoices/' . $partialInvoice['uid'] . '/cancel', [
+            'password' => 'password123',
+            'invoice_number' => $partialInvoice['invoice_number'],
+        ])->assertUnprocessable()
+            ->assertJsonPath('error', 'Remove payments from this invoice before deleting or voiding it.');
+
+        $secondOrder = $ctx['order']->replicate();
+        $secondOrder->uid = (string) Str::ulid();
+        $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $secondOrder->save();
+        foreach ($ctx['order']->items as $item) {
+            $copy = $item->replicate();
+            $copy->uid = (string) Str::ulid();
+            $copy->order_id = $secondOrder->id;
+            $copy->save();
+        }
+
+        $paidInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $secondOrder->id,
+        ])->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $paidInvoice['uid'],
+            'amount' => 1000,
+            'payment_method' => 'cash',
+        ])->assertCreated();
+
+        $this->patchJson('/api/v1/invoices/' . $paidInvoice['uid'] . '/void')
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'Remove payments from this invoice before deleting or voiding it.');
+
+        $this->patchJson('/api/v1/invoices/' . $paidInvoice['uid'] . '/cancel', [
+            'password' => 'password123',
+            'invoice_number' => $paidInvoice['invoice_number'],
+        ])->assertUnprocessable()
+            ->assertJsonPath('error', 'Remove payments from this invoice before deleting or voiding it.');
+
+        $receipt = Receipt::whereHas('settlements', fn ($query) => $query->where('invoice_id', $partialInvoice['id']))->firstOrFail();
+        $this->deleteJson('/api/v1/receipts/customer/' . $receipt->uid)->assertOk();
+
+        $this->patchJson('/api/v1/invoices/' . $partialInvoice['uid'] . '/cancel', [
+            'password' => 'password123',
+            'invoice_number' => $partialInvoice['invoice_number'],
+        ])->assertOk()
+            ->assertJsonPath('invoice.status', 'cancel');
     }
 
     public function test_invoice_discounts_can_be_added_edited_deleted_and_affect_profit(): void
@@ -488,6 +611,421 @@ class FinancialApiTest extends TestCase
                 'id' => 'refund-order-' . $refundOrderId,
                 'status' => 'refund',
                 'is_refund_order' => true,
+            ]);
+    }
+
+    public function test_refund_request_can_be_invoiced_with_negative_total_and_remains_allocatable(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $refundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+
+        $refundInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $refundOrder['id'],
+            'invoice_date' => '2026-06-24',
+        ])->assertCreated()
+            ->assertJsonPath('invoice.total_amount', '-1000.0000')
+            ->assertJsonPath('invoice.outstanding_amount', '0.0000')
+            ->assertJsonPath('invoice.lines.0.total_price', '-1000.0000')
+            ->json('invoice');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $refundOrder['id'],
+            'status' => 'refund',
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => $refundInvoice['id'],
+            'order_id' => $refundOrder['id'],
+            'total_amount' => -1000,
+            'outstanding_amount' => 0,
+        ]);
+
+        $this->getJson('/api/v1/payments/refund-allocations/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 1000)
+            ->assertJsonPath('data.0.id', $refundOrder['id']);
+
+        $this->getJson('/api/v1/payments/refund-allocations/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 1000)
+            ->assertJsonPath('data.0.id', $refundOrder['id']);
+
+        $invoiceRows = $this->getJson('/api/v1/invoices?status=refund')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $refundInvoice['id'],
+                'status' => 'refund',
+                'is_refund_order' => true,
+                'total_amount' => '-1000.0000',
+            ])
+            ->json('data');
+
+        $this->assertFalse(collect($invoiceRows)->contains(fn (array $row) => $row['id'] === 'refund-order-' . $refundOrder['id']));
+    }
+
+    public function test_customer_refund_can_adjust_another_invoice_without_payment(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+            'invoice_date' => '2026-06-24',
+        ])->assertCreated();
+
+        $refundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $refundOrder['id'],
+            'invoice_date' => '2026-06-24',
+        ])->assertCreated();
+
+        $secondOrder = $ctx['order']->replicate();
+        $secondOrder->uid = (string) Str::ulid();
+        $secondOrder->order_number = 'ORD-' . fake()->unique()->numerify('######');
+        $secondOrder->booking_reference = 'PNR' . fake()->numerify('#####');
+        $secondOrder->status = 'order';
+        $secondOrder->save();
+        foreach ($ctx['order']->items as $item) {
+            $copy = $item->replicate();
+            $copy->uid = (string) Str::ulid();
+            $copy->order_id = $secondOrder->id;
+            $copy->save();
+        }
+
+        $secondInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $secondOrder->id,
+            'invoice_date' => '2026-06-25',
+        ])->assertCreated()->json('invoice');
+
+        $response = $this->postJson('/api/v1/payments/refund-allocations/customer-adjustment', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 1000,
+            'adjustment_date' => '2026-06-26',
+            'description' => 'Adjusted refund against next sale',
+            'allocations' => [
+                ['order_id' => $refundOrder['id'], 'amount' => 1000],
+            ],
+            'invoice_allocations' => [
+                ['invoice_uid' => $secondInvoice['uid'], 'amount' => 1000],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'adjustment.refund_allocations')
+            ->assertJsonCount(1, 'adjustment.settlements');
+
+        $this->assertSame(0, Payment::count());
+        $this->assertDatabaseHas('refund_allocations', [
+            'order_id' => $refundOrder['id'],
+            'payment_id' => null,
+            'receipt_id' => null,
+            'allocation_type' => RefundAllocation::CUSTOMER_PAYMENT,
+            'amount' => 1000,
+        ]);
+        $this->assertDatabaseHas('invoice_settlements', [
+            'invoice_id' => $secondInvoice['id'],
+            'amount_received' => 1000,
+            'reference_document_type' => RefundAllocation::class,
+            'notes' => 'Adjusted refund against next sale',
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => $secondInvoice['id'],
+            'status' => 'paid',
+            'outstanding_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $secondOrder->id,
+            'status' => 'paid',
+        ]);
+
+        $this->getJson('/api/v1/payments/refund-allocations/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 0)
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_full_refund_workflow_invoices_negative_refund_with_matching_cost_and_profit_impact(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        OrderVendorCost::create([
+            'tenant_id' => $ctx['tenant']->id,
+            'order_id' => $ctx['order']->id,
+            'vendor_id' => $ctx['vendor']->id,
+            'service_type' => 'flight',
+            'service_index' => 0,
+            'amount' => 700,
+        ]);
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+            'invoice_date' => '2026-06-24',
+        ])->assertCreated()->json('invoice');
+
+        $this->getJson('/api/v1/invoices?search=' . $invoice['invoice_number'])
+            ->assertOk()
+            ->assertJsonPath('data.0.can_create_refund_request', true);
+
+        $refundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->assertJsonPath('order.total_amount', '-1000.0000')
+            ->json('order');
+
+        $refundInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $refundOrder['id'],
+            'invoice_date' => '2026-06-24',
+        ])->assertCreated()
+            ->assertJsonPath('invoice.total_amount', '-1000.0000')
+            ->assertJsonPath('invoice.lines.0.total_price', '-1000.0000')
+            ->json('invoice');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $refundOrder['id'],
+            'status' => 'refund',
+            'total_amount' => -1000,
+        ]);
+        $this->assertDatabaseHas('order_vendor_costs', [
+            'order_id' => $refundOrder['id'],
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => -700,
+        ]);
+
+        $this->getJson('/api/v1/invoices?search=' . $invoice['invoice_number'])
+            ->assertOk()
+            ->assertJsonPath('data.0.can_create_refund_request', false);
+
+        $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'A refund request or refund order already exists for this invoice.');
+
+        $customerStatement = $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk();
+        $statementRefundInvoice = collect($customerStatement->json('customer_currency_invoices'))
+            ->firstWhere('invoice_number', $refundInvoice['invoice_number']);
+        $this->assertSame('refund', $statementRefundInvoice['status']);
+        $customerRefunds = collect($customerStatement->json('transactions'))->where('type', 'refund')->values();
+        $this->assertCount(1, $customerRefunds);
+        $this->assertSame($refundInvoice['invoice_number'], $customerRefunds[0]['reference']);
+        $this->assertSame(1000.0, (float) $customerRefunds[0]['refunds']);
+
+        $vendorStatement = $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonPath('summary.outstanding_balance', 0)
+            ->json('transactions');
+        $vendorRefunds = collect($vendorStatement)->where('type', 'vendor_refund')->values();
+        $this->assertCount(1, $vendorRefunds);
+        $this->assertSame($refundOrder['order_number'], $vendorRefunds[0]['reference']);
+        $this->assertSame(700.0, (float) $vendorRefunds[0]['vendor_refunds']);
+
+        $profit = $this->getJson('/api/v1/reports/profit?from_date=2020-01-01&to_date=2030-12-31&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.revenue', 0)
+            ->assertJsonPath('data.0.cost', 0)
+            ->assertJsonPath('data.0.profit', 0)
+            ->json('details');
+        $refundProfitRow = collect($profit)->firstWhere('order_id', $refundOrder['id']);
+        $this->assertSame(-1000.0, (float) $refundProfitRow['revenue']);
+        $this->assertSame(-700.0, (float) $refundProfitRow['cost']);
+        $this->assertSame(-300.0, (float) $refundProfitRow['profit']);
+    }
+
+    public function test_refund_can_be_deleted_directly_from_invoice_action_unless_allocated(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated()->json('invoice');
+
+        $refundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+        $refundInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $refundOrder['id'],
+        ])->assertCreated()->json('invoice');
+
+        $this->getJson('/api/v1/invoices?search=' . $invoice['invoice_number'])
+            ->assertOk()
+            ->assertJsonPath('data.0.has_refund_order', true)
+            ->assertJsonPath('data.0.refund_order_number', $refundOrder['order_number'])
+            ->assertJsonPath('data.0.can_delete_refund', true);
+
+        $this->deleteJson('/api/v1/invoices/' . $invoice['uid'] . '/refund')
+            ->assertOk()
+            ->assertJsonPath('refund_order_number', $refundOrder['order_number']);
+
+        $this->assertDatabaseMissing('invoices', ['uid' => $refundInvoice['uid']]);
+        $this->assertNull(Order::withTrashed()->find($refundOrder['id']));
+
+        $this->getJson('/api/v1/invoices?search=' . $invoice['invoice_number'])
+            ->assertOk()
+            ->assertJsonPath('data.0.can_create_refund_request', true)
+            ->assertJsonPath('data.0.has_refund_order', false)
+            ->assertJsonPath('data.0.can_delete_refund', false);
+
+        $secondRefundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+        $secondRefundInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $secondRefundOrder['id'],
+        ])->assertCreated()->json('invoice');
+
+        $this->postJson('/api/v1/payments/refund-allocations/customer-payment', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 100,
+            'payment_method' => 'cash',
+            'allocations' => [
+                ['order_id' => $secondRefundOrder['id'], 'amount' => 100],
+            ],
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/invoices?search=' . $secondRefundInvoice['invoice_number'])
+            ->assertOk()
+            ->assertJsonPath('data.0.has_refund_order', true)
+            ->assertJsonPath('data.0.can_delete_refund', false);
+
+        $this->deleteJson('/api/v1/invoices/' . $secondRefundInvoice['uid'] . '/refund')
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'Delete customer refund payments and vendor refund receipts before deleting this refund.');
+
+        $this->assertDatabaseHas('invoices', ['uid' => $secondRefundInvoice['uid']]);
+        $this->assertFalse(Order::withTrashed()->findOrFail($secondRefundOrder['id'])->trashed());
+    }
+
+    public function test_refund_status_order_without_invoice_can_open_as_virtual_invoice(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $refund = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+
+        Order::whereKey($refund['id'])->update(['status' => 'refund']);
+
+        $this->assertDatabaseMissing('invoices', [
+            'order_id' => $refund['id'],
+        ]);
+
+        $this->getJson('/api/v1/invoices?status=refund')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $refund['uid'])
+            ->assertJsonPath('data.0.status', 'refund')
+            ->assertJsonPath('data.0.is_refund_order', true)
+            ->assertJsonPath('data.0.is_virtual_invoice', true);
+
+        $this->getJson('/api/v1/invoices/' . $refund['uid'])
+            ->assertOk()
+            ->assertJsonPath('uid', $refund['uid'])
+            ->assertJsonPath('invoice_number', 'Refund ' . $refund['order_number'])
+            ->assertJsonPath('status', 'refund')
+            ->assertJsonPath('is_virtual_invoice', true)
+            ->assertJsonPath('lines.0.total_price', '-1000.0000');
+    }
+
+    public function test_refund_allocation_records_customer_payment_and_vendor_receipt_against_refund_request(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $refund = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+
+        $this->getJson('/api/v1/payments/refund-allocations/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 1000)
+            ->assertJsonPath('data.0.id', $refund['id']);
+
+        $customerPayment = $this->postJson('/api/v1/payments/refund-allocations/customer-payment', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 400,
+            'payment_method' => 'cash',
+            'payment_date' => '2026-06-22',
+            'description' => 'Refund paid to customer',
+            'allocations' => [
+                ['order_id' => $refund['id'], 'amount' => 400],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('payment.amount', '400.0000')
+            ->assertJsonPath('payment.refund_allocations.0.order_id', $refund['id'])
+            ->json('payment');
+
+        $this->assertDatabaseHas('refund_allocations', [
+            'payment_id' => $customerPayment['id'],
+            'order_id' => $refund['id'],
+            'allocation_type' => 'customer_payment',
+            'amount' => 400,
+        ]);
+
+        $this->getJson('/api/v1/payments/refund-allocations/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 600)
+            ->assertJsonPath('data.0.outstanding_amount', 600);
+
+        $this->postJson('/api/v1/payments/refund-allocations/customer-payment', [
+            'customer_id' => $ctx['customer']->id,
+            'amount' => 700,
+            'payment_method' => 'cash',
+            'allocations' => [
+                ['order_id' => $refund['id'], 'amount' => 700],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonPath('error', 'An allocation exceeds the selected customer refund balance.');
+
+        $vendorReceipt = $this->postJson('/api/v1/payments/refund-allocations/vendor-receipt', [
+            'vendor_id' => $ctx['vendor']->id,
+            'amount' => 250,
+            'payment_method' => 'cash',
+            'receipt_date' => '2026-06-23',
+            'description' => 'Vendor paid refund value',
+            'allocations' => [
+                ['order_id' => $refund['id'], 'amount' => 250],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('receipt.amount', '250.0000')
+            ->assertJsonPath('receipt.refund_allocations.0.order_id', $refund['id'])
+            ->json('receipt');
+
+        $this->assertDatabaseHas('refund_allocations', [
+            'receipt_id' => $vendorReceipt['id'],
+            'order_id' => $refund['id'],
+            'allocation_type' => 'vendor_receipt',
+            'amount' => 250,
+        ]);
+
+        $this->getJson('/api/v1/payments/refund-allocations/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonPath('outstanding_total', 750)
+            ->assertJsonPath('data.0.outstanding_amount', 750);
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'payment',
+                'customer_payments' => 400,
+            ]);
+
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'receipt',
+                'vendor_receipts' => 250,
             ]);
     }
 
@@ -1356,7 +1894,7 @@ class FinancialApiTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_change_order_booked_by_from_invoice_folder_action(): void
+    public function test_admin_and_accounts_can_change_order_booked_by_from_invoice_folder_action(): void
     {
         $ctx = $this->seedTenantContext();
 
@@ -1384,6 +1922,49 @@ class FinancialApiTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'id' => $ctx['order']->id,
             'created_by_user_id' => $newBooker->id,
+        ]);
+
+        $accountsRole = Role::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'code' => 'accounts',
+            'name' => 'Accounts',
+            'is_system' => false,
+        ]);
+
+        $accountsUser = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $accountsRole->id,
+            'name' => 'Accounts Tester',
+            'email' => 'accounts-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        $secondBooker = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $ctx['user']->role_id,
+            'name' => 'Accounts Booker',
+            'email' => 'accounts-booker-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($accountsUser);
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid . '/booked-by', [
+            'user_id' => $secondBooker->id,
+        ])->assertOk()
+            ->assertJsonPath('order.created_by.id', $secondBooker->id)
+            ->assertJsonPath('order.created_by.name', 'Accounts Booker');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $ctx['order']->id,
+            'created_by_user_id' => $secondBooker->id,
         ]);
     }
 

@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Receipt;
+use App\Models\RefundAllocation;
 use App\Models\Vendor;
 use App\Models\VendorPaymentAllocation;
 use App\Services\PaymentService;
@@ -88,16 +89,248 @@ class PaymentController extends Controller
 
     public function vendorReceipts(Request $request): JsonResponse
     {
-        $query = Receipt::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('vendor_id')->with('vendor:id,name');
+        $query = Receipt::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->whereNotNull('vendor_id')
+            ->with(['vendor:id,name', 'refundAllocations.order:id,order_number,booking_reference'])
+            ->withSum('refundAllocations as allocated_refund_amount', 'amount');
         if ($request->filled('vendor_id')) $query->where('vendor_id', (int) $request->query('vendor_id'));
         return response()->json($query->orderByDesc('receipt_date')->orderByDesc('id')->paginate(50));
     }
 
     public function customerPayments(Request $request): JsonResponse
     {
-        $query = Payment::where('tenant_id', auth()->user()->tenant_id)->where('company_id', auth()->user()->company_id)->whereNotNull('customer_id')->with('customer:id,name');
+        $query = Payment::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->whereNotNull('customer_id')
+            ->with(['customer:id,name', 'refundAllocations.order:id,order_number,booking_reference'])
+            ->withSum('refundAllocations as allocated_refund_amount', 'amount');
         if ($request->filled('customer_id')) $query->where('customer_id', (int) $request->query('customer_id'));
         return response()->json($query->orderByDesc('payment_date')->orderByDesc('id')->paginate(50));
+    }
+
+    public function customerRefundAllocations(int $customerId): JsonResponse
+    {
+        $tenantId = (int) auth()->user()->tenant_id;
+        $companyId = (int) auth()->user()->company_id;
+        $customer = Customer::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->with('company:id,base_currency_code')
+            ->findOrFail($customerId);
+
+        $orders = $this->customerRefundOrderRows($tenantId, $companyId, $customer);
+
+        return response()->json([
+            'customer' => $customer->only(['id', 'uid', 'name', 'currency_code']),
+            'data' => $orders,
+            'outstanding_total' => round((float) $orders->sum('outstanding_amount'), 4),
+        ]);
+    }
+
+    public function vendorRefundAllocations(int $vendorId): JsonResponse
+    {
+        $tenantId = (int) auth()->user()->tenant_id;
+        $companyId = (int) auth()->user()->company_id;
+        $vendor = Vendor::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->with('company:id,base_currency_code')
+            ->findOrFail($vendorId);
+
+        $orders = $this->vendorRefundOrderRows($tenantId, $companyId, $vendor);
+
+        return response()->json([
+            'vendor' => $vendor->only(['id', 'uid', 'name', 'currency_code']),
+            'data' => $orders,
+            'outstanding_total' => round((float) $orders->sum('outstanding_amount'), 4),
+        ]);
+    }
+
+    public function recordCustomerRefundPayment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,bank_transfer,check,card',
+            'payment_date' => 'nullable|date',
+            'account_id' => 'nullable|integer',
+            'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000',
+            'allocations' => 'required|array|min:1',
+            'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $customer = Customer::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->with('company')
+            ->findOrFail((int) $validated['customer_id']);
+        $currency = $customer->currency_code ?: $customer->company->base_currency_code;
+
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $customer->company_id, $currency)) {
+            return response()->json(['error' => 'The selected account is unavailable for this customer refund payment.'], 422);
+        }
+
+        $allocations = collect($validated['allocations']);
+        if (abs((float) $allocations->sum('amount') - (float) $validated['amount']) > 0.0001) {
+            return response()->json(['error' => 'The customer refund payment amount must equal the allocation total.'], 422);
+        }
+
+        $refundOrders = $this->customerRefundOrderRows((int) $customer->tenant_id, (int) $customer->company_id, $customer)->keyBy('id');
+        foreach ($allocations as $allocation) {
+            $refundOrder = $refundOrders->get((int) $allocation['order_id']);
+            if (!$refundOrder || (float) $allocation['amount'] > (float) $refundOrder['outstanding_amount']) {
+                return response()->json(['error' => 'An allocation exceeds the selected customer refund balance.'], 422);
+            }
+        }
+
+        $payment = $this->paymentService->recordCustomerRefundPayment(
+            customer: $customer,
+            amount: (float) $validated['amount'],
+            paymentMethod: $validated['payment_method'],
+            accountId: $validated['account_id'] ?? null,
+            referenceNumber: $validated['reference_number'] ?? null,
+            description: $validated['description'] ?? null,
+            paymentDate: $validated['payment_date'] ?? null,
+            createdByUserId: auth()->id(),
+            allocations: $allocations->map(fn (array $allocation) => [
+                'order_id' => (int) $allocation['order_id'],
+                'amount' => (float) $allocation['amount'],
+            ])->all()
+        );
+
+        return response()->json(['success' => true, 'payment' => $payment], 201);
+    }
+
+    public function recordCustomerRefundAdjustment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
+            'adjustment_date' => 'nullable|date',
+            'description' => 'nullable|string|max:1000',
+            'allocations' => 'required|array|min:1',
+            'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+            'invoice_allocations' => 'required|array|min:1',
+            'invoice_allocations.*.invoice_uid' => 'required|string|distinct|exists:invoices,uid',
+            'invoice_allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $customer = Customer::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->with('company')
+            ->findOrFail((int) $validated['customer_id']);
+        $currency = $customer->currency_code ?: $customer->company->base_currency_code;
+        $refundAllocations = collect($validated['allocations']);
+        $invoiceAllocations = collect($validated['invoice_allocations']);
+
+        if (abs((float) $refundAllocations->sum('amount') - (float) $validated['amount']) > 0.0001) {
+            return response()->json(['error' => 'The customer refund adjustment amount must equal the refund allocation total.'], 422);
+        }
+        if (abs((float) $invoiceAllocations->sum('amount') - (float) $validated['amount']) > 0.0001) {
+            return response()->json(['error' => 'The customer refund adjustment amount must equal the invoice allocation total.'], 422);
+        }
+
+        $refundOrders = $this->customerRefundOrderRows((int) $customer->tenant_id, (int) $customer->company_id, $customer)->keyBy('id');
+        foreach ($refundAllocations as $allocation) {
+            $refundOrder = $refundOrders->get((int) $allocation['order_id']);
+            if (!$refundOrder || (float) $allocation['amount'] > (float) $refundOrder['outstanding_amount']) {
+                return response()->json(['error' => 'An allocation exceeds the selected customer refund balance.'], 422);
+            }
+        }
+
+        $invoices = Invoice::where('tenant_id', $customer->tenant_id)
+            ->where('company_id', $customer->company_id)
+            ->where('customer_id', $customer->id)
+            ->where('currency_code', $currency)
+            ->whereIn('uid', $invoiceAllocations->pluck('invoice_uid')->all())
+            ->whereNotIn('status', self::CLOSED_INVOICE_STATUSES)
+            ->where('total_amount', '>', 0)
+            ->where('outstanding_amount', '>', 0)
+            ->get()
+            ->keyBy('uid');
+
+        foreach ($invoiceAllocations as $allocation) {
+            $invoice = $invoices->get($allocation['invoice_uid']);
+            if (!$invoice || (float) $allocation['amount'] > (float) $invoice->outstanding_amount) {
+                return response()->json(['error' => 'An adjustment exceeds the selected invoice balance.'], 422);
+            }
+        }
+
+        $result = $this->paymentService->recordCustomerRefundAdjustment(
+            customer: $customer,
+            invoices: $invoices->values(),
+            amount: (float) $validated['amount'],
+            adjustmentDate: $validated['adjustment_date'] ?? null,
+            description: $validated['description'] ?? null,
+            createdByUserId: auth()->id(),
+            refundAllocations: $refundAllocations->map(fn (array $allocation) => [
+                'order_id' => (int) $allocation['order_id'],
+                'amount' => (float) $allocation['amount'],
+            ])->all(),
+            invoiceAllocations: $invoiceAllocations->map(fn (array $allocation) => [
+                'invoice_id' => (int) $invoices->get($allocation['invoice_uid'])->id,
+                'amount' => (float) $allocation['amount'],
+            ])->all()
+        );
+
+        return response()->json(['success' => true, 'adjustment' => $result], 201);
+    }
+
+    public function recordVendorRefundReceipt(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'vendor_id' => 'required|integer|exists:vendors,id',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,bank_transfer,check,card',
+            'receipt_date' => 'nullable|date',
+            'account_id' => 'nullable|integer',
+            'reference_number' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:1000',
+            'allocations' => 'required|array|min:1',
+            'allocations.*.order_id' => 'required|integer|distinct|exists:orders,id',
+            'allocations.*.amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $vendor = Vendor::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->with('company')
+            ->findOrFail((int) $validated['vendor_id']);
+        $currency = $vendor->currency_code ?: $vendor->company->base_currency_code;
+
+        if (!$this->accountIsValid($validated['account_id'] ?? null, $validated['payment_method'], $vendor->company_id, $currency)) {
+            return response()->json(['error' => 'The selected account is unavailable for this vendor refund receipt.'], 422);
+        }
+
+        $allocations = collect($validated['allocations']);
+        if (abs((float) $allocations->sum('amount') - (float) $validated['amount']) > 0.0001) {
+            return response()->json(['error' => 'The vendor refund receipt amount must equal the allocation total.'], 422);
+        }
+
+        $refundOrders = $this->vendorRefundOrderRows((int) $vendor->tenant_id, (int) $vendor->company_id, $vendor)->keyBy('id');
+        foreach ($allocations as $allocation) {
+            $refundOrder = $refundOrders->get((int) $allocation['order_id']);
+            if (!$refundOrder || (float) $allocation['amount'] > (float) $refundOrder['outstanding_amount']) {
+                return response()->json(['error' => 'An allocation exceeds the selected vendor refund balance.'], 422);
+            }
+        }
+
+        $receipt = $this->paymentService->recordVendorRefundReceipt(
+            vendor: $vendor,
+            amount: (float) $validated['amount'],
+            paymentMethod: $validated['payment_method'],
+            accountId: $validated['account_id'] ?? null,
+            referenceNumber: $validated['reference_number'] ?? null,
+            description: $validated['description'] ?? null,
+            receiptDate: $validated['receipt_date'] ?? null,
+            createdByUserId: auth()->id(),
+            allocations: $allocations->map(fn (array $allocation) => [
+                'order_id' => (int) $allocation['order_id'],
+                'amount' => (float) $allocation['amount'],
+            ])->all()
+        );
+
+        return response()->json(['success' => true, 'receipt' => $receipt], 201);
     }
 
     public function recordCustomerPayment(Request $request): JsonResponse
@@ -843,5 +1076,93 @@ class PaymentController extends Controller
             'payment_method' => 'required|in:cash,bank_transfer,check,card', 'account_id' => 'nullable|integer',
             'reference_number' => 'nullable|string|max:100', 'description' => 'nullable|string|max:1000',
         ];
+    }
+
+    private function customerRefundOrderRows(int $tenantId, int $companyId, Customer $customer)
+    {
+        $currency = $customer->currency_code ?: $customer->company?->base_currency_code;
+
+        return Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->where('customer_id', $customer->id)
+            ->when($currency, fn ($query) => $query->where('currency_code', $currency))
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where('total_amount', '<', 0)
+            ->with('vendor:id,name')
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (Order $order) use ($customer): array {
+                $allocated = (float) RefundAllocation::where('tenant_id', $order->tenant_id)
+                    ->where('order_id', $order->id)
+                    ->where('allocation_type', RefundAllocation::CUSTOMER_PAYMENT)
+                    ->where(function ($query) use ($order, $customer): void {
+                        $query->whereHas('payment', fn ($paymentQuery) => $paymentQuery
+                            ->where('company_id', $order->company_id)
+                            ->where('customer_id', $customer->id))
+                            ->orWhereNull('payment_id');
+                    })
+                    ->sum('amount');
+                $refundAmount = abs((float) $order->total_amount);
+
+                return [
+                    'id' => $order->id,
+                    'uid' => $order->uid,
+                    'order_number' => $order->order_number,
+                    'booking_reference' => $order->booking_reference,
+                    'date' => $order->created_at->toDateString(),
+                    'currency_code' => $order->currency_code,
+                    'vendor_name' => $order->vendor?->name,
+                    'refund_amount' => round($refundAmount, 4),
+                    'allocated_amount' => round($allocated, 4),
+                    'outstanding_amount' => round(max(0, $refundAmount - $allocated), 4),
+                    'description' => $order->notes,
+                ];
+            })
+            ->filter(fn (array $order) => $order['outstanding_amount'] > 0)
+            ->values();
+    }
+
+    private function vendorRefundOrderRows(int $tenantId, int $companyId, Vendor $vendor)
+    {
+        $currency = $vendor->currency_code ?: $vendor->company?->base_currency_code;
+
+        return Order::where('tenant_id', $tenantId)
+            ->where('company_id', $companyId)
+            ->when($currency, fn ($query) => $query->where('currency_code', $currency))
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->with(['customer:id,name', 'vendorCosts'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (Order $order) use ($vendor): array {
+                $payable = $this->statementService->vendorPayableAmount($order, $vendor->id);
+                if ($payable >= 0) {
+                    return [];
+                }
+
+                $allocated = (float) RefundAllocation::where('tenant_id', $order->tenant_id)
+                    ->where('order_id', $order->id)
+                    ->where('allocation_type', RefundAllocation::VENDOR_RECEIPT)
+                    ->whereHas('receipt', fn ($query) => $query
+                        ->where('company_id', $order->company_id)
+                        ->where('vendor_id', $vendor->id))
+                    ->sum('amount');
+                $refundAmount = abs($payable);
+
+                return [
+                    'id' => $order->id,
+                    'uid' => $order->uid,
+                    'order_number' => $order->order_number,
+                    'booking_reference' => $order->booking_reference,
+                    'date' => $order->created_at->toDateString(),
+                    'currency_code' => $order->currency_code,
+                    'customer_name' => $order->customer?->name,
+                    'refund_amount' => round($refundAmount, 4),
+                    'allocated_amount' => round($allocated, 4),
+                    'outstanding_amount' => round(max(0, $refundAmount - $allocated), 4),
+                    'description' => $order->notes,
+                ];
+            })
+            ->filter(fn (array $order) => ($order['outstanding_amount'] ?? 0) > 0)
+            ->values();
     }
 }

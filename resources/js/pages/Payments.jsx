@@ -56,18 +56,16 @@ export default function Payments() {
   const loadBaseData = async () => {
     setLoading(true);
     try {
-      const [customerResponse, receiptResponse, cashResponse, bankResponse] = await Promise.all([
+      const [customerResponse, cashResponse, bankResponse] = await Promise.all([
         fetch('/api/v1/customers', { headers }),
-        fetch('/api/v1/receipts/customer', { headers }),
         fetch('/api/v1/accounts/cash', { headers }),
         fetch('/api/v1/accounts/bank', { headers }),
       ]);
-      if (![customerResponse, receiptResponse, cashResponse, bankResponse].every((response) => response.ok)) throw new Error('Could not load receipt data');
-      const [customerData, receiptData, cashData, bankData] = await Promise.all([
-        customerResponse.json(), receiptResponse.json(), cashResponse.json(), bankResponse.json(),
+      if (![customerResponse, cashResponse, bankResponse].every((response) => response.ok)) throw new Error('Could not load receipt data');
+      const [customerData, cashData, bankData] = await Promise.all([
+        customerResponse.json(), cashResponse.json(), bankResponse.json(),
       ]);
       setCustomers(customerData.data || customerData || []);
-      setReceipts(receiptData.data || []);
       setAccounts({ cash: cashData || [], bank: bankData || [] });
     } catch (error) {
       message.error(error.message);
@@ -77,6 +75,15 @@ export default function Payments() {
   };
 
   useEffect(() => { loadBaseData(); }, []);
+
+  const loadCustomerReceipts = async (value) => {
+    setReceipts([]);
+    if (!value) return;
+    const response = await fetch(`/api/v1/receipts/customer?customer_id=${value}`, { headers });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || data.error || 'Could not load customer receipt history');
+    setReceipts(data.data || []);
+  };
   useEffect(() => {
     if (!printableReceipt) return undefined;
 
@@ -93,8 +100,11 @@ export default function Payments() {
     fetch(`/api/v1/invoices/${invoiceUid}`, { headers }).then((response) => response.json().then((data) => ({ response, data }))).then(({ response, data }) => {
       if (!response.ok) throw new Error('Could not open the selected invoice');
       setCustomerId(data.customer_id);
-      return fetch(`/api/v1/invoices?customer_id=${data.customer_id}&per_page=200`, { headers });
-    }).then((response) => response.json()).then((data) => {
+      return Promise.all([
+        fetch(`/api/v1/invoices?customer_id=${data.customer_id}&per_page=200`, { headers }),
+        loadCustomerReceipts(data.customer_id),
+      ]);
+    }).then(([response]) => response.json()).then((data) => {
       const open = (data.data || []).filter(isAllocatableInvoice);
       setInvoices(open);
       const selected = open.find((invoice) => invoice.uid === invoiceUid);
@@ -107,12 +117,16 @@ export default function Payments() {
     setSelectedKeys([]);
     setAllocations({});
     setInvoices([]);
+    setReceipts([]);
     if (!value) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/invoices?customer_id=${value}&per_page=200`, { headers });
+      const [response] = await Promise.all([
+        fetch(`/api/v1/invoices?customer_id=${value}&per_page=200`, { headers }),
+        loadCustomerReceipts(value),
+      ]);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Could not load customer invoices');
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not load customer invoices');
       setInvoices((data.data || []).filter(isAllocatableInvoice));
     } catch (error) {
       message.error(error.message);
@@ -234,7 +248,7 @@ export default function Payments() {
       const response = await fetch(`/api/v1/receipts/customer/${editing.uid}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ date: editing.date, payment_method: editing.method, account_id: editing.account_id, reference_number: editing.reference || null, description: editing.narration || null, allocations: editAllocations }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Could not update receipt');
-      message.success('Receipt updated and reallocated'); setEditing(null); await loadBaseData();
+      message.success('Receipt updated and reallocated'); setEditing(null); await Promise.all([customerId ? selectCustomer(customerId) : Promise.resolve(), loadBaseData()]);
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
@@ -244,7 +258,7 @@ export default function Payments() {
       const response = await fetch(`/api/v1/receipts/customer/${row.uid}`, { method: 'DELETE', headers });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Could not delete receipt');
-      message.success('Receipt deleted and invoice balances restored'); await loadBaseData();
+      message.success('Receipt deleted and invoice balances restored'); await Promise.all([customerId ? selectCustomer(customerId) : Promise.resolve(), loadBaseData()]);
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
@@ -460,7 +474,7 @@ export default function Payments() {
       </Card>
 
       <Card className="financial-history-card">
-        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={receipts} scroll={{ x: 1670 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>{compactActions ? null : 'Refresh'}</Button>} />
+        <Tabs items={[{ key: 'history', label: 'Receipt history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={customerId ? receipts : []} scroll={{ x: 1670 }} locale={{ emptyText: customerId ? 'No receipt history for this customer' : 'Select a customer to view receipt history' }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={() => { loadBaseData(); if (customerId) selectCustomer(customerId); }}>{compactActions ? null : 'Refresh'}</Button>} />
       </Card>
       {printableReceipt && (
         <div className="receipt-print-host" aria-hidden="true">

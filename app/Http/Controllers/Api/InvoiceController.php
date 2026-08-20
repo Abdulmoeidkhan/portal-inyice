@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\InvoiceDiscount;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\OrderVendorCost;
+use App\Models\RefundAllocation;
 use App\Services\InvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -57,6 +59,7 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'invoice' => $invoice->load('lines'),
+            'order' => $order->fresh(['invoice', 'invoices']),
         ], 201);
     }
 
@@ -79,7 +82,13 @@ class InvoiceController extends Controller
             ->with(['customer', 'order.createdBy']);
 
         if ($status) {
-            $query->where('status', $status);
+            $query->where(function ($statusQuery) use ($status): void {
+                $statusQuery->where('status', $status);
+
+                if (in_array($status, ['refund_request', 'partial_refund', 'refund'], true)) {
+                    $statusQuery->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('status', $status));
+                }
+            });
         }
 
         if ($customerId) {
@@ -105,12 +114,23 @@ class InvoiceController extends Controller
             ->orderByDesc('id')
             ->limit($candidateLimit)
             ->get()
-            ->map(fn (Invoice $invoice): array => [
-            ...$invoice->toArray(),
-            'is_refund_order' => false,
-            'sort_date' => optional($invoice->invoice_date)->toDateString() ?? optional($invoice->created_at)->toDateString(),
-            'sort_id' => $invoice->id,
-        ])->all());
+            ->map(function (Invoice $invoice): array {
+                $isRefundInvoice = in_array((string) $invoice->order?->status, ['refund_request', 'partial_refund', 'refund'], true)
+                    && (float) $invoice->total_amount < 0;
+
+                return [
+                    ...$invoice->toArray(),
+                    'status' => $isRefundInvoice ? $invoice->order->status : $invoice->status,
+                    'is_refund_order' => $isRefundInvoice,
+                    'is_virtual_invoice' => false,
+                    'can_void_invoice' => !$isRefundInvoice && $this->canVoidInvoice($invoice),
+                    'can_delete_invoice' => !$isRefundInvoice && $this->canDeleteInvoice($invoice),
+                    'can_create_refund_request' => !$isRefundInvoice && $this->canCreateRefundRequest($invoice),
+                    ...$this->refundDeletionStateForInvoice($invoice),
+                    'sort_date' => optional($invoice->invoice_date)->toDateString() ?? optional($invoice->created_at)->toDateString(),
+                    'sort_id' => $invoice->id,
+                ];
+            })->all());
 
         $refundOrders = collect();
         $refundTotal = 0;
@@ -118,6 +138,7 @@ class InvoiceController extends Controller
             $refundQuery = Order::where('tenant_id', $tenantId)
                 ->where('company_id', $companyId)
                 ->whereIn('status', ['partial_refund', 'refund'])
+                ->whereDoesntHave('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
                 ->when($customerId, fn ($orderQuery) => $orderQuery->where('customer_id', $customerId))
                 ->with(['customer', 'invoice', 'items', 'vendor', 'createdBy'])
                 ->when($search !== '', function ($orderQuery) use ($search): void {
@@ -151,6 +172,7 @@ class InvoiceController extends Controller
                     'customer' => $order->customer?->toArray(),
                     'order' => $order->toArray(),
                     'is_refund_order' => true,
+                    'is_virtual_invoice' => true,
                     'sort_date' => optional($order->updated_at)->toDateString() ?? optional($order->created_at)->toDateString(),
                     'sort_id' => $order->id,
                 ]);
@@ -188,7 +210,17 @@ class InvoiceController extends Controller
             ->with($user?->hasRole('sales') === true
                 ? ['lines', 'customer', 'order', 'company']
                 : ['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'customer', 'order', 'company', 'settlements.referenceDocument'])
-            ->firstOrFail();
+            ->first();
+
+        if (!$invoice) {
+            $refundOrder = $this->virtualRefundInvoiceOrder($uid);
+
+            if ($refundOrder) {
+                return response()->json($this->virtualRefundInvoiceResponse($refundOrder, $user));
+            }
+
+            abort(404, 'No query results for model [App\\Models\\Invoice].');
+        }
 
         if ($user?->hasRole('sales') === true) {
             $invoice->setRelation('settlements', collect());
@@ -412,6 +444,298 @@ class InvoiceController extends Controller
             ->firstOrFail();
     }
 
+    private function virtualRefundInvoiceOrder(string $uid): ?Order
+    {
+        return Order::where('tenant_id', auth()->user()->tenant_id)
+            ->where('company_id', auth()->user()->company_id)
+            ->where('uid', $uid)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->whereDoesntHave('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
+            ->with(['items', 'customer', 'company', 'vendor'])
+            ->first();
+    }
+
+    private function virtualRefundInvoiceResponse(Order $order, $user): array
+    {
+        if ($this->shouldHideCostProfit($user)) {
+            $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
+        }
+
+        $total = (float) $order->total_amount;
+        $invoice = [
+            'id' => 'refund-order-' . $order->id,
+            'uid' => $order->uid,
+            'invoice_number' => 'Refund ' . $order->order_number,
+            'invoice_date' => optional($order->updated_at)->toDateString(),
+            'due_date' => null,
+            'currency_code' => $order->currency_code,
+            'subtotal' => $total,
+            'tax_amount' => 0,
+            'total_amount' => $total,
+            'outstanding_amount' => 0,
+            'advance_balance' => 0,
+            'status' => $order->status,
+            'notes' => $order->notes,
+            'customer' => $order->customer?->toArray(),
+            'company' => $order->company?->toArray(),
+            'order' => $order->toArray(),
+            'lines' => $order->items->map(fn ($item): array => [
+                'id' => $item->id,
+                'uid' => $item->uid,
+                'description' => $item->description,
+                'quantity' => $item->quantity,
+                'unit_price' => $item->unit_price,
+                'total_price' => $item->total_price,
+            ])->values()->all(),
+            'discounts' => [],
+            'settlements' => [],
+            'is_refund_order' => true,
+            'is_virtual_invoice' => true,
+            'can_void_invoice' => false,
+            'can_delete_invoice' => false,
+            'can_create_refund_request' => false,
+            ...$this->refundDeletionStateForOrder($order),
+        ];
+
+        return $this->normalizeResponseText($invoice);
+    }
+
+    private function refundDeletionStateForInvoice(Invoice $invoice): array
+    {
+        return $this->refundDeletionStateForOrder($this->relatedRefundOrderForInvoice($invoice));
+    }
+
+    private function refundDeletionStateForOrder(?Order $refundOrder): array
+    {
+        return [
+            'has_refund_order' => $refundOrder !== null,
+            'refund_order_uid' => $refundOrder?->uid,
+            'refund_order_number' => $refundOrder?->order_number,
+            'can_delete_refund' => $refundOrder !== null && !$this->refundOrderHasAllocations($refundOrder),
+        ];
+    }
+
+    private function relatedRefundOrderForInvoice(Invoice $invoice): ?Order
+    {
+        $order = $invoice->relationLoaded('order') ? $invoice->order : $invoice->order()->first();
+        if (!$order) {
+            return null;
+        }
+
+        if (in_array((string) $order->status, ['refund_request', 'partial_refund', 'refund'], true)) {
+            return $order;
+        }
+
+        return $this->refundOrderForOriginalOrder($order);
+    }
+
+    private function refundOrderForOriginalOrder(Order $order): ?Order
+    {
+        return Order::where('tenant_id', $order->tenant_id)
+            ->where('company_id', $order->company_id)
+            ->whereKeyNot($order->id)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where(function ($query) use ($order): void {
+                $query->where('booking_reference', $order->order_number)
+                    ->orWhere('meta->refund_of_order_id', $order->id)
+                    ->orWhere('meta->refund_of_order_uid', $order->uid)
+                    ->orWhere('meta->refund_of_order_number', $order->order_number);
+            })
+            ->latest('id')
+            ->first();
+    }
+
+    private function refundOrderHasAllocations(Order $refundOrder): bool
+    {
+        return RefundAllocation::where('tenant_id', $refundOrder->tenant_id)
+            ->where('order_id', $refundOrder->id)
+            ->exists();
+    }
+
+    private function canCreateRefundRequest(Invoice $invoice): bool
+    {
+        if (in_array((string) $invoice->status, ['void', 'cancel'], true)) {
+            return false;
+        }
+
+        $order = $invoice->relationLoaded('order') ? $invoice->order : $invoice->order()->first();
+        if (!$order || in_array((string) $order->status, ['refund_request', 'partial_refund', 'refund'], true)) {
+            return false;
+        }
+
+        return !$this->refundOrderExistsFor($order);
+    }
+
+    private function canDeleteInvoice(Invoice $invoice): bool
+    {
+        if (in_array((string) $invoice->status, ['paid', 'partial_paid', 'void', 'cancel'], true)) {
+            return false;
+        }
+
+        return !$this->invoiceHasPaymentActivity($invoice);
+    }
+
+    private function canVoidInvoice(Invoice $invoice): bool
+    {
+        if (!in_array($invoice->status, ['draft', 'issued', 'sent'], true)) {
+            return false;
+        }
+
+        if ($this->invoiceHasPaymentActivity($invoice)) {
+            return false;
+        }
+
+        $order = $invoice->relationLoaded('order') ? $invoice->order : $invoice->order()->first();
+        if (!$order || in_array((string) $order->status, ['refund_request', 'partial_refund', 'refund'], true)) {
+            return false;
+        }
+
+        return !$this->refundOrderExistsFor($order);
+    }
+
+    private function invoiceHasPaymentActivity(Invoice $invoice): bool
+    {
+        return $invoice->settlements()
+            ->where('status', 'confirmed')
+            ->where(function ($query): void {
+                $query->where('amount_received', '>', 0)
+                    ->orWhere('amount_refunded', '>', 0)
+                    ->orWhere('amount_to_advance', '>', 0);
+            })
+            ->exists();
+    }
+
+    private function refundOrderExistsFor(Order $order): bool
+    {
+        return Order::where('tenant_id', $order->tenant_id)
+            ->where('company_id', $order->company_id)
+            ->whereKeyNot($order->id)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where(function ($query) use ($order): void {
+                $query->where('booking_reference', $order->order_number)
+                    ->orWhere('meta->refund_of_order_id', $order->id)
+                    ->orWhere('meta->refund_of_order_uid', $order->uid)
+                    ->orWhere('meta->refund_of_order_number', $order->order_number);
+            })
+            ->exists();
+    }
+
+    private function voidInvoiceNote(Invoice $invoice, string $timestamp): string
+    {
+        $invoice->loadMissing(['lines', 'order.vendorCosts.vendor']);
+        $order = $invoice->order;
+        $currency = $invoice->currency_code ?: $order?->currency_code ?: '';
+        $money = fn (mixed $value): string => trim($currency . ' ' . number_format((float) $value, 2, '.', ''));
+        $costRows = $order ? $this->costBreakupRows($order, $money) : [];
+        $costTotal = $order ? $this->orderCostTotal($order) : 0.0;
+        $profit = (float) $invoice->total_amount - $costTotal;
+        $lines = [
+            "Voided on {$timestamp}. Invoice values were converted to zero.",
+            'Previous totals:',
+            '- Revenue: ' . $money($invoice->total_amount),
+            '- Outstanding: ' . $money($invoice->outstanding_amount),
+            '- Cost: ' . $money($costTotal),
+            '- Profit: ' . $money($profit),
+            'Revenue breakup:',
+        ];
+
+        foreach ($invoice->lines as $line) {
+            $lines[] = sprintf(
+                '- %s | Qty %s | Unit %s | Total %s',
+                trim((string) $line->description),
+                (string) $line->quantity,
+                $money($line->unit_price),
+                $money($line->total_price)
+            );
+        }
+
+        $lines[] = 'Costing breakup:';
+        if ($costRows === []) {
+            $lines[] = '- No cost rows recorded';
+        } else {
+            array_push($lines, ...$costRows);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function orderCostTotal(Order $order): float
+    {
+        $order->loadMissing('vendorCosts');
+
+        if ($order->vendorCosts->isNotEmpty()) {
+            return (float) $order->vendorCosts->sum('amount');
+        }
+
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $total = collect($meta['pricing'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->sum(fn (array $row) => OrderVendorCost::toAmount($row['flight_cost'] ?? null));
+
+        foreach (array_keys(OrderVendorCost::SERVICE_SECTIONS) as $section) {
+            $total += collect($meta[$section] ?? [])
+                ->filter(fn ($row) => is_array($row))
+                ->sum(fn (array $row) => OrderVendorCost::amountFromServiceRow($row));
+        }
+
+        return (float) $total;
+    }
+
+    private function costBreakupRows(Order $order, callable $money): array
+    {
+        $order->loadMissing(['vendorCosts.vendor']);
+
+        if ($order->vendorCosts->isNotEmpty()) {
+            return $order->vendorCosts
+                ->map(fn (OrderVendorCost $row) => sprintf(
+                    '- %s | %s | %s',
+                    $row->vendor?->name ?: 'Unassigned vendor',
+                    str_replace('_', ' ', $row->service_type),
+                    $money($row->amount)
+                ))
+                ->values()
+                ->all();
+        }
+
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $rows = [];
+
+        foreach (($meta['pricing'] ?? []) as $pricing) {
+            if (!is_array($pricing)) {
+                continue;
+            }
+
+            $amount = OrderVendorCost::toAmount($pricing['flight_cost'] ?? null);
+            if ($amount != 0.0) {
+                $rows[] = sprintf(
+                    '- %s | flight | %s',
+                    trim((string) ($pricing['vendor_name'] ?? $pricing['pax_name'] ?? 'Flight vendor')),
+                    $money($amount)
+                );
+            }
+        }
+
+        foreach (OrderVendorCost::SERVICE_SECTIONS as $section => $serviceType) {
+            foreach (($meta[$section] ?? []) as $serviceRow) {
+                if (!is_array($serviceRow)) {
+                    continue;
+                }
+
+                $amount = OrderVendorCost::amountFromServiceRow($serviceRow);
+                if ($amount != 0.0) {
+                    $rows[] = sprintf(
+                        '- %s | %s | %s',
+                        trim((string) ($serviceRow['vendor_name'] ?? $serviceRow['visa_vendor'] ?? ucfirst(str_replace('_', ' ', $serviceType)))),
+                        str_replace('_', ' ', $serviceType),
+                        $money($amount)
+                    );
+                }
+            }
+        }
+
+        return $rows;
+    }
+
     private function discountForInvoice(Invoice $invoice, string $discountUid): InvoiceDiscount
     {
         return InvoiceDiscount::query()
@@ -501,18 +825,49 @@ class InvoiceController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($this->invoiceHasPaymentActivity($invoice)) {
+                return response()->json([
+                    'error' => 'Remove payments from this invoice before deleting or voiding it.',
+                ], 422);
+            }
+
             if (!in_array($invoice->status, ['draft', 'issued', 'sent'], true)) {
                 return response()->json([
                     'error' => 'Cannot void invoice with status: ' . $invoice->status,
                 ], 422);
             }
 
-            $invoice->update(['status' => 'void']);
+            $invoice->loadMissing(['lines', 'order.vendorCosts.vendor']);
+
+            if (!$this->canVoidInvoice($invoice)) {
+                return response()->json([
+                    'error' => 'Cannot void this invoice because a refund request or refund order already exists.',
+                ], 422);
+            }
+
+            $existingNotes = trim((string) $invoice->notes);
+            $voidNote = $this->voidInvoiceNote($invoice, now()->format('Y-m-d H:i:s'));
+
+            $invoice->lines()->update([
+                'unit_price' => 0,
+                'total_price' => 0,
+            ]);
+            $this->invoiceService->releaseReceiptAllocations($invoice);
+
+            $invoice->update([
+                'subtotal' => 0,
+                'tax_amount' => 0,
+                'total_amount' => 0,
+                'outstanding_amount' => 0,
+                'advance_balance' => 0,
+                'status' => 'void',
+                'notes' => $existingNotes !== '' ? $existingNotes . "\n" . $voidNote : $voidNote,
+            ]);
             $invoice->order()->update(['status' => 'void']);
 
             return response()->json([
                 'success' => true,
-                'invoice' => $invoice->fresh(),
+                'invoice' => $invoice->fresh(['lines']),
             ]);
         });
     }
@@ -545,6 +900,12 @@ class InvoiceController extends Controller
                 ], 422);
             }
 
+            if (!$this->canDeleteInvoice($invoice)) {
+                return response()->json([
+                    'error' => 'Remove payments from this invoice before deleting or voiding it.',
+                ], 422);
+            }
+
             $existingNotes = trim((string) $invoice->notes);
             $cancelNote = sprintf(
                 'Deleted from invoices tab on %s by %s after password and invoice number confirmation.',
@@ -562,6 +923,69 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => true,
                 'invoice' => $invoice->fresh(),
+            ]);
+        });
+    }
+
+    public function deleteRefund(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return DB::transaction(function () use ($uid, $user): JsonResponse {
+            $invoice = Invoice::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->with('order')
+                ->first();
+
+            $refundOrder = $invoice
+                ? $this->relatedRefundOrderForInvoice($invoice)
+                : $this->virtualRefundInvoiceOrder($uid);
+
+            if (!$refundOrder) {
+                return response()->json([
+                    'error' => 'No refund request or refund order exists for this invoice.',
+                ], 404);
+            }
+
+            $refundOrder = Order::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->whereKey($refundOrder->id)
+                ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($this->refundOrderHasAllocations($refundOrder)) {
+                return response()->json([
+                    'error' => 'Delete customer refund payments and vendor refund receipts before deleting this refund.',
+                ], 422);
+            }
+
+            $refundInvoices = $refundOrder->invoices()
+                ->with('settlements')
+                ->get();
+
+            foreach ($refundInvoices as $refundInvoice) {
+                if ($this->invoiceHasPaymentActivity($refundInvoice)) {
+                    return response()->json([
+                        'error' => 'Remove payments from this refund invoice before deleting this refund.',
+                    ], 422);
+                }
+            }
+
+            $deletedInvoiceNumbers = $refundInvoices->pluck('invoice_number')->filter()->values()->all();
+            foreach ($refundInvoices as $refundInvoice) {
+                $refundInvoice->delete();
+            }
+
+            $refundOrderNumber = $refundOrder->order_number;
+            $refundOrder->forceDelete();
+
+            return response()->json([
+                'success' => true,
+                'message' => trim('Refund ' . $refundOrderNumber . ' deleted.'),
+                'refund_order_number' => $refundOrderNumber,
+                'deleted_invoice_numbers' => $deletedInvoiceNumbers,
             ]);
         });
     }

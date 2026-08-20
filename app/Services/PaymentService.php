@@ -7,7 +7,9 @@ use App\Models\InvoiceSettlement;
 use App\Models\Receipt;
 use App\Models\Payment;
 use App\Models\Vendor;
+use App\Models\Customer;
 use App\Models\Order;
+use App\Models\RefundAllocation;
 use App\Models\VendorPaymentAllocation;
 use App\Models\LedgerEntry;
 use Illuminate\Database\Eloquent\Collection;
@@ -269,7 +271,7 @@ class PaymentService
     }
 
     public function recordCustomerPayment(
-        \App\Models\Customer $customer,
+        Customer $customer,
         float $amount,
         string $paymentMethod,
         ?int $accountId,
@@ -322,8 +324,208 @@ class PaymentService
         });
     }
 
+    public function recordCustomerRefundPayment(
+        Customer $customer,
+        float $amount,
+        string $paymentMethod,
+        ?int $accountId,
+        ?string $referenceNumber,
+        ?string $description,
+        ?string $paymentDate,
+        ?int $createdByUserId,
+        array $allocations
+    ): Payment {
+        return DB::transaction(function () use ($customer, $amount, $paymentMethod, $accountId, $referenceNumber, $description, $paymentDate, $createdByUserId, $allocations): Payment {
+            $payment = $this->recordCustomerPayment(
+                customer: $customer,
+                amount: $amount,
+                paymentMethod: $paymentMethod,
+                accountId: $accountId,
+                referenceNumber: $referenceNumber,
+                description: $description ?: 'Customer refund payment',
+                paymentDate: $paymentDate,
+                createdByUserId: $createdByUserId
+            );
+
+            foreach ($allocations as $allocation) {
+                RefundAllocation::create([
+                    'uid' => (string) Str::ulid(),
+                    'tenant_id' => $customer->tenant_id,
+                    'order_id' => (int) $allocation['order_id'],
+                    'payment_id' => $payment->id,
+                    'allocation_type' => RefundAllocation::CUSTOMER_PAYMENT,
+                    'amount' => (float) $allocation['amount'],
+                ]);
+            }
+
+            return $payment->fresh(['customer:id,name', 'refundAllocations.order:id,order_number,booking_reference']);
+        });
+    }
+
+    public function recordCustomerRefundAdjustment(
+        Customer $customer,
+        Collection $invoices,
+        float $amount,
+        ?string $adjustmentDate,
+        ?string $description,
+        ?int $createdByUserId,
+        array $refundAllocations,
+        array $invoiceAllocations
+    ): array {
+        return DB::transaction(function () use ($customer, $invoices, $amount, $adjustmentDate, $description, $createdByUserId, $refundAllocations, $invoiceAllocations): array {
+            $date = $adjustmentDate ?: now()->toDateString();
+            $currency = $customer->currency_code ?: $customer->company->base_currency_code;
+            $lockedInvoices = Invoice::whereIn('id', $invoices->modelKeys())->lockForUpdate()->get()->keyBy('id');
+            $refundOrderIds = collect($refundAllocations)->pluck('order_id')->map(fn ($id) => (int) $id)->unique()->values();
+            $refundOrders = Order::whereIn('id', $refundOrderIds)->lockForUpdate()->get()->keyBy('id');
+            $createdRefundAllocations = [];
+            $settlements = [];
+
+            if (abs(collect($refundAllocations)->sum('amount') - $amount) > 0.0001 || abs(collect($invoiceAllocations)->sum('amount') - $amount) > 0.0001) {
+                throw new \InvalidArgumentException('Refund and invoice allocation totals must match the adjustment amount.');
+            }
+
+            foreach ($refundAllocations as $allocation) {
+                $refundOrder = $refundOrders->get((int) $allocation['order_id']);
+                if (
+                    !$refundOrder
+                    || (int) $refundOrder->tenant_id !== (int) $customer->tenant_id
+                    || (int) $refundOrder->company_id !== (int) $customer->company_id
+                    || (int) $refundOrder->customer_id !== (int) $customer->id
+                    || (string) $refundOrder->currency_code !== (string) $currency
+                    || !in_array((string) $refundOrder->status, ['refund_request', 'partial_refund', 'refund'], true)
+                    || (float) $refundOrder->total_amount >= 0
+                ) {
+                    throw new \InvalidArgumentException('A selected refund order is not available for this customer adjustment.');
+                }
+
+                $alreadyAllocated = (float) RefundAllocation::where('tenant_id', $refundOrder->tenant_id)
+                    ->where('order_id', $refundOrder->id)
+                    ->where('allocation_type', RefundAllocation::CUSTOMER_PAYMENT)
+                    ->where(function ($query) use ($refundOrder, $customer): void {
+                        $query->whereHas('payment', fn ($paymentQuery) => $paymentQuery
+                            ->where('company_id', $refundOrder->company_id)
+                            ->where('customer_id', $customer->id))
+                            ->orWhereNull('payment_id');
+                    })
+                    ->sum('amount');
+                $available = max(0, abs((float) $refundOrder->total_amount) - $alreadyAllocated);
+                if ((float) $allocation['amount'] > $available + 0.0001) {
+                    throw new \InvalidArgumentException('An allocation exceeds the selected customer refund balance.');
+                }
+
+                $createdRefundAllocations[] = [
+                    'model' => RefundAllocation::create([
+                        'uid' => (string) Str::ulid(),
+                        'tenant_id' => $customer->tenant_id,
+                        'order_id' => $refundOrder->id,
+                        'payment_id' => null,
+                        'receipt_id' => null,
+                        'allocation_type' => RefundAllocation::CUSTOMER_PAYMENT,
+                        'amount' => (float) $allocation['amount'],
+                    ]),
+                    'remaining' => (float) $allocation['amount'],
+                    'order_number' => $refundOrder->order_number,
+                ];
+            }
+
+            $poolIndex = 0;
+            foreach ($invoiceAllocations as $allocation) {
+                $invoice = $lockedInvoices->get((int) $allocation['invoice_id']);
+                if (
+                    !$invoice
+                    || (int) $invoice->tenant_id !== (int) $customer->tenant_id
+                    || (int) $invoice->company_id !== (int) $customer->company_id
+                    || (int) $invoice->customer_id !== (int) $customer->id
+                    || (string) $invoice->currency_code !== (string) $currency
+                    || in_array((string) $invoice->status, ['paid', 'void', 'cancel'], true)
+                    || (float) $invoice->total_amount <= 0
+                ) {
+                    throw new \InvalidArgumentException('A selected invoice is not available for customer refund adjustment.');
+                }
+                if ((float) $allocation['amount'] > (float) $invoice->outstanding_amount + 0.0001) {
+                    throw new \InvalidArgumentException('An adjustment exceeds the selected invoice balance.');
+                }
+
+                $remaining = (float) $allocation['amount'];
+                while ($remaining > 0.0001) {
+                    while (isset($createdRefundAllocations[$poolIndex]) && $createdRefundAllocations[$poolIndex]['remaining'] <= 0.0001) {
+                        $poolIndex++;
+                    }
+                    if (!isset($createdRefundAllocations[$poolIndex])) {
+                        throw new \InvalidArgumentException('Refund adjustment allocation is incomplete.');
+                    }
+
+                    $source = &$createdRefundAllocations[$poolIndex];
+                    $applied = min($remaining, (float) $source['remaining']);
+                    $settlements[] = InvoiceSettlement::create([
+                        'uid' => (string) Str::ulid(),
+                        'tenant_id' => $customer->tenant_id,
+                        'invoice_id' => $invoice->id,
+                        'amount_received' => $applied,
+                        'settlement_date' => $date,
+                        'settlement_type' => 'payment',
+                        'reference_document_id' => $source['model']->id,
+                        'reference_document_type' => RefundAllocation::class,
+                        'notes' => $description ?: 'Adjusted from customer refund ' . $source['order_number'],
+                    ]);
+                    $source['remaining'] -= $applied;
+                    $remaining -= $applied;
+                    unset($source);
+                }
+
+                $this->recalculateInvoice($invoice);
+            }
+
+            return [
+                'refund_allocations' => collect($createdRefundAllocations)->pluck('model')->map->fresh(['order:id,order_number,booking_reference'])->values(),
+                'settlements' => collect($settlements)->map->fresh(['invoice:id,invoice_number,status,outstanding_amount'])->values(),
+                'invoices' => Invoice::whereIn('id', $lockedInvoices->keys())->get(),
+                'created_by_user_id' => $createdByUserId,
+            ];
+        });
+    }
+
+    public function recordVendorRefundReceipt(
+        Vendor $vendor,
+        float $amount,
+        string $paymentMethod,
+        ?int $accountId,
+        ?string $referenceNumber,
+        ?string $description,
+        ?string $receiptDate,
+        ?int $createdByUserId,
+        array $allocations
+    ): Receipt {
+        return DB::transaction(function () use ($vendor, $amount, $paymentMethod, $accountId, $referenceNumber, $description, $receiptDate, $createdByUserId, $allocations): Receipt {
+            $receipt = $this->recordVendorReceipt(
+                vendor: $vendor,
+                amount: $amount,
+                paymentMethod: $paymentMethod,
+                accountId: $accountId,
+                referenceNumber: $referenceNumber,
+                description: $description ?: 'Vendor refund receipt',
+                receiptDate: $receiptDate,
+                createdByUserId: $createdByUserId
+            );
+
+            foreach ($allocations as $allocation) {
+                RefundAllocation::create([
+                    'uid' => (string) Str::ulid(),
+                    'tenant_id' => $vendor->tenant_id,
+                    'order_id' => (int) $allocation['order_id'],
+                    'receipt_id' => $receipt->id,
+                    'allocation_type' => RefundAllocation::VENDOR_RECEIPT,
+                    'amount' => (float) $allocation['amount'],
+                ]);
+            }
+
+            return $receipt->fresh(['vendor:id,name', 'refundAllocations.order:id,order_number,booking_reference']);
+        });
+    }
+
     public function recordCustomerAdvanceReceipt(
-        \App\Models\Customer $customer,
+        Customer $customer,
         float $amount,
         string $paymentMethod,
         ?int $accountId,
@@ -551,6 +753,7 @@ class PaymentService
             $invoiceIds = $settlements->pluck('invoice_id');
             InvoiceSettlement::whereIn('id', $settlements->modelKeys())->delete();
             LedgerEntry::where('tenant_id', $payment->tenant_id)->where('reference_type', 'payment')->where('reference_id', $payment->id)->delete();
+            $payment->refundAllocations()->delete();
             $payment->delete();
             Invoice::whereIn('id', $invoiceIds)->get()->each(fn (Invoice $invoice) => $this->recalculateInvoice($invoice));
         });
@@ -584,6 +787,7 @@ class PaymentService
     {
         DB::transaction(function () use ($receipt): void {
             LedgerEntry::where('tenant_id', $receipt->tenant_id)->where('reference_type', 'receipt')->where('reference_id', $receipt->id)->delete();
+            $receipt->refundAllocations()->delete();
             $receipt->delete();
         });
     }

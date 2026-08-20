@@ -15,6 +15,7 @@ export default function CounterpartyTransaction({ direction, partyType }) {
   const transactionLabel = isReceipt ? 'Receipt' : 'Payment';
   const endpoint = `/api/v1/${isReceipt ? 'receipts' : 'payments'}/${partyType}`;
   const partyEndpoint = `/api/v1/${partyType === 'customer' ? 'customers' : 'vendors'}`;
+  const partyField = `${partyType}_id`;
   const [parties, setParties] = useState([]);
   const [records, setRecords] = useState([]);
   const [accounts, setAccounts] = useState({ cash: [], bank: [] });
@@ -28,25 +29,37 @@ export default function CounterpartyTransaction({ direction, partyType }) {
   const load = async () => {
     setLoading(true);
     try {
-      const responses = await Promise.all([fetch(partyEndpoint, { headers }), fetch(endpoint, { headers }), fetch('/api/v1/accounts/cash', { headers }), fetch('/api/v1/accounts/bank', { headers })]);
+      const responses = await Promise.all([fetch(partyEndpoint, { headers }), fetch('/api/v1/accounts/cash', { headers }), fetch('/api/v1/accounts/bank', { headers })]);
       if (!responses.every((response) => response.ok)) throw new Error(`Could not load ${transactionLabel.toLowerCase()} data`);
-      const [partyData, recordData, cash, bank] = await Promise.all(responses.map((response) => response.json()));
-      setParties(partyData.data || partyData || []); setRecords(recordData.data || []); setAccounts({ cash, bank });
+      const [partyData, cash, bank] = await Promise.all(responses.map((response) => response.json()));
+      setParties(partyData.data || partyData || []); setAccounts({ cash, bank });
     } catch (error) { message.error(error.message); } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [endpoint]);
+
+  const loadRecords = async (partyId) => {
+    setRecords([]);
+    if (!partyId) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${endpoint}?${partyField}=${partyId}`, { headers });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || `Could not load ${transactionLabel.toLowerCase()} history`);
+      setRecords(data.data || []);
+    } catch (error) { message.error(error.message); } finally { setLoading(false); }
+  };
 
   const save = async () => {
     if (!form.party_id || !form.amount || !form.date) return message.error(`Select a ${partyLabel.toLowerCase()} and enter an amount`);
     setLoading(true);
     const dateField = isReceipt ? 'receipt_date' : 'payment_date';
     try {
-      const payload = { [`${partyType}_id`]: form.party_id, amount: form.amount, payment_method: form.method, [dateField]: form.date, date: form.date, account_id: form.account_id, reference_number: form.reference || null, description: form.description || null };
+      const payload = { [partyField]: form.party_id, amount: form.amount, payment_method: form.method, [dateField]: form.date, date: form.date, account_id: form.account_id, reference_number: form.reference || null, description: form.description || null };
       const response = await fetch(editingUid ? `${endpoint}/${editingUid}` : endpoint, { method: editingUid ? 'PATCH' : 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || `Could not record ${transactionLabel.toLowerCase()}`);
       message.success(`${partyLabel} ${transactionLabel.toLowerCase()} ${editingUid ? 'updated' : 'recorded'}`);
-      setEditingUid(null); setForm((current) => ({ ...current, amount: null, reference: '', description: '' })); await load();
+      setEditingUid(null); setForm((current) => ({ ...current, amount: null, reference: '', description: '' })); await Promise.all([load(), loadRecords(form.party_id)]);
     } catch (error) { message.error(error.message); } finally { setLoading(false); }
   };
 
@@ -55,7 +68,7 @@ export default function CounterpartyTransaction({ direction, partyType }) {
     try {
       const response = await fetch(`${endpoint}/${record.uid}`, { method: 'DELETE', headers });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || data.message || 'Could not delete record');
-      message.success(`${transactionLabel} deleted`); await load();
+      message.success(`${transactionLabel} deleted`); await Promise.all([load(), loadRecords(record[partyField])]);
     } catch (error) { message.error(error.message); } finally { setLoading(false); }
   };
 
@@ -64,12 +77,12 @@ export default function CounterpartyTransaction({ direction, partyType }) {
   const dateField = isReceipt ? 'receipt_date' : 'payment_date';
   const edit = (record) => {
     setEditingUid(record.uid);
-    setForm({ party_id: record[`${partyType}_id`], amount: Number(record.amount), date: String(record[dateField]).slice(0, 10), method: record.payment_method, account_id: record.account_id, reference: record.reference_number || '', description: record.description || '' });
+    setForm({ party_id: record[partyField], amount: Number(record.amount), date: String(record[dateField]).slice(0, 10), method: record.payment_method, account_id: record.account_id, reference: record.reference_number || '', description: record.description || '' });
   };
   return <div className="page-shell page-fade-up financial-entry-page">
     <div className="elevated-card financial-entry-hero"><div><Title level={2}>{partyLabel} {transactionLabel}s</Title><Paragraph>{isReceipt ? `Money received from a ${partyLabel.toLowerCase()}.` : `Money paid to a ${partyLabel.toLowerCase()}.`}</Paragraph></div></div>
     <Card className="border-beam-aurora financial-entry-card"><Row gutter={[16, 14]} align="bottom">
-      <Col xs={24} md={7}><Text strong>{partyLabel}</Text><Select showSearch optionFilterProp="label" value={form.party_id} onChange={(value) => setForm((current) => ({ ...current, party_id: value, account_id: null }))} options={parties.map((item) => ({ value: item.id, label: item.name }))} /></Col>
+      <Col xs={24} md={7}><Text strong>{partyLabel}</Text><Select showSearch allowClear optionFilterProp="label" value={form.party_id} onChange={(value) => { setForm((current) => ({ ...current, party_id: value, account_id: null })); loadRecords(value); }} options={parties.map((item) => ({ value: item.id, label: item.name }))} /></Col>
       <Col xs={12} md={4}><Text strong>{transactionLabel} date</Text><Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></Col>
       <Col xs={12} md={4}><Text strong>Amount</Text><InputNumber min={0.01} precision={2} value={form.amount} onChange={(value) => setForm((current) => ({ ...current, amount: value }))} /></Col>
       <Col xs={12} md={4}><Text strong>Method</Text><Select value={form.method} onChange={(value) => setForm((current) => ({ ...current, method: value, account_id: null }))} options={['cash', 'bank_transfer', 'card', 'check'].map((value) => ({ value, label: value.replaceAll('_', ' ').toUpperCase() }))} /></Col>
@@ -78,7 +91,7 @@ export default function CounterpartyTransaction({ direction, partyType }) {
       <Col xs={24} md={12}><Text strong>Description</Text><Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></Col>
       <Col xs={24} md={4}><Space.Compact block><Button block type="primary" icon={<SaveOutlined />} loading={loading} onClick={save}>{editingUid ? 'Update' : 'Record'}</Button>{editingUid && <Button danger onClick={() => { setEditingUid(null); setForm((current) => ({ ...current, amount: null, reference: '', description: '' })); }}>Cancel</Button>}</Space.Compact></Col>
     </Row></Card>
-    <Card className="financial-history-card" title={`${transactionLabel} history`}><Table rowKey="id" loading={loading} dataSource={records} scroll={{ x: 850 }} columns={[
+    <Card className="financial-history-card" title={`${transactionLabel} history`}><Table rowKey="id" loading={loading} dataSource={form.party_id ? records : []} scroll={{ x: 850 }} locale={{ emptyText: form.party_id ? `No ${transactionLabel.toLowerCase()} history for this ${partyLabel.toLowerCase()}` : `Select a ${partyLabel.toLowerCase()} to view ${transactionLabel.toLowerCase()} history` }} columns={[
       { title: `${transactionLabel} #`, dataIndex: numberField }, { title: 'Date', dataIndex: dateField, render: dateOnly },
       { title: partyLabel, dataIndex: [partyType, 'name'] }, { title: 'Method', dataIndex: 'payment_method', render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
       { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' }, { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },

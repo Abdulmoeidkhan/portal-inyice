@@ -42,7 +42,7 @@ class StatementService
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->whereNotIn('status', ['void', 'cancel'])
             ->whereHas('order')
-            ->with('customer:id,name')
+            ->with(['customer:id,name', 'order:id,status'])
             ->when($fromDate, fn($q) => $q->whereDate('invoice_date', '>=', $fromDate))
             ->when($toDate, fn($q) => $q->whereDate('invoice_date', '<=', $toDate))
             ->orderBy('invoice_date')
@@ -58,7 +58,7 @@ class StatementService
                 'invoice_date' => $invoice->invoice_date,
                 'due_date' => $invoice->due_date,
                 'customer_name' => $invoice->customer?->name,
-                'status' => $invoice->status,
+                'status' => $this->invoiceActivityStatus($invoice),
                 'amount' => $invoice->total_amount,
                 'currency' => $invoice->currency_code,
                 'outstanding' => $invoice->outstanding_amount,
@@ -89,6 +89,11 @@ class StatementService
         $cashTransactions = collect();
         foreach ($invoices as $invoice) {
             $amount = (float) $invoice->total_amount;
+            if ($amount < 0) {
+                $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'refund', 'reference' => $invoice->invoice_number, 'customer_name' => $invoice->customer?->name, 'description' => 'Customer refund invoice', 'sales' => 0, 'refunds' => abs($amount), 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => 0, 'credit' => abs($amount), 'sort_order' => 2]);
+                continue;
+            }
+
             $cashTransactions->push(['id' => 'invoice-' . $invoice->id, 'date' => $invoice->invoice_date->toDateString(), 'type' => 'invoice', 'reference' => $invoice->invoice_number, 'customer_name' => $invoice->customer?->name, 'description' => 'Customer invoice', 'sales' => $amount, 'refunds' => 0, 'customer_receipts' => 0, 'customer_payments' => 0, 'debit' => $amount, 'credit' => 0, 'sort_order' => 1]);
         }
         Order::where('tenant_id', $tenantId)
@@ -96,6 +101,7 @@ class StatementService
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
             ->where('total_amount', '<', 0)
+            ->whereDoesntHave('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
             ->with('customer:id,name')
             ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))->get()
             ->each(function (Order $order) use ($cashTransactions): void {
@@ -292,6 +298,20 @@ class StatementService
                 'outstanding_balance' => $runningBalance,
             ],
         ];
+    }
+
+    /**
+     * Show refund invoices with their refund lifecycle status in statement activity.
+     */
+    private function invoiceActivityStatus(Invoice $invoice): string
+    {
+        $orderStatus = (string) $invoice->order?->status;
+
+        if ((float) $invoice->total_amount < 0 && in_array($orderStatus, ['refund_request', 'partial_refund', 'refund'], true)) {
+            return $orderStatus;
+        }
+
+        return (string) $invoice->status;
     }
 
     /**

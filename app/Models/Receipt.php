@@ -66,6 +66,11 @@ class Receipt extends Model
             ->where('reference_document_type', self::class);
     }
 
+    public function refundAllocations(): HasMany
+    {
+        return $this->hasMany(RefundAllocation::class);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uid';

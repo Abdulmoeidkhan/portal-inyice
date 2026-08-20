@@ -175,25 +175,28 @@ export default function InvoiceDetail({ shared = false }) {
     let acquiredLock = false;
     let heartbeatTimer = null;
     let cancelled = false;
+    let lockUid = uid;
 
     const loadInvoice = async () => {
       setLoading(true);
       setLockConflict(null);
 
       try {
-        if (!shared) {
-          await acquireEditLock('invoice', uid);
-          acquiredLock = true;
-          heartbeatTimer = setInterval(() => {
-            heartbeatEditLock('invoice', uid).catch(() => {});
-          }, 30000);
-        }
-
         const endpoint = shared ? `/api/v1/shared-invoices/${shareToken}` : `/api/v1/invoices/${uid}`;
         const response = await fetch(endpoint, { headers: shared ? { Accept: 'application/json' } : { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Invoice is unavailable');
         if (cancelled) return;
+
+        if (!shared && !data.is_virtual_invoice) {
+          lockUid = data.uid || uid;
+          await acquireEditLock('invoice', lockUid);
+          acquiredLock = true;
+          heartbeatTimer = setInterval(() => {
+            heartbeatEditLock('invoice', lockUid).catch(() => {});
+          }, 30000);
+        }
+
         setInvoice(data);
       } catch (error) {
         if (cancelled) return;
@@ -217,7 +220,7 @@ export default function InvoiceDetail({ shared = false }) {
         clearInterval(heartbeatTimer);
       }
       if (acquiredLock) {
-        releaseEditLock('invoice', uid).catch(() => {});
+        releaseEditLock('invoice', lockUid).catch(() => {});
       }
     };
   }, [shared, shareToken, uid]);
@@ -284,7 +287,7 @@ export default function InvoiceDetail({ shared = false }) {
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/invoices')}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Download PDF</Button>
-        {!shared && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
+        {!shared && !invoice.is_virtual_invoice && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
       </Space>
       <Card className="invoice-paper">
         <Watermark

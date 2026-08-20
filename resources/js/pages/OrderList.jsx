@@ -58,6 +58,29 @@ const statusFilterOptions = [
   { label: 'Order', value: 'order' },
   { label: 'Refund Request', value: 'refund_request' },
 ];
+const openOrderStatusOptions = [
+  { label: 'Quote', value: 'quote' },
+  { label: 'Order', value: 'order' },
+  { label: 'Cancel', value: 'cancel' },
+];
+const orderStatusOptions = [
+  {
+    label: 'Order Section',
+    options: openOrderStatusOptions,
+  },
+  {
+    label: 'Invoice Section',
+    options: [
+      { label: 'Void', value: 'void' },
+    ],
+  },
+];
+const refundRequestStatusOptions = [
+  { label: 'Refund Request', value: 'refund_request' },
+  { label: 'Refund', value: 'refund' },
+];
+
+const hasActiveInvoice = (order) => Boolean(order?.invoice || (Array.isArray(order?.invoices) && order.invoices.length));
 
 const currentUserIsSales = () => {
   try {
@@ -116,6 +139,11 @@ export default function OrderList() {
   const compactActions = !screens.sm;
   const canChangeEditingStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(editingOrder?.status));
   const visibleStatusFilterOptions = statusFilterOptions;
+  const editingStatusOptions = ['refund_request', 'refund'].includes(editingOrder?.status)
+    ? refundRequestStatusOptions
+    : hasActiveInvoice(editingOrder) || invoiceSectionStatuses.includes(editingOrder?.status)
+      ? orderStatusOptions
+      : openOrderStatusOptions;
 
   const showLockAlert = (error, fallback = 'This order is currently locked for editing.') => {
     Modal.warning({
@@ -378,7 +406,7 @@ export default function OrderList() {
       return false;
     }
 
-    return !order.invoice && ['quote', 'order', 'confirm'].includes(order.status);
+    return !order.invoice && ['quote', 'order', 'confirm', 'refund_request'].includes(order.status);
   };
 
   const openInvoiceModal = (order) => {
@@ -426,18 +454,22 @@ export default function OrderList() {
     }
   };
 
-  const renderOrderActions = (record, { showLabels = !compactActions } = {}) => (
-    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={false}>
-      <Button
-        size="small"
-        type="default"
-        icon={<FileTextOutlined />}
-        disabled={!canCreateInvoice(record)}
-        loading={invoiceLoadingKey === record.uid}
-        onClick={() => openInvoiceModal(record)}
-      >
-        {showLabels ? 'Invoice' : null}
-      </Button>
+  const renderOrderActions = (record, { showLabels = !compactActions } = {}) => {
+    const isRefundRequestOrder = record?.status === 'refund_request';
+
+    return (
+      <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={false}>
+        <Button
+          size="small"
+          type={isRefundRequestOrder ? 'primary' : 'default'}
+          danger={isRefundRequestOrder}
+          icon={<FileTextOutlined />}
+          disabled={!canCreateInvoice(record)}
+          loading={invoiceLoadingKey === record.uid}
+          onClick={() => openInvoiceModal(record)}
+        >
+          {showLabels ? (isRefundRequestOrder ? 'Refund' : 'Invoice') : null}
+        </Button>
       <Button
         size="small"
         icon={<EditOutlined />}
@@ -467,8 +499,9 @@ export default function OrderList() {
       >
         {showLabels ? 'Duplicate' : null}
       </Button>
-    </Space>
-  );
+      </Space>
+    );
+  };
 
   const columns = [
     {
@@ -675,25 +708,7 @@ export default function OrderList() {
                 <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 180 }}>
                   <Select
                     disabled={!canChangeEditingStatus}
-                    options={[
-                      {
-                        label: 'Order Section',
-                        options: [
-                          { label: 'Quote', value: 'quote' },
-                          { label: 'Order', value: 'order' },
-                          { label: 'Cancel', value: 'cancel' },
-                        ],
-                      },
-                      {
-                        label: 'Invoice Section',
-                        options: [
-                          { label: 'Void', value: 'void' },
-                          { label: 'Refund Request', value: 'refund_request' },
-                          { label: 'Refund', value: 'refund' },
-                          { label: 'Partial Refund', value: 'partial_refund' },
-                        ],
-                      },
-                    ]}
+                    options={editingStatusOptions}
                   />
                 </Form.Item>
                 <Form.Item
@@ -757,9 +772,9 @@ export default function OrderList() {
       </Modal>
 
       <Modal
-        title={invoiceOrder ? `Create invoice for ${invoiceOrder.order_number}` : 'Create Invoice'}
+        title={invoiceOrder ? `Create ${invoiceOrder.status === 'refund_request' ? 'refund' : 'invoice'} for ${invoiceOrder.order_number}` : 'Create Invoice'}
         open={Boolean(invoiceOrder)}
-        okText="Create Invoice"
+        okText={invoiceOrder?.status === 'refund_request' ? 'Create Refund' : 'Create Invoice'}
         cancelButtonProps={{ danger: true }}
         confirmLoading={Boolean(invoiceLoadingKey)}
         okButtonProps={{ disabled: !invoiceDate }}
@@ -768,7 +783,7 @@ export default function OrderList() {
         destroyOnClose
       >
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          <Text type="secondary">Choose the invoice date used for invoice registers and reports.</Text>
+          <Text type="secondary">Choose the {invoiceOrder?.status === 'refund_request' ? 'refund' : 'invoice'} date used for invoice registers and reports.</Text>
           <DatePicker
             autoFocus
             allowClear={false}

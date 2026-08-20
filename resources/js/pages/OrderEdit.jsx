@@ -44,6 +44,19 @@ const invoiceStatusColors = {
   refund_request: 'red',
 };
 const invoiceSectionStatuses = ['invoice', 'void', 'refund', 'partial_refund', 'paid', 'partial_paid'];
+const openOrderStatusOptions = [
+  { label: 'Quote', value: 'quote' },
+  { label: 'Order', value: 'order' },
+  { label: 'Cancel', value: 'cancel' },
+];
+const orderStatusOptions = [
+  { label: 'Void', value: 'void' },
+];
+const refundRequestStatusOptions = [
+  { label: 'Refund Request', value: 'refund_request' },
+  { label: 'Refund', value: 'refund' },
+];
+const hasActiveInvoice = (order) => Boolean(order?.invoice || (Array.isArray(order?.invoices) && order.invoices.length));
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
 
@@ -220,7 +233,13 @@ export default function OrderEdit() {
   const [invoiceSaving, setInvoiceSaving] = useState(false);
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
-  const canCreateInvoice = order && !order.invoice && ['quote', 'order', 'confirm'].includes(order.status);
+  const isRefundRequestOrder = order?.status === 'refund_request';
+  const canCreateInvoice = order && !order.invoice && ['quote', 'order', 'confirm', 'refund_request'].includes(order.status);
+  const statusOptions = ['refund_request', 'refund'].includes(order?.status)
+    ? refundRequestStatusOptions
+    : hasActiveInvoice(order) || invoiceSectionStatuses.includes(order?.status)
+      ? orderStatusOptions
+      : openOrderStatusOptions;
   const affixTarget = () => document.querySelector('.app-content');
   const currencyCode = Form.useWatch('currency_code', form) || order?.currency_code || 'PKR';
 
@@ -625,7 +644,7 @@ export default function OrderEdit() {
       message.success(`Invoice ${data.invoice?.invoice_number || ''} created`);
       setOrder((current) => ({
         ...current,
-        status: 'invoice',
+        status: data.order?.status || current?.status,
         invoice: data.invoice,
         invoices: [data.invoice, ...(current?.invoices || [])],
       }));
@@ -678,12 +697,12 @@ export default function OrderEdit() {
           <Space className="edit-order-actions">
             <Button danger onClick={() => navigate('/orders')}>Cancel</Button>
             {canCreateInvoice && (
-              <Button type="default" icon={<FileTextOutlined />} loading={invoiceSaving} onClick={openInvoiceDateModal}>
-                Invoice
+              <Button type={isRefundRequestOrder ? 'primary' : 'default'} danger={isRefundRequestOrder} icon={<FileTextOutlined />} loading={invoiceSaving} onClick={openInvoiceDateModal}>
+                {isRefundRequestOrder ? 'Refund' : 'Invoice'}
               </Button>
             )}
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-              Save Order
+              {isRefundRequestOrder ? 'Save Refund Request' : 'Save Order'}
             </Button>
           </Space>
         </Card>
@@ -716,15 +735,7 @@ export default function OrderEdit() {
                       <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Status required' }]} style={{ minWidth: 200 }}>
                         <Select
                           disabled={!canChangeStatus}
-                          options={[
-                            { label: 'Quote', value: 'quote' },
-                            { label: 'Order', value: 'order' },
-                            { label: 'Cancel', value: 'cancel' },
-                            { label: 'Void', value: 'void' },
-                            { label: 'Refund Request', value: 'refund_request' },
-                            { label: 'Refund', value: 'refund' },
-                            { label: 'Partial Refund', value: 'partial_refund' },
-                          ]}
+                          options={statusOptions}
                         />
                       </Form.Item>
                       <Form.Item
@@ -845,9 +856,9 @@ export default function OrderEdit() {
       </Modal>
 
       <Modal
-        title={order ? `Create invoice for ${order.order_number}` : 'Create Invoice'}
+        title={order ? `Create ${isRefundRequestOrder ? 'refund' : 'invoice'} for ${order.order_number}` : `Create ${isRefundRequestOrder ? 'Refund' : 'Invoice'}`}
         open={invoiceDateOpen}
-        okText="Create Invoice"
+        okText={isRefundRequestOrder ? 'Create Refund' : 'Create Invoice'}
         cancelButtonProps={{ danger: true }}
         confirmLoading={invoiceSaving}
         okButtonProps={{ disabled: !invoiceDate }}
@@ -856,7 +867,7 @@ export default function OrderEdit() {
         destroyOnClose
       >
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          <Text type="secondary">Choose the invoice date used for invoice registers and reports.</Text>
+          <Text type="secondary">Choose the {isRefundRequestOrder ? 'refund' : 'invoice'} date used for invoice registers and reports.</Text>
           <DatePicker
             autoFocus
             allowClear={false}

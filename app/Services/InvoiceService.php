@@ -36,7 +36,7 @@ class InvoiceService
 
             $invoice = $this->createFreshInvoice($order, $invoiceDate);
 
-            $order->update(['status' => 'invoice']);
+            $order->update(['status' => $this->isRefundOrder($order) ? 'refund' : 'invoice']);
 
             return $invoice->fresh(['lines']);
         });
@@ -94,12 +94,16 @@ class InvoiceService
         $invoice->due_date = $invoiceDate->copy()->addDays(30)->toDateString();
         $invoice->currency_code = $order->currency_code ?: $order->company->base_currency_code;
         $invoice->invoice_number = $this->generateInvoiceNumber($order->company_id);
-        $subtotal = (float) $order->items->sum(fn ($item) => max(0, (float) $item->total_price));
-        $total = max(0, (float) $order->items->sum('total_price'));
+        $isRefundOrder = $this->isRefundOrder($order);
+        $lineTotal = (float) $order->items->sum('total_price');
+        $subtotal = $isRefundOrder
+            ? $lineTotal
+            : (float) $order->items->sum(fn ($item) => max(0, (float) $item->total_price));
+        $total = $isRefundOrder ? $lineTotal : max(0, $lineTotal);
         $invoice->subtotal = $subtotal;
         $invoice->tax_amount = 0;
         $invoice->total_amount = $total;
-        $invoice->outstanding_amount = $total;
+        $invoice->outstanding_amount = $isRefundOrder ? 0 : $total;
         $invoice->status = 'issued';
         $invoice->fx_rate_to_base = 1;
         $invoice->save();
@@ -117,6 +121,15 @@ class InvoiceService
         }
 
         return $invoice;
+    }
+
+    private function isRefundOrder(Order $order): bool
+    {
+        $meta = $order->meta ?? [];
+
+        return isset($meta['refund_of_order_id'])
+            || in_array((string) $order->status, ['refund_request', 'partial_refund', 'refund'], true)
+            || (float) $order->total_amount < 0;
     }
 
     /**

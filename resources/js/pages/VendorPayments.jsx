@@ -31,14 +31,13 @@ export default function VendorPayments() {
   const loadBaseData = async () => {
     setLoading(true);
     try {
-      const [vendorResponse, paymentResponse, cashResponse, bankResponse] = await Promise.all([
-        fetch('/api/v1/vendors', { headers }), fetch('/api/v1/payments/vendor', { headers }),
+      const [vendorResponse, cashResponse, bankResponse] = await Promise.all([
+        fetch('/api/v1/vendors', { headers }),
         fetch('/api/v1/accounts/cash', { headers }), fetch('/api/v1/accounts/bank', { headers }),
       ]);
-      if (![vendorResponse, paymentResponse, cashResponse, bankResponse].every((response) => response.ok)) throw new Error('Could not load vendor payment data');
-      const [vendorData, paymentData, cashData, bankData] = await Promise.all([vendorResponse.json(), paymentResponse.json(), cashResponse.json(), bankResponse.json()]);
+      if (![vendorResponse, cashResponse, bankResponse].every((response) => response.ok)) throw new Error('Could not load vendor payment data');
+      const [vendorData, cashData, bankData] = await Promise.all([vendorResponse.json(), cashResponse.json(), bankResponse.json()]);
       setVendors(vendorData.data || vendorData || []);
-      setPayments(paymentData.data || []);
       setAccounts({ cash: cashData || [], bank: bankData || [] });
     } catch (error) {
       message.error(error.message);
@@ -49,17 +48,30 @@ export default function VendorPayments() {
 
   useEffect(() => { loadBaseData(); }, []);
 
+  const loadVendorPayments = async (value) => {
+    setPayments([]);
+    if (!value) return;
+    const response = await fetch(`/api/v1/payments/vendor?vendor_id=${value}`, { headers });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || data.error || 'Could not load vendor payment history');
+    setPayments(data.data || []);
+  };
+
   const selectVendor = async (value) => {
     setVendorId(value);
     setSelectedKeys([]);
     setAllocations({});
     setPayables([]);
+    setPayments([]);
     if (!value) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/payments/vendor/${value}/payables`, { headers });
+      const [response] = await Promise.all([
+        fetch(`/api/v1/payments/vendor/${value}/payables`, { headers }),
+        loadVendorPayments(value),
+      ]);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Could not load vendor payables');
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not load vendor payables');
       setPayables(data.data || []);
     } catch (error) {
       message.error(error.message);
@@ -147,7 +159,7 @@ export default function VendorPayments() {
       const response = await fetch(`/api/v1/payments/vendor/payment/${editing.uid}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ date: editing.date, payment_method: editing.method, account_id: editing.account_id, reference_number: editing.reference || null, description: editing.narration || null, allocations: next }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Could not update payment');
-      message.success('Vendor payment updated and reallocated'); setEditing(null); await loadBaseData();
+      message.success('Vendor payment updated and reallocated'); setEditing(null); await Promise.all([vendorId ? selectVendor(vendorId) : Promise.resolve(), loadBaseData()]);
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
@@ -157,7 +169,7 @@ export default function VendorPayments() {
       const response = await fetch(`/api/v1/payments/vendor/payment/${row.uid}`, { method: 'DELETE', headers });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Could not delete payment');
-      message.success('Vendor payment deleted'); await loadBaseData();
+      message.success('Vendor payment deleted'); await Promise.all([vendorId ? selectVendor(vendorId) : Promise.resolve(), loadBaseData()]);
     } catch (error) { message.error(error.message); } finally { setSaving(false); }
   };
 
@@ -257,7 +269,7 @@ export default function VendorPayments() {
         </Row>}
       </Card>
 
-      <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={payments} scroll={{ x: 900 }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={loadBaseData}>Refresh</Button>} /></Card>
+      <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={vendorId ? payments : []} scroll={{ x: 900 }} locale={{ emptyText: vendorId ? 'No payment history for this vendor' : 'Select a vendor to view payment history' }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={() => { loadBaseData(); if (vendorId) selectVendor(vendorId); }}>Refresh</Button>} /></Card>
       <Modal width={980} title={`Edit and reallocate ${editing?.payment_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} cancelButtonProps={{ danger: true }} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
           <Col xs={24} sm={12} md={6}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} style={{ width: '100%', marginTop: 4 }} /></Col>

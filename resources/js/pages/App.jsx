@@ -56,6 +56,7 @@ import VendorStatement from './VendorStatement';
 import VendorPayments from './VendorPayments';
 import CancelledReport from './CancelledReport';
 import ReferenceSearch from './ReferenceSearch';
+import CustomerRefundAllocation from './CustomerRefundAllocation';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -567,6 +568,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
               <Route path="/vendor-payments" element={canAccessPayments ? <VendorPayments /> : <Navigate to="/" replace />} />
               <Route path="/vendor-receipts" element={canAccessPayments ? <CounterpartyTransaction direction="receipt" partyType="vendor" /> : <Navigate to="/" replace />} />
+              <Route path="/refund-allocations" element={canAccessPayments ? <CustomerRefundAllocation /> : <Navigate to="/" replace />} />
               <Route path="/customers" element={<CustomerList />} />
               <Route path="/vendors" element={<VendorList />} />
               <Route path="/profile/company" element={<CompanyProfile />} />
@@ -833,6 +835,11 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           key: '/vendor-payments',
           label: <Link to="/vendor-payments">Vendor Payments</Link>,
           icon: <BankOutlined />,
+        },
+        {
+          key: '/refund-allocations',
+          label: <Link to="/refund-allocations">Refund Allocation</Link>,
+          icon: <SwapOutlined />,
         }] : []),
       ],
     },

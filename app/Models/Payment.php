@@ -65,6 +65,11 @@ class Payment extends Model
         return $this->hasMany(VendorPaymentAllocation::class);
     }
 
+    public function refundAllocations(): HasMany
+    {
+        return $this->hasMany(RefundAllocation::class);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uid';

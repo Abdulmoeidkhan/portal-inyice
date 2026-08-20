@@ -84,6 +84,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::patch('/{uid}/discount', 'discount')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.discount');
         Route::patch('/{uid}/void', 'void')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.void');
         Route::patch('/{uid}/cancel', 'cancel')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.cancel');
+        Route::delete('/{uid}/refund', 'deleteRefund')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('invoices.refund.delete');
         Route::get('/{uid}/aging-status', 'agingStatus')->name('invoices.agingStatus');
     });
 
@@ -93,7 +94,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::post('/{uid}/share', 'share')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share');
         Route::delete('/{uid}/share', 'revokeShare')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.share.revoke');
         Route::post('/{uid}/duplicate', 'duplicate')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.duplicate');
-        Route::patch('/{uid}/booked-by', 'updateBookedBy')->middleware(['role:admin,owner', 'throttle:sensitive-write'])->name('orders.bookedBy.update');
+        Route::patch('/{uid}/booked-by', 'updateBookedBy')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('orders.bookedBy.update');
         Route::post('/{uid}/refund-request', 'createRefundRequest')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.refundRequest');
         Route::post('/{uid}/recreate', 'recreateCancelled')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.recreateCancelled');
         Route::get('/{uid}', 'show')->name('orders.show');
@@ -128,6 +129,11 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/vendor/{vendorId}/payables', 'vendorPayables')->name('payments.vendor.payables');
         Route::post('/vendor', 'recordVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.record');
         Route::get('/customer', 'customerPayments')->name('payments.customer.list');
+        Route::get('/refund-allocations/customer/{customerId}', 'customerRefundAllocations')->name('payments.refundAllocations.customer');
+        Route::get('/refund-allocations/vendor/{vendorId}', 'vendorRefundAllocations')->name('payments.refundAllocations.vendor');
+        Route::post('/refund-allocations/customer-payment', 'recordCustomerRefundPayment')->middleware('throttle:sensitive-write')->name('payments.refundAllocations.customerPayment');
+        Route::post('/refund-allocations/customer-adjustment', 'recordCustomerRefundAdjustment')->middleware('throttle:sensitive-write')->name('payments.refundAllocations.customerAdjustment');
+        Route::post('/refund-allocations/vendor-receipt', 'recordVendorRefundReceipt')->middleware('throttle:sensitive-write')->name('payments.refundAllocations.vendorReceipt');
         Route::post('/customer', 'recordCustomerPayment')->middleware('throttle:sensitive-write')->name('payments.customer.record');
         Route::delete('/customer/{uid}', 'deleteCustomerPayment')->middleware('throttle:sensitive-write')->name('payments.customer.delete');
         Route::patch('/customer/{uid}', 'updateCustomerPayment')->middleware('throttle:sensitive-write')->name('payments.customer.update');

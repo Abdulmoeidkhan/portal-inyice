@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Descriptions, Divider, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Popconfirm, Row, Segmented, Select, Space, Spin, Tag, Typography } from 'antd';
-import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined, StopOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
@@ -9,10 +9,10 @@ import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const canEditInvoiceOrder = () => {
+const canUseInvoiceActions = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return ['admin', 'owner', 'accounts'].includes(user.role);
+    return ['owner', 'admin', 'accounts'].includes(user.role);
   } catch {
     return false;
   }
@@ -20,7 +20,7 @@ const canEditInvoiceOrder = () => {
 const canChangeBookedBy = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return ['admin', 'owner'].includes(user.role);
+    return ['owner', 'admin', 'accounts'].includes(user.role);
   } catch {
     return false;
   }
@@ -33,9 +33,6 @@ export default function InvoiceList() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [refundInvoice, setRefundInvoice] = useState(null);
-  const [refundAmount, setRefundAmount] = useState(0);
-  const [refundReason, setRefundReason] = useState('');
   const [discountInvoice, setDiscountInvoice] = useState(null);
   const [discounts, setDiscounts] = useState([]);
   const [discountLoading, setDiscountLoading] = useState(false);
@@ -53,11 +50,20 @@ export default function InvoiceList() {
   const [bookedByUserId, setBookedByUserId] = useState(null);
   const screens = Grid.useBreakpoint();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-  const canEditInvoices = canEditInvoiceOrder();
+  const canEditInvoices = canUseInvoiceActions();
   const canUpdateBookedBy = canChangeBookedBy();
   const compactActions = !screens.sm;
   const discountLimit = Math.max(0, Number(discountInvoice?.outstanding_amount || 0) + Number(editingDiscount?.amount || 0));
   const discountInputLimit = discountType === 'percentage' ? 100 : discountLimit;
+  const invoiceStatusOptions = [
+    { label: 'Issued', value: 'issued' },
+    { label: 'Sent', value: 'sent' },
+    { label: 'Partial Paid', value: 'partial_paid' },
+    { label: 'Paid', value: 'paid' },
+    { label: 'Overdue', value: 'overdue' },
+    { label: 'Void', value: 'void' },
+    { label: 'Refund', value: 'refund' },
+  ];
   const staffOptions = staff.map((user) => ({
     value: user.id,
     label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
@@ -163,6 +169,20 @@ export default function InvoiceList() {
     } catch (error) { message.error(error.message); return null; } finally { setActionLoadingKey(''); }
   };
 
+  const openInvoiceDocument = async (invoice, detailed = false) => {
+    if (!invoice.is_virtual_invoice) {
+      navigate(`/invoices/${invoice.uid}${detailed ? '?view=detailed' : ''}`);
+      return;
+    }
+
+    const data = await request('/api/v1/invoices/create-from-order', 'POST', { order_id: invoice.order_id }, `${invoice.uid}:invoice`);
+    if (!data?.invoice?.uid) return;
+
+    message.success(`Refund invoice ${data.invoice.invoice_number || ''} created`);
+    fetchInvoices();
+    navigate(`/invoices/${data.invoice.uid}${detailed ? '?view=detailed' : ''}`);
+  };
+
   const openOrderEdit = async (invoice) => {
     if (!invoice.order?.uid) return;
 
@@ -182,11 +202,6 @@ export default function InvoiceList() {
     } finally {
       setActionLoadingKey('');
     }
-  };
-
-  const refund = async (invoice, amount) => {
-    const data = await request('/api/v1/payments/customer/refund', 'POST', { invoice_uid: invoice.uid, amount, reason: refundReason || undefined }, `${invoice.uid}:refund`);
-    if (data) { message.success('Refund recorded'); setRefundInvoice(null); setRefundReason(''); fetchInvoices(); }
   };
 
   const loadDiscounts = async (invoice) => {
@@ -281,6 +296,44 @@ export default function InvoiceList() {
     }
   };
 
+  const createFullRefundInvoice = async (invoice) => {
+    if (!invoice.order?.uid) return;
+
+    setActionLoadingKey(`${invoice.uid}:full-refund`);
+    try {
+      const refundResponse = await fetch(`/api/v1/orders/${invoice.order.uid}/refund-request`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const refundData = await refundResponse.json();
+      if (!refundResponse.ok) throw new Error(refundData.error || refundData.message || 'Could not create refund request');
+
+      const refundOrder = refundData.order;
+      const invoiceResponse = await fetch('/api/v1/invoices/create-from-order', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: refundOrder.id }),
+      });
+      const invoiceData = await invoiceResponse.json();
+      if (!invoiceResponse.ok) throw new Error(invoiceData.error || invoiceData.message || 'Could not invoice refund request');
+
+      message.success(`Full refund invoice ${invoiceData.invoice?.invoice_number || ''} created`);
+      fetchInvoices();
+    } catch (error) {
+      message.error(error.message);
+    } finally {
+      setActionLoadingKey('');
+    }
+  };
+
+  const deleteRefund = async (invoice) => {
+    const data = await request(`/api/v1/invoices/${invoice.uid}/refund`, 'DELETE', undefined, `${invoice.uid}:delete-refund`);
+    if (data) {
+      message.success(data.message || 'Refund deleted');
+      fetchInvoices();
+    }
+  };
+
   const duplicateInvoiceOrder = async (invoice) => {
     if (!invoice.order?.uid) return;
 
@@ -337,72 +390,186 @@ export default function InvoiceList() {
     }
   };
 
-  const renderInvoiceActions = (invoice, { showLabels = !compactActions } = {}) => (
-    <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
-      {invoice.is_refund_order ? (
-        <>
-          <Button size="small" type="primary" icon={<EyeOutlined />} loading={actionLoadingKey === `${invoice.uid}:edit`} onClick={() => openOrderEdit(invoice)}>
-            {showLabels ? 'Open Order' : null}
-          </Button>
-          <Button size="small" icon={<CopyOutlined />} loading={actionLoadingKey === `${invoice.uid}:duplicate`} onClick={() => duplicateInvoiceOrder(invoice)}>
-            {showLabels ? 'Duplicate' : null}
-          </Button>
-          {canUpdateBookedBy && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => openBookedByModal(invoice)}>
-              {showLabels ? 'Booked By' : null}
-            </Button>
-          )}
-        </>
-      ) : (
-        <>
-          <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
-            {showLabels ? 'Invoice' : null}
-          </Button>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
-            {showLabels ? 'Detailed' : null}
-          </Button>
-        </>
-      )}
-      {invoice.order?.uid && (
-        <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
-          {showLabels ? 'Voucher' : null}
+  const invoiceActionItems = (invoice) => {
+    const isClosed = ['void', 'cancel'].includes(invoice.status);
+    const isRefundOrder = invoice.is_refund_order === true;
+    const isVirtual = invoice.is_virtual_invoice === true;
+
+    if (isRefundOrder) {
+      return [
+        {
+          key: 'duplicate',
+          icon: <CopyOutlined />,
+          label: 'Duplicate order',
+          disabled: !invoice.order?.uid,
+          onClick: () => duplicateInvoiceOrder(invoice),
+        },
+        {
+          key: 'booked-by',
+          icon: <EditOutlined />,
+          label: 'Change booked by',
+          disabled: !canUpdateBookedBy || !invoice.order?.uid,
+          onClick: () => openBookedByModal(invoice),
+        },
+        {
+          key: 'delete-refund',
+          icon: <DeleteOutlined />,
+          danger: true,
+          label: 'Delete refund',
+          disabled: !invoice.has_refund_order || !invoice.can_delete_refund,
+          onClick: () => Modal.confirm({
+            title: 'Delete refund?',
+            content: invoice.refund_order_number
+              ? `This will delete refund ${invoice.refund_order_number} and its refund invoice.`
+              : 'This will delete the refund request and its refund invoice.',
+            okText: 'Delete refund',
+            cancelButtonProps: { danger: true },
+            okButtonProps: { danger: true },
+            onOk: () => deleteRefund(invoice),
+          }),
+        },
+        {
+          key: 'share',
+          icon: <ShareAltOutlined />,
+          label: 'Copy share link',
+          disabled: isVirtual,
+          onClick: () => shareInvoice(invoice),
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'pay',
+        label: 'Record payment',
+        disabled: isRefundOrder || Number(invoice.outstanding_amount || 0) <= 0 || isClosed,
+        onClick: () => navigate(`/payments?invoice=${invoice.uid}`),
+      },
+      {
+        key: 'discount',
+        icon: <PercentageOutlined />,
+        label: 'Discounts',
+        disabled: isRefundOrder || isClosed,
+        onClick: () => openDiscount(invoice),
+      },
+      {
+        key: 'refund-request',
+        icon: <RollbackOutlined />,
+        label: 'Create refund request',
+        disabled: isRefundOrder || !invoice.order?.uid || isClosed || !invoice.can_create_refund_request,
+        onClick: () => createRefundRequest(invoice),
+      },
+      {
+        key: 'duplicate',
+        icon: <CopyOutlined />,
+        label: 'Duplicate order',
+        disabled: !invoice.order?.uid,
+        onClick: () => duplicateInvoiceOrder(invoice),
+      },
+      {
+        key: 'booked-by',
+        icon: <EditOutlined />,
+        label: 'Change booked by',
+        disabled: !canUpdateBookedBy || !invoice.order?.uid,
+        onClick: () => openBookedByModal(invoice),
+      },
+      {
+        key: 'full-refund',
+        icon: <RollbackOutlined />,
+        label: 'Full refund',
+        disabled: isRefundOrder || !invoice.order?.uid || isClosed || !invoice.can_create_refund_request,
+        onClick: () => Modal.confirm({
+          title: 'Create full refund invoice?',
+          content: `This will create a refund request and immediately invoice it for ${invoice.currency_code} ${money(Math.abs(Number(invoice.total_amount || 0)))} as a negative invoice.`,
+          okText: 'Create refund invoice',
+          cancelButtonProps: { danger: true },
+          okButtonProps: { danger: true },
+          onOk: () => createFullRefundInvoice(invoice),
+        }),
+      },
+      {
+        key: 'delete-refund',
+        icon: <DeleteOutlined />,
+        danger: true,
+        label: 'Delete refund',
+        disabled: !invoice.has_refund_order || !invoice.can_delete_refund,
+        onClick: () => Modal.confirm({
+          title: 'Delete refund?',
+          content: invoice.refund_order_number
+            ? `This will delete refund ${invoice.refund_order_number} and its refund invoice.`
+            : 'This will delete the refund request and its refund invoice.',
+          okText: 'Delete refund',
+          cancelButtonProps: { danger: true },
+          okButtonProps: { danger: true },
+          onOk: () => deleteRefund(invoice),
+        }),
+      },
+      {
+        key: 'share',
+        icon: <ShareAltOutlined />,
+        label: 'Copy share link',
+        disabled: isVirtual,
+        onClick: () => shareInvoice(invoice),
+      },
+      {
+        key: 'edit',
+        icon: <EditOutlined />,
+        label: 'Edit order',
+        disabled: !invoice.order?.uid,
+        onClick: () => openOrderEdit(invoice),
+      },
+      {
+        key: 'delete',
+        icon: <DeleteOutlined />,
+        danger: true,
+        label: 'Delete invoice',
+        disabled: isVirtual || !invoice.can_delete_invoice,
+        onClick: () => openDeleteInvoice(invoice),
+      },
+      {
+        key: 'void',
+        icon: <StopOutlined />,
+        danger: true,
+        label: 'Void Invoice',
+        disabled: !invoice.can_void_invoice,
+        onClick: () => Modal.confirm({
+          title: 'Void this invoice?',
+          content: 'This action will convert invoice values to zero and keep the previous cost/profit breakup in notes.',
+          okText: 'Void',
+          cancelButtonProps: { danger: true },
+          okButtonProps: { danger: true },
+          onOk: () => voidInvoice(invoice),
+        }),
+      },
+    ];
+  };
+
+  const renderInvoiceActions = (invoice, { showLabels = !compactActions } = {}) => {
+    if (!canEditInvoices) {
+      return <Text type="secondary">-</Text>;
+    }
+
+    return (
+      <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
+        <Button size="small" type="primary" icon={<FileTextOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={() => openInvoiceDocument(invoice)}>
+          {showLabels ? 'Invoice' : null}
         </Button>
-      )}
-      {!invoice.is_refund_order && (
-        <Dropdown menu={{ items: [
-          ...(canEditInvoices ? [
-            { key: 'pay', label: 'Record payment', disabled: Number(invoice.outstanding_amount || 0) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => navigate(`/payments?invoice=${invoice.uid}`) },
-            { key: 'discount', icon: <PercentageOutlined />, label: 'Discounts', disabled: ['void', 'cancel'].includes(invoice.status), onClick: () => openDiscount(invoice) },
-          ] : []),
-          { key: 'refund-request', icon: <RollbackOutlined />, label: 'Create refund request', disabled: !invoice.order?.uid || ['void', 'cancel'].includes(invoice.status), onClick: () => createRefundRequest(invoice) },
-          { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate order', disabled: !invoice.order?.uid, onClick: () => duplicateInvoiceOrder(invoice) },
-          ...(canUpdateBookedBy ? [
-            { key: 'booked-by', icon: <EditOutlined />, label: 'Change booked by', disabled: !invoice.order?.uid, onClick: () => openBookedByModal(invoice) },
-          ] : []),
-          ...(canEditInvoices ? [
-            { key: 'partial-refund', label: 'Partial refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => { setRefundInvoice(invoice); setRefundAmount(0); } },
-            { key: 'full-refund', label: 'Full refund', disabled: Number(invoice.total_amount) - Number(invoice.outstanding_amount) <= 0 || ['void', 'cancel'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Refund all paid amount?', content: `${invoice.currency_code} ${money(Number(invoice.total_amount) - Number(invoice.outstanding_amount))}`, okText: 'Refund', cancelButtonProps: { danger: true }, okButtonProps: { danger: true }, onOk: () => refund(invoice, Number(invoice.total_amount) - Number(invoice.outstanding_amount)) }) },
-          ] : []),
-          { key: 'share', icon: <ShareAltOutlined />, label: 'Copy share link', onClick: () => shareInvoice(invoice) },
-          ...(canEditInvoices ? [
-            { type: 'divider' },
-            { key: 'edit', icon: <EditOutlined />, label: 'Edit order', disabled: !invoice.order?.uid, onClick: () => openOrderEdit(invoice) },
-            { key: 'delete', danger: true, label: 'Delete invoice', onClick: () => openDeleteInvoice(invoice) },
-            { key: 'void', danger: true, label: 'Void invoice', disabled: !['draft', 'issued', 'sent'].includes(invoice.status), onClick: () => Modal.confirm({ title: 'Void this invoice?', content: 'This action marks the invoice as void.', okText: 'Void', cancelButtonProps: { danger: true }, okButtonProps: { danger: true }, onOk: () => voidInvoice(invoice) }) },
-          ] : []),
-        ] }}>
+        <Button size="small" icon={<EyeOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={() => openInvoiceDocument(invoice, true)}>
+          {showLabels ? 'Detailed' : null}
+        </Button>
+        {!invoice.is_refund_order && invoice.order?.uid && (
+          <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
+            {showLabels ? 'Voucher' : null}
+          </Button>
+        )}
+        <Dropdown menu={{ items: invoiceActionItems(invoice) }} trigger={['click']}>
           <Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>
             {showLabels ? 'Actions' : null}
           </Button>
         </Dropdown>
-      )}
-      {invoice.is_refund_order && canEditInvoices && (
-        <Button size="small" icon={<EditOutlined />} loading={actionLoadingKey === `${invoice.uid}:edit`} onClick={() => openOrderEdit(invoice)}>
-          {showLabels ? 'Edit' : null}
-        </Button>
-      )}
-    </Space>
-  );
+      </Space>
+    );
+  };
 
   const columns = [
     {
@@ -467,7 +634,7 @@ export default function InvoiceList() {
       render: dateOnly,
     },
     {
-      title: 'Action',
+      title: 'Actions',
       key: 'action',
       width: compactActions ? 172 : 330,
       align: compactActions ? 'center' : undefined,
@@ -502,17 +669,7 @@ export default function InvoiceList() {
             placeholder="Filter by status"
             allowClear
             onChange={(value) => setStatusFilter(value || '')}
-            options={[
-              { label: 'Draft', value: 'draft' },
-              { label: 'Issued', value: 'issued' },
-              { label: 'Sent', value: 'sent' },
-              { label: 'Partial Paid', value: 'partial_paid' },
-              { label: 'Paid', value: 'paid' },
-              { label: 'Overdue', value: 'overdue' },
-              { label: 'Void', value: 'void' },
-              { label: 'Partial Refund', value: 'partial_refund' },
-              { label: 'Refund', value: 'refund' },
-            ]}
+            options={invoiceStatusOptions}
           />
         </Space>
 
@@ -522,10 +679,17 @@ export default function InvoiceList() {
             columns={columns}
             dataSource={invoices}
             rowKey="id"
-            onRow={(invoice) => compactActions ? {
+            onRow={(invoice) => ({
               className: 'mobile-row-clickable',
-              onClick: () => setSelectedInvoice(invoice),
-            } : {}}
+              onClick: () => {
+                if (compactActions) {
+                  setSelectedInvoice(invoice);
+                  return;
+                }
+
+                openInvoiceDocument(invoice);
+              },
+            })}
             pagination={{
               current: pagination.current,
               pageSize: pagination.pageSize,
@@ -567,13 +731,6 @@ export default function InvoiceList() {
           </Space>
         )}
       </Drawer>
-      <Modal title={`Partial refund · ${refundInvoice?.invoice_number || ''}`} open={!!refundInvoice} onCancel={() => setRefundInvoice(null)} cancelButtonProps={{ danger: true }} onOk={() => refund(refundInvoice, refundAmount)} okText="Record refund" confirmLoading={actionLoadingKey === `${refundInvoice?.uid}:refund`} okButtonProps={{ danger: true, disabled: refundAmount <= 0 }}>
-        <Typography.Paragraph>Refundable: {refundInvoice?.currency_code} {money(Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))}</Typography.Paragraph>
-        <Typography.Text strong>Amount</Typography.Text>
-        <InputNumber style={{ width: '100%', marginBottom: 12 }} min={0.01} max={Math.max(0, Number(refundInvoice?.total_amount || 0) - Number(refundInvoice?.outstanding_amount || 0))} precision={2} value={refundAmount} onChange={(value) => setRefundAmount(Number(value || 0))} />
-        <Typography.Text strong>Reason</Typography.Text>
-        <Input.TextArea maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
-      </Modal>
       <Modal
         className="discounts-modal"
         title={`Discounts · ${discountInvoice?.invoice_number || ''}`}

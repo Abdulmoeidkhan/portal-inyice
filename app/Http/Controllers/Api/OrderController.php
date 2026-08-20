@@ -1070,6 +1070,12 @@ class OrderController extends Controller
             ], 422);
         }
 
+        if ($this->refundOrderExistsFor($sourceOrder)) {
+            return response()->json([
+                'error' => 'A refund request or refund order already exists for this invoice.',
+            ], 422);
+        }
+
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
 
         $refundOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
@@ -1106,6 +1112,11 @@ class OrderController extends Controller
 
             $this->copyRefundOrderItems($sourceOrder, $refundOrder);
             $refundOrder->syncVendorCostsFromVoucher($refundMeta);
+            $sourceOrder->loadMissing('vendorCosts');
+            if ($sourceOrder->vendorCosts->isNotEmpty()) {
+                $refundOrder->vendorCosts()->delete();
+                $this->copyRefundVendorCosts($sourceOrder, $refundOrder);
+            }
             $refundOrder->update([
                 'total_amount' => OrderItem::where('order_id', $refundOrder->id)->sum('total_price') ?: -abs((float) $sourceOrder->total_amount),
             ]);
@@ -1205,6 +1216,41 @@ class OrderController extends Controller
         if ($items !== []) {
             OrderItem::insert($items);
         }
+    }
+
+    private function copyRefundVendorCosts(Order $sourceOrder, Order $targetOrder): void
+    {
+        $sourceOrder->loadMissing('vendorCosts');
+
+        $costs = $sourceOrder->vendorCosts->map(fn (OrderVendorCost $cost) => [
+            'tenant_id' => $targetOrder->tenant_id,
+            'order_id' => $targetOrder->id,
+            'vendor_id' => $cost->vendor_id,
+            'service_type' => $cost->service_type,
+            'service_index' => $cost->service_index,
+            'amount' => -abs((float) $cost->amount),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($costs !== []) {
+            OrderVendorCost::insert($costs);
+        }
+    }
+
+    private function refundOrderExistsFor(Order $order): bool
+    {
+        return Order::where('tenant_id', $order->tenant_id)
+            ->where('company_id', $order->company_id)
+            ->whereKeyNot($order->id)
+            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->where(function ($query) use ($order): void {
+                $query->where('booking_reference', $order->order_number)
+                    ->orWhere('meta->refund_of_order_id', $order->id)
+                    ->orWhere('meta->refund_of_order_uid', $order->uid)
+                    ->orWhere('meta->refund_of_order_number', $order->order_number);
+            })
+            ->exists();
     }
 
     private function negativeRefundVoucher(array $payload): array
