@@ -960,6 +960,7 @@ class OrderController extends Controller
         $newOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
             $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
             $newMeta = $sourceMeta;
+            $duplicateStatus = $this->duplicateOrderStatus($sourceOrder);
             unset($newMeta['cancel_approval'], $newMeta['cancel_signature'], $newMeta['recreated_from_cancelled_order']);
             $newMeta['duplicated_from_order'] = [
                 'order_id' => $sourceOrder->id,
@@ -985,7 +986,7 @@ class OrderController extends Controller
                 'active_sections' => $sourceOrder->active_sections,
                 'emergency_contact' => $sourceOrder->emergency_contact,
                 'booking_reference' => $sourceOrder->booking_reference,
-                'status' => 'order',
+                'status' => $duplicateStatus,
                 'currency_code' => $sourceOrder->currency_code,
                 'total_amount' => 0,
                 'notes' => trim("Duplicated from order {$sourceOrder->order_number}.\n" . (string) $sourceOrder->notes),
@@ -1003,13 +1004,26 @@ class OrderController extends Controller
             return $newOrder;
         });
 
+        $duplicateLabel = $newOrder->status === 'refund_request' ? 'Refund request' : 'Order';
+
         return response()->json([
             'success' => true,
-            'message' => "Order {$newOrder->order_number} duplicated from {$sourceOrder->order_number}.",
+            'message' => "{$duplicateLabel} {$newOrder->order_number} duplicated from {$sourceOrder->order_number}.",
             'order' => $this->orderForUser($newOrder->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice']), $user),
             'source_order_uid' => $sourceOrder->uid,
             'source_order_number' => $sourceOrder->order_number,
         ], 201);
+    }
+
+    private function duplicateOrderStatus(Order $sourceOrder): string
+    {
+        $sourceStatus = (string) $sourceOrder->status;
+
+        if ((float) $sourceOrder->total_amount < 0 || in_array($sourceStatus, ['refund_request', 'partial_refund', 'refund'], true)) {
+            return 'refund_request';
+        }
+
+        return 'order';
     }
 
     public function updateBookedBy(string $uid, Request $request): JsonResponse

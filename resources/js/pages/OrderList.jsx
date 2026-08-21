@@ -78,6 +78,7 @@ const orderStatusOptions = [
 const refundRequestStatusOptions = [
   { label: 'Refund Request', value: 'refund_request' },
   { label: 'Refund', value: 'refund' },
+  { label: 'Cancel', value: 'cancel' },
 ];
 
 const hasActiveInvoice = (order) => Boolean(order?.invoice || (Array.isArray(order?.invoices) && order.invoices.length));

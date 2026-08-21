@@ -56,6 +56,7 @@ const orderStatusOptions = [
 const refundRequestStatusOptions = [
   { label: 'Refund Request', value: 'refund_request' },
   { label: 'Refund', value: 'refund' },
+  { label: 'Cancel', value: 'cancel' },
 ];
 const refundOrderStatuses = ['refund_request', 'refund', 'partial_refund'];
 const hasActiveInvoice = (order) => Boolean(order?.invoice || (Array.isArray(order?.invoices) && order.invoices.length));
@@ -241,7 +242,8 @@ export default function OrderEdit() {
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
   const formStatus = Form.useWatch('status', form) || order?.status;
-  const isRefundEditMode = isRefundOrderStatus(formStatus);
+  const isCancellingRefundOrder = isRefundOrderStatus(order?.status) && formStatus === 'cancel';
+  const isRefundEditMode = isRefundOrderStatus(formStatus) || isCancellingRefundOrder;
   const isRefundRequestOrder = order?.status === 'refund_request';
   const canCreateInvoice = order && !order.invoice && ['quote', 'order', 'confirm', 'refund_request'].includes(order.status);
   const statusOptions = ['refund_request', 'refund'].includes(order?.status)
@@ -536,7 +538,7 @@ export default function OrderEdit() {
         ...form.getFieldsValue(true),
         ...submittedValues,
       };
-      const isRefundSubmit = isRefundOrderStatus(values.status);
+      const isRefundSubmit = isRefundOrderStatus(values.status) || (isRefundOrderStatus(order?.status) && values.status === 'cancel');
       const voucherPayload = sanitizeVoucherForSubmit(isRefundSubmit ? coerceRefundVoucherValues(voucher) : voucher);
       const isCancellingOrder = values.status === 'cancel' && order?.status !== 'cancel';
 

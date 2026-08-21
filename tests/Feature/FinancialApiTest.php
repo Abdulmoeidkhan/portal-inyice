@@ -574,22 +574,19 @@ class FinancialApiTest extends TestCase
             ->json('data');
         $this->assertFalse(collect($orders)->contains(fn (array $order) => (int) $order['id'] === (int) $ctx['order']->id));
 
-        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+        $pendingCustomerStatement = $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
             ->assertOk()
-            ->assertJsonFragment([
-                'type' => 'refund',
-                'reference' => $refundOrder->order_number,
-                'refunds' => 1000,
-            ]);
+            ->json('transactions');
+        $this->assertFalse(collect($pendingCustomerStatement)->contains(
+            fn (array $transaction) => $transaction['reference'] === $refundOrder->order_number
+        ));
 
-        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+        $pendingVendorStatement = $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
             ->assertOk()
-            ->assertJsonFragment([
-                'type' => 'vendor_refund',
-                'reference' => $refundOrder->order_number,
-                'vendor_refunds' => 1000,
-            ])
-            ->assertJsonPath('summary.outstanding_balance', 0);
+            ->json('transactions');
+        $this->assertFalse(collect($pendingVendorStatement)->contains(
+            fn (array $transaction) => $transaction['reference'] === $refundOrder->order_number
+        ));
 
         $this->patchJson('/api/v1/orders/' . $refundOrder->uid, [
             'customer_id' => $ctx['customer']->id,
@@ -612,6 +609,23 @@ class FinancialApiTest extends TestCase
                 'status' => 'refund',
                 'is_refund_order' => true,
             ]);
+
+        $this->getJson('/api/v1/statements/customer/' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'refund',
+                'reference' => $refundOrder->order_number,
+                'refunds' => 1000,
+            ]);
+
+        $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'vendor_refund',
+                'reference' => $refundOrder->order_number,
+                'vendor_refunds' => 1000,
+            ])
+            ->assertJsonPath('summary.outstanding_balance', 0);
     }
 
     public function test_refund_request_can_be_invoiced_with_negative_total_and_remains_allocatable(): void
@@ -1892,6 +1906,34 @@ class FinancialApiTest extends TestCase
             'uid' => $invoice['uid'],
             'order_id' => $ctx['order']->id,
         ]);
+    }
+
+    public function test_refund_order_duplicate_stays_refund_request(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $refundOrder = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/refund-request')
+            ->assertCreated()
+            ->json('order');
+
+        $response = $this->postJson('/api/v1/orders/' . $refundOrder['uid'] . '/duplicate');
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('source_order_uid', $refundOrder['uid'])
+            ->assertJsonPath('order.status', 'refund_request')
+            ->assertJsonPath('order.total_amount', '-1000.0000');
+
+        $duplicatedOrder = Order::where('uid', $response->json('order.uid'))->firstOrFail();
+        $this->assertNotSame($refundOrder['id'], $duplicatedOrder->id);
+        $this->assertNull($duplicatedOrder->invoice);
+        $this->assertSame(1, $duplicatedOrder->items()->count());
+        $this->assertSame(-1000.0, (float) $duplicatedOrder->total_amount);
+        $this->assertSame('refund_request', $duplicatedOrder->status);
     }
 
     public function test_admin_and_accounts_can_change_order_booked_by_from_invoice_folder_action(): void

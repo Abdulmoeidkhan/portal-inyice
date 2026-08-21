@@ -15,6 +15,8 @@ use Illuminate\Support\Collection;
 
 class StatementService
 {
+    private const CONFIRMED_REFUND_ORDER_STATUSES = ['partial_refund', 'refund'];
+
     /**
      * Generate customer statement
      */
@@ -99,7 +101,7 @@ class StatementService
         Order::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
-            ->whereIn('status', ['refund_request', 'partial_refund', 'refund'])
+            ->whereIn('status', self::CONFIRMED_REFUND_ORDER_STATUSES)
             ->where('total_amount', '<', 0)
             ->whereDoesntHave('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
             ->with('customer:id,name')
@@ -182,7 +184,7 @@ class StatementService
             ->where('company_id', $companyId)
             ->where(function ($query): void {
                 $query->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
-                    ->orWhereIn('status', ['refund_request', 'partial_refund', 'refund']);
+                    ->orWhereIn('status', self::CONFIRMED_REFUND_ORDER_STATUSES);
             })
             ->with('invoice:id,order_id,invoice_date')
             ->orderBy('created_at')
@@ -307,7 +309,7 @@ class StatementService
     {
         $orderStatus = (string) $invoice->order?->status;
 
-        if ((float) $invoice->total_amount < 0 && in_array($orderStatus, ['refund_request', 'partial_refund', 'refund'], true)) {
+        if ((float) $invoice->total_amount < 0 && in_array($orderStatus, self::CONFIRMED_REFUND_ORDER_STATUSES, true)) {
             return $orderStatus;
         }
 
