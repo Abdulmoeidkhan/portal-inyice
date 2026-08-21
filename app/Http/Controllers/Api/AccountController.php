@@ -8,6 +8,7 @@ use App\Models\BankAccount;
 use App\Services\LedgerService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -60,16 +61,16 @@ class AccountController extends Controller
             'opening_balance' => 'nullable|numeric|min:0',
         ]);
 
-        $account = CashAccount::create([
+        $account = DB::transaction(fn (): CashAccount => CashAccount::create([
             'uid' => (string) Str::ulid(),
             'tenant_id' => auth()->user()->tenant_id,
             'company_id' => auth()->user()->company_id,
             'account_code' => $validated['account_code'],
             'account_name' => $validated['account_name'],
             'currency_code' => $validated['currency_code'],
-            'opening_balance' => (float)$validated['opening_balance'] ?? 0,
-            'current_balance' => (float)$validated['opening_balance'] ?? 0,
-        ]);
+            'opening_balance' => (float) ($validated['opening_balance'] ?? 0),
+            'current_balance' => (float) ($validated['opening_balance'] ?? 0),
+        ]));
 
         return response()->json([
             'success' => true,
@@ -122,7 +123,7 @@ class AccountController extends Controller
             'opening_balance' => 'nullable|numeric|min:0',
         ]);
 
-        $account = BankAccount::create([
+        $account = DB::transaction(fn (): BankAccount => BankAccount::create([
             'uid' => (string) Str::ulid(),
             'tenant_id' => auth()->user()->tenant_id,
             'company_id' => auth()->user()->company_id,
@@ -130,9 +131,9 @@ class AccountController extends Controller
             'account_number' => $validated['account_number'],
             'account_holder' => $validated['account_holder'],
             'currency_code' => $validated['currency_code'],
-            'opening_balance' => (float)$validated['opening_balance'] ?? 0,
-            'current_balance' => (float)$validated['opening_balance'] ?? 0,
-        ]);
+            'opening_balance' => (float) ($validated['opening_balance'] ?? 0),
+            'current_balance' => (float) ($validated['opening_balance'] ?? 0),
+        ]));
 
         return response()->json([
             'success' => true,

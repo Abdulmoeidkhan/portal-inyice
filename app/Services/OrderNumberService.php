@@ -14,13 +14,17 @@ class OrderNumberService
     {
         $today = now();
         $prefix = $today->format('Ymd'); // YYYYMMDD
-        $sequence = Order::where('company_id', $companyId)
+        $lastOrderNumber = Order::withTrashed()
+            ->where('company_id', $companyId)
             ->where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [
-                $today->copy()->startOfDay(),
-                $today->copy()->endOfDay(),
-            ])
-            ->count() + 1;
+            ->where('order_number', 'like', "ORD-{$prefix}-%")
+            ->orderByDesc('order_number')
+            ->value('order_number');
+
+        $sequence = 1;
+        if (is_string($lastOrderNumber) && preg_match('/^ORD-' . preg_quote($prefix, '/') . '-(\d+)$/', $lastOrderNumber, $matches)) {
+            $sequence = ((int) $matches[1]) + 1;
+        }
 
         return sprintf('ORD-%s-%05d', $prefix, $sequence);
     }

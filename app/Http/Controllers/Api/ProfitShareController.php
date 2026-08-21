@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -82,7 +83,7 @@ class ProfitShareController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $share = $this->persistShare(new ProfitShare(), $request);
+        $share = DB::transaction(fn (): ProfitShare => $this->persistShare(new ProfitShare(), $request));
 
         return response()->json([
             'success' => true,
@@ -94,13 +95,16 @@ class ProfitShareController extends Controller
     public function update(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $share = ProfitShare::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $share = DB::transaction(function () use ($uid, $request, $user): ProfitShare {
+            $share = ProfitShare::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $share = $this->persistShare($share, $request);
+            return $this->persistShare($share, $request);
+        });
 
         return response()->json([
             'success' => true,
@@ -112,13 +116,17 @@ class ProfitShareController extends Controller
     public function destroy(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $share = ProfitShare::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
 
-        $share->delete();
+        DB::transaction(function () use ($uid, $user): void {
+            $share = ProfitShare::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $share->delete();
+        });
 
         return response()->json([
             'success' => true,

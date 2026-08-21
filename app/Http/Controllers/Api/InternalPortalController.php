@@ -13,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -82,30 +83,40 @@ class InternalPortalController extends Controller
         $validated['monthly_invoice_limit'] = null;
         $validated['order_limit'] = null;
 
-        if (array_key_exists('user_limit', $validated)) {
-            $requestedUserLimit = (int) $validated['user_limit'];
-            $isPaid = array_key_exists('is_paid', $validated)
-                ? (bool) $validated['is_paid']
-                : (bool) $company->is_paid;
+        $response = DB::transaction(function () use ($company, $validated): ?JsonResponse {
+            $company = Company::withoutGlobalScopes()->lockForUpdate()->findOrFail($company->id);
 
-            if (!$isPaid && $requestedUserLimit > Company::DEFAULT_USER_LIMIT) {
-                return response()->json([
-                    'error' => 'Unpaid companies are limited to '.Company::DEFAULT_USER_LIMIT.' users.',
-                ], 422);
+            if (array_key_exists('user_limit', $validated)) {
+                $requestedUserLimit = (int) $validated['user_limit'];
+                $isPaid = array_key_exists('is_paid', $validated)
+                    ? (bool) $validated['is_paid']
+                    : (bool) $company->is_paid;
+
+                if (!$isPaid && $requestedUserLimit > Company::DEFAULT_USER_LIMIT) {
+                    return response()->json([
+                        'error' => 'Unpaid companies are limited to '.Company::DEFAULT_USER_LIMIT.' users.',
+                    ], 422);
+                }
+
+                $currentUsers = User::withoutGlobalScopes()
+                    ->where('company_id', $company->id)
+                    ->count();
+
+                if ($requestedUserLimit < $currentUsers) {
+                    return response()->json([
+                        'error' => "User limit cannot be lower than the company's current {$currentUsers} users.",
+                    ], 422);
+                }
             }
 
-            $currentUsers = User::withoutGlobalScopes()
-                ->where('company_id', $company->id)
-                ->count();
+            $company->update($validated);
 
-            if ($requestedUserLimit < $currentUsers) {
-                return response()->json([
-                    'error' => "User limit cannot be lower than the company's current {$currentUsers} users.",
-                ], 422);
-            }
+            return null;
+        });
+
+        if ($response) {
+            return $response;
         }
-
-        $company->update($validated);
 
         return response()->json([
             'success' => true,
@@ -124,15 +135,21 @@ class InternalPortalController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $company->update([
-            'is_active' => $validated['is_active'],
-        ]);
+        $company = DB::transaction(function () use ($company, $validated): Company {
+            $company = Company::withoutGlobalScopes()->lockForUpdate()->findOrFail($company->id);
 
-        if (!$company->is_active) {
-            User::withoutGlobalScopes()
-                ->where('company_id', $company->id)
-                ->each(fn (User $user) => $user->tokens()->delete());
-        }
+            $company->update([
+                'is_active' => $validated['is_active'],
+            ]);
+
+            if (!$company->is_active) {
+                User::withoutGlobalScopes()
+                    ->where('company_id', $company->id)
+                    ->each(fn (User $user) => $user->tokens()->delete());
+            }
+
+            return $company;
+        });
 
         return response()->json([
             'success' => true,
@@ -170,7 +187,7 @@ class InternalPortalController extends Controller
         $tenant = $this->internalTenant();
         $company = $this->internalCompany($tenant);
 
-        $user = User::create([
+        $user = DB::transaction(fn (): User => User::create([
             'uid' => (string) Str::ulid(),
             'tenant_id' => $tenant->id,
             'company_id' => $company->id,
@@ -179,7 +196,7 @@ class InternalPortalController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'is_active' => true,
-        ]);
+        ]));
 
         $user->load('role:id,code,name,is_system');
 
@@ -206,13 +223,23 @@ class InternalPortalController extends Controller
             ], 422);
         }
 
-        $target->forceFill([
-            'is_active' => $validated['is_active'],
-        ])->save();
+        $target = DB::transaction(function () use ($target, $validated): User {
+            $target = User::withoutGlobalScopes()
+                ->with('role:id,code,name,is_system')
+                ->whereKey($target->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (!$target->is_active) {
-            $target->tokens()->delete();
-        }
+            $target->forceFill([
+                'is_active' => $validated['is_active'],
+            ])->save();
+
+            if (!$target->is_active) {
+                $target->tokens()->delete();
+            }
+
+            return $target;
+        });
 
         return response()->json([
             'success' => true,
@@ -232,11 +259,21 @@ class InternalPortalController extends Controller
             ->where('uid', $uid)
             ->firstOrFail();
 
-        $target->forceFill([
-            'password' => $validated['password'],
-        ])->save();
+        $target = DB::transaction(function () use ($target, $validated): User {
+            $target = User::withoutGlobalScopes()
+                ->with('role:id,code,name,is_system')
+                ->whereKey($target->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $target->tokens()->delete();
+            $target->forceFill([
+                'password' => $validated['password'],
+            ])->save();
+
+            $target->tokens()->delete();
+
+            return $target;
+        });
 
         return response()->json([
             'success' => true,
@@ -260,9 +297,11 @@ class InternalPortalController extends Controller
             ], 422);
         }
 
-        $user->forceFill([
-            'password' => $validated['password'],
-        ])->save();
+        DB::transaction(function () use ($user, $validated): void {
+            $user->forceFill([
+                'password' => $validated['password'],
+            ])->save();
+        });
 
         return response()->json([
             'success' => true,

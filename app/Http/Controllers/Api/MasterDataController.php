@@ -10,6 +10,7 @@ use App\Models\Vendor;
 use App\Services\StatementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class MasterDataController extends Controller
@@ -60,7 +61,7 @@ class MasterDataController extends Controller
             'currency_code' => 'nullable|string|size:3|exists:currencies,code',
         ]);
 
-        $customer = Customer::create([
+        $customer = DB::transaction(fn (): Customer => Customer::create([
             'uid' => (string) Str::ulid(),
             'tenant_id' => $user->tenant_id,
             'company_id' => $company->id,
@@ -73,7 +74,7 @@ class MasterDataController extends Controller
             'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
             'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $company->base_currency_code,
             'is_active' => true,
-        ]);
+        ]));
 
         return response()->json(['success' => true, 'customer' => $customer], 201);
     }
@@ -81,47 +82,61 @@ class MasterDataController extends Controller
     public function updateCustomer(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $customer = Customer::where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
-
-        if ($this->hasCustomerFinancialLinks($customer)) {
-            return response()->json(['error' => 'This customer is attached to financial activity and cannot be updated.'], 422);
-        }
-
         $validated = $request->validate($this->customerRules());
 
-        $customer->update([
-            'type' => $validated['type'] ?? 'B2C',
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'city' => $validated['city'] ?? null,
-            'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
-            'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $customer->currency_code,
-        ]);
+        $response = DB::transaction(function () use ($uid, $user, $validated): ?JsonResponse {
+            $customer = Customer::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'customer' => $this->customerPayload($customer->fresh()),
-        ]);
+            if ($this->hasCustomerFinancialLinks($customer)) {
+                return response()->json(['error' => 'This customer is attached to financial activity and cannot be updated.'], 422);
+            }
+
+            $customer->update([
+                'type' => $validated['type'] ?? 'B2C',
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'city' => $validated['city'] ?? null,
+                'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
+                'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $customer->currency_code,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'customer' => $this->customerPayload($customer->fresh()),
+            ]);
+        });
+
+        return $response;
     }
 
     public function deleteCustomer(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $customer = Customer::where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $response = DB::transaction(function () use ($uid, $user): ?JsonResponse {
+            $customer = Customer::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($this->hasCustomerFinancialLinks($customer)) {
-            return response()->json(['error' => 'This customer is attached to financial activity and cannot be deleted.'], 422);
+            if ($this->hasCustomerFinancialLinks($customer)) {
+                return response()->json(['error' => 'This customer is attached to financial activity and cannot be deleted.'], 422);
+            }
+
+            $customer->delete();
+
+            return null;
+        });
+
+        if ($response) {
+            return $response;
         }
-
-        $customer->delete();
 
         return response()->json(['success' => true, 'message' => 'Customer deleted successfully.']);
     }
@@ -193,7 +208,7 @@ class MasterDataController extends Controller
             'payment_terms' => 'nullable|string|max:100',
         ]);
 
-        $vendor = Vendor::create([
+        $vendor = DB::transaction(fn (): Vendor => Vendor::create([
             'uid' => (string) Str::ulid(),
             'tenant_id' => $user->tenant_id,
             'company_id' => $company->id,
@@ -207,7 +222,7 @@ class MasterDataController extends Controller
             'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $company->base_currency_code,
             'payment_terms' => $validated['payment_terms'] ?? null,
             'is_active' => true,
-        ]);
+        ]));
 
         return response()->json(['success' => true, 'vendor' => $vendor], 201);
     }
@@ -215,51 +230,65 @@ class MasterDataController extends Controller
     public function updateVendor(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $vendor = Vendor::where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
-
-        if ($this->hasVendorFinancialLinks($vendor)) {
-            return response()->json(['error' => 'This vendor is attached to financial activity and cannot be updated.'], 422);
-        }
-
         $validated = $request->validate([
             ...$this->customerRules(),
             'payment_terms' => 'nullable|string|max:100',
         ]);
 
-        $vendor->update([
-            'type' => $validated['type'] ?? 'B2C',
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'city' => $validated['city'] ?? null,
-            'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
-            'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $vendor->currency_code,
-            'payment_terms' => $validated['payment_terms'] ?? null,
-        ]);
+        $response = DB::transaction(function () use ($uid, $user, $validated): ?JsonResponse {
+            $vendor = Vendor::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'vendor' => $this->vendorPayload($vendor->fresh()),
-        ]);
+            if ($this->hasVendorFinancialLinks($vendor)) {
+                return response()->json(['error' => 'This vendor is attached to financial activity and cannot be updated.'], 422);
+            }
+
+            $vendor->update([
+                'type' => $validated['type'] ?? 'B2C',
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'city' => $validated['city'] ?? null,
+                'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
+                'currency_code' => isset($validated['currency_code']) ? strtoupper($validated['currency_code']) : $vendor->currency_code,
+                'payment_terms' => $validated['payment_terms'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'vendor' => $this->vendorPayload($vendor->fresh()),
+            ]);
+        });
+
+        return $response;
     }
 
     public function deleteVendor(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $vendor = Vendor::where('tenant_id', $user->tenant_id)
-            ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $response = DB::transaction(function () use ($uid, $user): ?JsonResponse {
+            $vendor = Vendor::where('tenant_id', $user->tenant_id)
+                ->where('company_id', $user->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($this->hasVendorFinancialLinks($vendor)) {
-            return response()->json(['error' => 'This vendor is attached to financial activity and cannot be deleted.'], 422);
+            if ($this->hasVendorFinancialLinks($vendor)) {
+                return response()->json(['error' => 'This vendor is attached to financial activity and cannot be deleted.'], 422);
+            }
+
+            $vendor->delete();
+
+            return null;
+        });
+
+        if ($response) {
+            return $response;
         }
-
-        $vendor->delete();
 
         return response()->json(['success' => true, 'message' => 'Vendor deleted successfully.']);
     }

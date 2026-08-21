@@ -26,6 +26,7 @@ import {
   syncPassengerNameFields,
   syncVisaNumberFields,
 } from './sales-flow/defaults';
+import { coerceRefundVoucherValues } from './sales-flow/refundValues';
 import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
 import Table from '../components/CsvTable';
@@ -56,9 +57,11 @@ const refundRequestStatusOptions = [
   { label: 'Refund Request', value: 'refund_request' },
   { label: 'Refund', value: 'refund' },
 ];
+const refundOrderStatuses = ['refund_request', 'refund', 'partial_refund'];
 const hasActiveInvoice = (order) => Boolean(order?.invoice || (Array.isArray(order?.invoices) && order.invoices.length));
 
 const money = (value, currency = '') => `${currency ? `${currency} ` : ''}${Number(value || 0).toLocaleString()}`;
+const isRefundOrderStatus = (status) => refundOrderStatuses.includes(String(status || ''));
 
 const rowFactories = {
   flights: blankFlight,
@@ -131,13 +134,17 @@ const sanitizeVoucherForSubmit = (voucher) => {
   };
 };
 
-const orderFormDefaults = (order) => ({
-  customer_id: order?.customer?.id || order?.customer_id,
-  status: order?.status || 'order',
-  currency_code: order?.currency_code || 'PKR',
-  total_amount: Number(order?.total_amount || 0),
-  notes: order?.notes || '',
-});
+const orderFormDefaults = (order) => {
+  const totalAmount = Number(order?.total_amount || 0);
+
+  return {
+    customer_id: order?.customer?.id || order?.customer_id,
+    status: order?.status || 'order',
+    currency_code: order?.currency_code || 'PKR',
+    total_amount: isRefundOrderStatus(order?.status) ? Math.abs(totalAmount) : totalAmount,
+    notes: order?.notes || '',
+  };
+};
 
 const voucherFromOrder = (order) => {
   const initialVoucher = createInitialVoucher();
@@ -233,6 +240,8 @@ export default function OrderEdit() {
   const [invoiceSaving, setInvoiceSaving] = useState(false);
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
+  const formStatus = Form.useWatch('status', form) || order?.status;
+  const isRefundEditMode = isRefundOrderStatus(formStatus);
   const isRefundRequestOrder = order?.status === 'refund_request';
   const canCreateInvoice = order && !order.invoice && ['quote', 'order', 'confirm', 'refund_request'].includes(order.status);
   const statusOptions = ['refund_request', 'refund'].includes(order?.status)
@@ -527,7 +536,8 @@ export default function OrderEdit() {
         ...form.getFieldsValue(true),
         ...submittedValues,
       };
-      const voucherPayload = sanitizeVoucherForSubmit(voucher);
+      const isRefundSubmit = isRefundOrderStatus(values.status);
+      const voucherPayload = sanitizeVoucherForSubmit(isRefundSubmit ? coerceRefundVoucherValues(voucher) : voucher);
       const isCancellingOrder = values.status === 'cancel' && order?.status !== 'cancel';
 
       if (isCancellingOrder && !password) {
@@ -537,7 +547,10 @@ export default function OrderEdit() {
         return;
       }
 
-      const payload = { ...values };
+      const payload = {
+        ...values,
+        total_amount: isRefundSubmit ? -Math.abs(Number(values.total_amount || 0)) : values.total_amount,
+      };
       if (isCancellingOrder) {
         payload.cancel_password = password;
       } else {
@@ -753,7 +766,7 @@ export default function OrderEdit() {
                         rules={[{ required: true, message: 'Total amount required' }]}
                         style={{ minWidth: 180 }}
                       >
-                        <InputNumber min={0} precision={2} controls={false} style={{ width: '100%' }} />
+                        <InputNumber min={0} precision={2} controls={false} status={isRefundEditMode ? 'error' : undefined} style={{ width: '100%' }} />
                       </Form.Item>
                     </Space>
                     <Form.Item name="notes" label="Order Notes">
@@ -810,6 +823,7 @@ export default function OrderEdit() {
           onUseFlightPassengersForVisa={useFlightPassengersForVisa}
           onSetHotelLeadPassenger={setHotelLeadPassenger}
           canViewCostProfit={canViewCostProfit}
+          refundMode={isRefundEditMode}
         />
 
         <VoucherDiscountsCard

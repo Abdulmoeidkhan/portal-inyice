@@ -24,3 +24,34 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.voucher-discount-editor-grid {
+  align-items: flex-end;
+}
+
+.voucher-discount-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.voucher-discount-field .ant-segmented {
+  width: 100%;
+}
+
+.voucher-discount-value-input,
+.voucher-discount-value-input.ant-input-number-group-wrapper,
+.voucher-discount-field .ant-input-number-group-wrapper {
+  width: 100%;
+}
+
+.voucher-discount-field .ant-input,
+.voucher-discount-field .ant-input-number,
+.voucher-discount-field .ant-segmented {
+  min-height: 24px;
+}
+
+.voucher-discount-submit {
+  width: auto;
+}

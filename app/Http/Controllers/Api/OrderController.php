@@ -446,12 +446,15 @@ class OrderController extends Controller
 
     public function share(string $uid, Request $request): JsonResponse
     {
-        $order = Order::where('tenant_id', $request->user()->tenant_id)
-            ->where('company_id', $request->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $shareToken = DB::transaction(function () use ($uid, $request): string {
+            $order = Order::where('tenant_id', $request->user()->tenant_id)
+                ->where('company_id', $request->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $shareToken = $order->ensureShareToken();
+            return $order->ensureShareToken();
+        });
 
         return response()->json([
             'share_url' => url('/shared/vouchers/' . $shareToken),
@@ -461,12 +464,15 @@ class OrderController extends Controller
 
     public function revokeShare(string $uid, Request $request): JsonResponse
     {
-        $order = Order::where('tenant_id', $request->user()->tenant_id)
-            ->where('company_id', $request->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        DB::transaction(function () use ($uid, $request): void {
+            $order = Order::where('tenant_id', $request->user()->tenant_id)
+                ->where('company_id', $request->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $order->update(['share_token' => null]);
+            $order->update(['share_token' => null]);
+        });
 
         return response()->json(['success' => true]);
     }
@@ -1016,25 +1022,31 @@ class OrderController extends Controller
             'user_id' => ['required', 'integer', 'min:1'],
         ]);
 
-        $bookedBy = User::query()
-            ->where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->where('is_active', true)
-            ->findOrFail((int) $validated['user_id']);
+        $order = DB::transaction(function () use ($uid, $validated, $user, $tenantId, $companyId): Order {
+            $bookedBy = User::query()
+                ->where('tenant_id', $tenantId)
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->findOrFail((int) $validated['user_id']);
 
-        $order = Order::where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->where('uid', $uid)
-            ->firstOrFail();
+            $order = Order::where('tenant_id', $tenantId)
+                ->where('company_id', $companyId)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $order->update([
-            'created_by_user_id' => $bookedBy->id,
-            'updated_by_user_id' => (int) $user->id,
-        ]);
+            $order->update([
+                'created_by_user_id' => $bookedBy->id,
+                'updated_by_user_id' => (int) $user->id,
+            ]);
+
+            return $order;
+        });
 
         return response()->json([
             'success' => true,
-            'message' => "Booked by changed to {$bookedBy->name}.",
+            'message' => "Booked by changed to {$order->createdBy?->name}.",
             'order' => $this->orderForUser($order->fresh(['customer:id,name', 'vendor:id,name', 'items:id,order_id,description,total_price', 'invoice', 'createdBy:id,name,email']), $user),
         ]);
     }
@@ -1135,18 +1147,27 @@ class OrderController extends Controller
 
     public function destroy(string $uid, Request $request): JsonResponse
     {
-        $order = Order::where('tenant_id', $request->user()->tenant_id)
-            ->where('company_id', $request->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $response = DB::transaction(function () use ($uid, $request): ?JsonResponse {
+            $order = Order::where('tenant_id', $request->user()->tenant_id)
+                ->where('company_id', $request->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (Invoice::where('order_id', $order->id)->exists()) {
-            return response()->json([
-                'error' => 'Cannot delete an order that already has an invoice.',
-            ], 422);
+            if (Invoice::where('order_id', $order->id)->exists()) {
+                return response()->json([
+                    'error' => 'Cannot delete an order that already has an invoice.',
+                ], 422);
+            }
+
+            $order->delete();
+
+            return null;
+        });
+
+        if ($response) {
+            return $response;
         }
-
-        $order->delete();
 
         return response()->json([
             'success' => true,

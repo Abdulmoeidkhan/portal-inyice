@@ -13,6 +13,7 @@ import {
   blankTransfer,
   blankVisa,
 } from './defaults';
+import { refundInputValue, refundSignedFields, signedRefundValue } from './refundValues';
 
 const { Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -169,6 +170,7 @@ export default function VoucherRowsSections({
   onUseFlightPassengersForVisa,
   onSetHotelLeadPassenger,
   canViewCostProfit = true,
+  refundMode = false,
 }) {
   const screens = useBreakpoint();
   const useMobileSectionSelect = !screens.md;
@@ -194,7 +196,10 @@ export default function VoucherRowsSections({
 
   const setPricingField = (idx, field, value) => {
     const row = voucher.pricing[idx] || {};
-    const numericValue = value ?? (field === 'flight_ticket_no' ? '' : '0');
+    const fallbackValue = field === 'flight_ticket_no' ? '' : '0';
+    const numericValue = refundMode && refundSignedFields.has(field)
+      ? signedRefundValue(value, fallbackValue)
+      : value ?? fallbackValue;
     const nextRow = { ...row, [field]: numericValue };
     const cost = toNumber(nextRow.flight_cost);
     const profit = toNumber(nextRow.flight_profit);
@@ -229,7 +234,9 @@ export default function VoucherRowsSections({
 
   const setServiceMoneyField = (section, idx, field, value) => {
     const row = voucher[section]?.[idx] || {};
-    const numericValue = value ?? '0';
+    const numericValue = refundMode && refundSignedFields.has(field)
+      ? signedRefundValue(value)
+      : value ?? '0';
     const nextRow = { ...row, [field]: numericValue };
     const cost = toNumber(nextRow.cost);
     const profit = toNumber(nextRow.profit);
@@ -301,7 +308,10 @@ export default function VoucherRowsSections({
         {...inputProps}
         stringMode
         controls={false}
-        value={row[field] === '' || row[field] === null || row[field] === undefined ? null : row[field]}
+        status={refundMode && refundSignedFields.has(field) ? 'error' : undefined}
+        value={refundMode && refundSignedFields.has(field)
+          ? refundInputValue(row[field])
+          : row[field] === '' || row[field] === null || row[field] === undefined ? null : row[field]}
         onChange={(value) => setServiceMoneyField(section, idx, field, value)}
         style={{ width: '100%' }}
       />
@@ -413,9 +423,12 @@ export default function VoucherRowsSections({
                       {...inputProps}
                       stringMode
                       controls={false}
-                      value={row[field] === '' || row[field] === null || row[field] === undefined
-                        ? (field === 'flight_ticket_no' ? null : '0')
-                        : row[field]}
+                      status={refundMode && refundSignedFields.has(field) ? 'error' : undefined}
+                      value={refundMode && refundSignedFields.has(field)
+                        ? (refundInputValue(row[field]) ?? (field === 'flight_ticket_no' ? null : '0'))
+                        : row[field] === '' || row[field] === null || row[field] === undefined
+                          ? (field === 'flight_ticket_no' ? null : '0')
+                          : row[field]}
                       onChange={(value) => setPricingField(idx, field, value)}
                       style={{ width: '100%' }}
                     />

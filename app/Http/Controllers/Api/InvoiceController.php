@@ -254,11 +254,20 @@ class InvoiceController extends Controller
 
     public function share(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
-            ->where('company_id', auth()->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
-        if (!$invoice->share_token) $invoice->update(['share_token' => Str::random(64)]);
+        $invoice = DB::transaction(function () use ($uid): Invoice {
+            $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!$invoice->share_token) {
+                $invoice->update(['share_token' => Str::random(64)]);
+            }
+
+            return $invoice;
+        });
+
         return response()->json([
             'share_url' => url('/shared/invoices/' . $invoice->share_token),
             'share_token' => $invoice->share_token,
@@ -267,11 +276,16 @@ class InvoiceController extends Controller
 
     public function revokeShare(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
-            ->where('company_id', auth()->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
-        $invoice->update(['share_token' => null]);
+        DB::transaction(function () use ($uid): void {
+            $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $invoice->update(['share_token' => null]);
+        });
+
         return response()->json(['success' => true]);
     }
 
@@ -800,12 +814,15 @@ class InvoiceController extends Controller
      */
     public function markAsSent(string $uid): JsonResponse
     {
-        $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
-            ->where('company_id', auth()->user()->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $updated = DB::transaction(function () use ($uid): Invoice {
+            $invoice = Invoice::where('tenant_id', auth()->user()->tenant_id)
+                ->where('company_id', auth()->user()->company_id)
+                ->where('uid', $uid)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $updated = $this->invoiceService->markAsSent($invoice);
+            return $this->invoiceService->markAsSent($invoice);
+        });
 
         return response()->json([
             'success' => true,

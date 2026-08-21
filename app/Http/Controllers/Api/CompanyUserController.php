@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -44,111 +45,124 @@ class CompanyUserController extends Controller
             'role' => ['required', Rule::in($roles->pluck('code')->all())],
         ]);
 
-        $limits = $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit));
+        return DB::transaction(function () use ($user, $validated): JsonResponse {
+            $limits = $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit));
 
-        if ($limits['remaining'] < 1) {
+            if ($limits['remaining'] < 1) {
+                return response()->json([
+                    'error' => 'This company already has the maximum number of users.',
+                    'limits' => $limits,
+                ], 422);
+            }
+
+            $role = Role::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('code', $validated['role'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $companyUser = User::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $user->tenant_id,
+                'company_id' => $user->company_id,
+                'role_id' => $role->id,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'is_active' => true,
+            ]);
+
+            $companyUser->load('role:id,code,name');
+
             return response()->json([
-                'error' => 'This company already has the maximum number of users.',
-                'limits' => $limits,
-            ], 422);
-        }
-
-        $role = Role::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('code', $validated['role'])
-            ->firstOrFail();
-
-        $companyUser = User::create([
-            'uid' => (string) Str::ulid(),
-            'tenant_id' => $user->tenant_id,
-            'company_id' => $user->company_id,
-            'role_id' => $role->id,
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'is_active' => true,
-        ]);
-
-        $companyUser->load('role:id,code,name');
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Company user created successfully.',
-            'user' => $this->serializeUser($companyUser),
-            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit)),
-        ], 201);
+                'success' => true,
+                'message' => 'Company user created successfully.',
+                'user' => $this->serializeUser($companyUser),
+                'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit)),
+            ], 201);
+        });
     }
 
     public function update(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $companyUser = $this->companyUser($uid, $user);
         $roles = $this->availableRoles((int) $user->tenant_id);
-
-        if ($companyUser->hasRole('owner')) {
-            return response()->json(['error' => 'Owner users cannot be edited here.'], 422);
-        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'email' => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($companyUser->id)],
+            'email' => ['required', 'email', 'max:200'],
             'role' => ['required', Rule::in($roles->pluck('code')->all())],
             'is_active' => ['required', 'boolean'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $role = Role::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('code', $validated['role'])
-            ->firstOrFail();
+        return DB::transaction(function () use ($uid, $user, $validated): JsonResponse {
+            $companyUser = $this->companyUser($uid, $user, true);
 
-        $companyUser->fill([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'role_id' => $role->id,
-            'is_active' => (bool) $validated['is_active'],
-        ]);
+            if ($companyUser->hasRole('owner')) {
+                return response()->json(['error' => 'Owner users cannot be edited here.'], 422);
+            }
 
-        if (!empty($validated['password'])) {
-            $companyUser->password = $validated['password'];
-            $companyUser->tokens()->delete();
-        }
+            validator($validated, [
+                'email' => [Rule::unique('users', 'email')->ignore($companyUser->id)],
+            ])->validate();
 
-        if (!$companyUser->is_active) {
-            $companyUser->tokens()->delete();
-        }
+            $role = Role::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('code', $validated['role'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $companyUser->save();
-        $companyUser->load('role:id,code,name');
+            $companyUser->fill([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'role_id' => $role->id,
+                'is_active' => (bool) $validated['is_active'],
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Company user updated successfully.',
-            'user' => $this->serializeUser($companyUser),
-        ]);
+            if (!empty($validated['password'])) {
+                $companyUser->password = $validated['password'];
+                $companyUser->tokens()->delete();
+            }
+
+            if (!$companyUser->is_active) {
+                $companyUser->tokens()->delete();
+            }
+
+            $companyUser->save();
+            $companyUser->load('role:id,code,name');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Company user updated successfully.',
+                'user' => $this->serializeUser($companyUser),
+            ]);
+        });
     }
 
     public function destroy(string $uid, Request $request): JsonResponse
     {
         $user = $request->user();
-        $companyUser = $this->companyUser($uid, $user);
+        return DB::transaction(function () use ($uid, $user): JsonResponse {
+            $companyUser = $this->companyUser($uid, $user, true);
 
-        if ($companyUser->id === $user->id) {
-            return response()->json(['error' => 'You cannot delete your own user account.'], 422);
-        }
+            if ($companyUser->id === $user->id) {
+                return response()->json(['error' => 'You cannot delete your own user account.'], 422);
+            }
 
-        if ($companyUser->hasRole('owner')) {
-            return response()->json(['error' => 'Owner users cannot be deleted.'], 422);
-        }
+            if ($companyUser->hasRole('owner')) {
+                return response()->json(['error' => 'Owner users cannot be deleted.'], 422);
+            }
 
-        $companyUser->tokens()->delete();
-        $companyUser->delete();
+            $companyUser->tokens()->delete();
+            $companyUser->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Company user deleted successfully.',
-            'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit)),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Company user deleted successfully.',
+                'limits' => $this->limits((int) $user->tenant_id, (int) $user->company_id, $this->effectiveUserLimit($user->company?->user_limit)),
+            ]);
+        });
     }
 
     private function effectiveUserLimit(?int $configuredLimit): int
@@ -179,14 +193,19 @@ class CompanyUserController extends Controller
         ];
     }
 
-    private function companyUser(string $uid, User $user): User
+    private function companyUser(string $uid, User $user, bool $lock = false): User
     {
-        return User::query()
+        $query = User::query()
             ->with('role:id,code,name')
             ->where('tenant_id', $user->tenant_id)
             ->where('company_id', $user->company_id)
-            ->where('uid', $uid)
-            ->firstOrFail();
+            ->where('uid', $uid);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->firstOrFail();
     }
 
     private function serializeUser(User $user): array

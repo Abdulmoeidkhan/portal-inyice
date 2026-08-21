@@ -8,6 +8,8 @@ import { calculateVoucherTotals } from './voucherTotals';
 const { Text } = Typography;
 
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const discountFieldStyle = { display: 'flex', flexDirection: 'column', gap: 8, width: '100%' };
+const discountControlStyle = { width: '100%' };
 
 const normalizedForm = (discount) => ({
   ...blankDiscount(),
@@ -129,42 +131,49 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
           {editingIndex !== null && <Button size="small" icon={<PlusOutlined />} onClick={resetForm}>New discount</Button>}
         </div>
 
-        <Row gutter={[12, 12]}>
+        <Row className="voucher-discount-editor-grid" gutter={[12, 12]} align="bottom">
           <Col xs={24} md={8}>
-            <Text strong>Discount type</Text>
-            <Segmented
-              block
-              value={form.discount_type}
-              options={[
-                { label: 'Amount', value: 'amount' },
-                { label: 'Percentage', value: 'percentage' },
-              ]}
-              onChange={(value) => setForm((current) => ({ ...current, discount_type: value, amount: '', percentage: '' }))}
-              style={{ marginTop: 6 }}
-            />
+            <div className="voucher-discount-field" style={discountFieldStyle}>
+              <Text strong>Discount type</Text>
+              <Segmented
+                block
+                value={form.discount_type}
+                options={[
+                  { label: 'Amount', value: 'amount' },
+                  { label: 'Percentage', value: 'percentage' },
+                ]}
+                onChange={(value) => setForm((current) => ({ ...current, discount_type: value, amount: '', percentage: '' }))}
+                style={discountControlStyle}
+              />
+            </div>
           </Col>
           <Col xs={24} md={8}>
-            <Text strong>{form.discount_type === 'percentage' ? 'Percentage' : 'Amount'}</Text>
-            <InputNumber
-              min={0.01}
-              max={inputLimit}
-              precision={2}
-              controls={false}
-              addonAfter={form.discount_type === 'percentage' ? '%' : currencyCode}
-              value={inputValue === '' || inputValue === null || inputValue === undefined ? null : inputValue}
-              onChange={(value) => setForm((current) => ({
-                ...current,
-                [current.discount_type === 'percentage' ? 'percentage' : 'amount']: value ?? '',
-              }))}
-              style={{ width: '100%', marginTop: 6 }}
-            />
+            <div className="voucher-discount-field" style={discountFieldStyle}>
+              <Text strong>{form.discount_type === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Text>
+              <InputNumber
+                className="voucher-discount-value-input"
+                min={0.01}
+                max={inputLimit}
+                precision={2}
+                controls={false}
+                addonAfter={form.discount_type === 'percentage' ? '%' : currencyCode}
+                value={inputValue === '' || inputValue === null || inputValue === undefined ? null : inputValue}
+                onChange={(value) => setForm((current) => ({
+                  ...current,
+                  [current.discount_type === 'percentage' ? 'percentage' : 'amount']: value ?? '',
+                }))}
+                style={discountControlStyle}
+              />
+            </div>
           </Col>
           <Col xs={24} md={8}>
-            <Text strong>Reason</Text>
-            <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} style={{ marginTop: 6 }} />
+            <div className="voucher-discount-field" style={discountFieldStyle}>
+              <Text strong>Reason</Text>
+              <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} style={discountControlStyle} />
+            </div>
           </Col>
-          <Col span={24}>
-            <Button type="primary" icon={<PlusOutlined />} disabled={Number(inputValue || 0) <= 0 || Number(inputValue || 0) > inputLimit} onClick={saveDiscount}>
+          <Col xs={24}>
+            <Button className="voucher-discount-submit" type="primary" icon={<PlusOutlined />} disabled={Number(inputValue || 0) <= 0 || Number(inputValue || 0) > inputLimit} onClick={saveDiscount}>
               {editingIndex === null ? 'Add discount' : 'Update discount'}
             </Button>
           </Col>
