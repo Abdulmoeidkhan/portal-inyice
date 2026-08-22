@@ -4,6 +4,7 @@ import { ClearOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, SearchOut
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import { openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
@@ -122,12 +123,12 @@ export default function ReferenceSearch() {
       render: (_, row) => (
         <Space wrap size={[6, 6]}>
           {row.invoice_uid && (
-            <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${row.invoice_uid}`)}>
+            <Button size="small" icon={<EyeOutlined />} onClick={(event) => openRoute(navigate, `/invoices/${row.invoice_uid}`, event)}>
               Invoice
             </Button>
           )}
           {row.order_uid && (
-            <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${row.order_uid}/voucher`)}>
+            <Button size="small" icon={<FileSearchOutlined />} onClick={(event) => openRoute(navigate, `/orders/${row.order_uid}/voucher`, event)}>
               Voucher
             </Button>
           )}

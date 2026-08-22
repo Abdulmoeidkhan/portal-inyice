@@ -4,6 +4,7 @@ import { Button, Card, Col, Empty, Input, Row, Select, Space, Statistic, Tag, Ty
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
+import { openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 import useReportTablePagination from '../hooks/useReportTablePagination';
 
@@ -68,8 +69,8 @@ export default function DiscountReport() {
       width: 185,
       render: (_, row) => (
         <Space wrap size={[6, 6]}>
-          {row.invoice_uid && <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${row.invoice_uid}`)}>Invoice</Button>}
-          {row.order_uid && <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${row.order_uid}/voucher`)}>Voucher</Button>}
+          {row.invoice_uid && <Button size="small" icon={<EyeOutlined />} onClick={(event) => openRoute(navigate, `/invoices/${row.invoice_uid}`, event)}>Invoice</Button>}
+          {row.order_uid && <Button size="small" icon={<FileSearchOutlined />} onClick={(event) => openRoute(navigate, `/orders/${row.order_uid}/voucher`, event)}>Voucher</Button>}
         </Space>
       ),
     },

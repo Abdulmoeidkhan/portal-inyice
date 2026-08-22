@@ -1769,6 +1769,10 @@ body {
   line-height: 1.35;
 }
 
+.voucher-preview-multiline-text {
+  white-space: pre-line;
+}
+
 .voucher-preview-footer-notes {
   display: grid;
   gap: 10px;

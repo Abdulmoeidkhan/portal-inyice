@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { acquireEditLock, releaseEditLock } from '../services/editLocks';
+import { openRoute } from '../services/navigation';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import Table from '../components/CsvTable';
 
@@ -481,14 +482,14 @@ export default function OrderList() {
       <Button
         size="small"
         icon={<FileSearchOutlined />}
-        onClick={() => navigate(`/orders/${record.uid}/quotation`)}
+        onClick={(event) => openRoute(navigate, `/orders/${record.uid}/quotation`, event)}
       >
         {showLabels ? 'Quotation' : null}
       </Button>
       <Button
         size="small"
         icon={<EyeOutlined />}
-        onClick={() => navigate(`/orders/${record.uid}/voucher`)}
+        onClick={(event) => openRoute(navigate, `/orders/${record.uid}/voucher`, event)}
       >
         {showLabels ? 'Voucher' : null}
       </Button>

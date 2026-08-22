@@ -218,9 +218,9 @@ const defaultFileName = () => {
   return `${pageName}-${timestamp}.csv`;
 };
 
-function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, ...props }) {
+function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, sortable = true, ...props }) {
   const rows = Array.isArray(dataSource) ? dataSource : [];
-  const enhancedColumns = React.useMemo(() => sortableColumns(columns, rows), [columns, rows]);
+  const enhancedColumns = React.useMemo(() => (sortable ? sortableColumns(columns, rows) : columns), [columns, rows, sortable]);
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title

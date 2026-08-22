@@ -5,6 +5,7 @@ import { message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock } from '../services/editLocks';
+import { createDeferredRouteOpener, openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
@@ -169,18 +170,32 @@ export default function InvoiceList() {
     } catch (error) { message.error(error.message); return null; } finally { setActionLoadingKey(''); }
   };
 
-  const openInvoiceDocument = async (invoice, detailed = false) => {
+  const openInvoiceDocument = async (invoice, detailed = false, event) => {
+    const deferredRoute = invoice.is_virtual_invoice ? createDeferredRouteOpener(event) : null;
+    const openDocumentRoute = (uid) => {
+      const path = `/invoices/${uid}${detailed ? '?view=detailed' : ''}`;
+      if (deferredRoute) {
+        deferredRoute.open(navigate, path);
+        return;
+      }
+
+      openRoute(navigate, path, event);
+    };
+
     if (!invoice.is_virtual_invoice) {
-      navigate(`/invoices/${invoice.uid}${detailed ? '?view=detailed' : ''}`);
+      openDocumentRoute(invoice.uid);
       return;
     }
 
     const data = await request('/api/v1/invoices/create-from-order', 'POST', { order_id: invoice.order_id }, `${invoice.uid}:invoice`);
-    if (!data?.invoice?.uid) return;
+    if (!data?.invoice?.uid) {
+      deferredRoute?.close();
+      return;
+    }
 
     message.success(`Refund invoice ${data.invoice.invoice_number || ''} created`);
     fetchInvoices();
-    navigate(`/invoices/${data.invoice.uid}${detailed ? '?view=detailed' : ''}`);
+    openDocumentRoute(data.invoice.uid);
   };
 
   const openOrderEdit = async (invoice) => {
@@ -551,14 +566,14 @@ export default function InvoiceList() {
 
     return (
       <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
-        <Button size="small" type="primary" icon={<FileTextOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={() => openInvoiceDocument(invoice)}>
+        <Button size="small" type="primary" icon={<FileTextOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={(event) => openInvoiceDocument(invoice, false, event)}>
           {showLabels ? 'Invoice' : null}
         </Button>
-        <Button size="small" icon={<EyeOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={() => openInvoiceDocument(invoice, true)}>
+        <Button size="small" icon={<EyeOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={(event) => openInvoiceDocument(invoice, true, event)}>
           {showLabels ? 'Detailed' : null}
         </Button>
         {!invoice.is_refund_order && invoice.order?.uid && (
-          <Button size="small" icon={<FileSearchOutlined />} onClick={() => navigate(`/orders/${invoice.order.uid}/voucher`)}>
+          <Button size="small" icon={<FileSearchOutlined />} onClick={(event) => openRoute(navigate, `/orders/${invoice.order.uid}/voucher`, event)}>
             {showLabels ? 'Voucher' : null}
           </Button>
         )}

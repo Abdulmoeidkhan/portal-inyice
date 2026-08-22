@@ -329,7 +329,7 @@ export default function InvoiceDetail({ shared = false }) {
             </div>
           </div>
           {detailed ? (
-            <Table className="invoice-lines-table" rowKey="id" pagination={false} dataSource={detailedRows} columns={[
+            <Table className="invoice-lines-table" rowKey="id" pagination={false} csvDownload={false} sortable={false} dataSource={detailedRows} columns={[
               { title: '#', width: 54, render: (_, __, index) => index + 1 },
               { title: 'Item & Description', dataIndex: 'public_description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
               { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
@@ -346,6 +346,8 @@ export default function InvoiceDetail({ shared = false }) {
                     className="invoice-lines-table"
                     rowKey="id"
                     pagination={false}
+                    csvDownload={false}
+                    sortable={false}
                     dataSource={passengerRows}
                     columns={[
                       { title: 'Passenger', dataIndex: 'name', render: (value) => value || '-' },
@@ -353,7 +355,7 @@ export default function InvoiceDetail({ shared = false }) {
                   />
                 </div>
               )}
-              <Table className="invoice-lines-table" rowKey="key" pagination={false} dataSource={serviceRows} columns={[
+              <Table className="invoice-lines-table" rowKey="key" pagination={false} csvDownload={false} sortable={false} dataSource={serviceRows} columns={[
                 { title: '#', width: 54, render: (_, __, index) => index + 1 },
                 { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
                 { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
@@ -375,7 +377,7 @@ export default function InvoiceDetail({ shared = false }) {
           {hasReceiptRows && (
             <div className="invoice-receipts">
               <Title level={4}>Receipts & Payments</Title>
-              <Table rowKey="id" pagination={false} dataSource={settlementRows} columns={[
+              <Table rowKey="id" pagination={false} csvDownload={false} sortable={false} dataSource={settlementRows} columns={[
                 { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
                 {
                   title: 'Receipt / Reference', render: (_, row) => {

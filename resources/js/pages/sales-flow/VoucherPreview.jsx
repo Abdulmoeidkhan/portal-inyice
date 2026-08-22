@@ -159,6 +159,12 @@ const Section = ({ title, children }) => (
   </section>
 );
 
+const MultilineText = ({ children }) => (
+  <p className="voucher-preview-multiline-text">
+    {children}
+  </p>
+);
+
 const compactColumns = (columns, data) => columns.filter((column) => {
   if (column.alwaysVisible) {
     return true;
@@ -187,6 +193,8 @@ const PreviewTable = ({ columns, data }) => {
       columns={visibleColumns}
       dataSource={keyedData}
       pagination={false}
+      csvDownload={false}
+      sortable={false}
       scroll={{ x: 'max-content' }}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" /> }}
     />
@@ -388,13 +396,13 @@ export default function VoucherPreview({ order }) {
             {voucher.emergency_contact && (
               <div>
                 <Text className="voucher-preview-section-title">Emergency Contact(s)</Text>
-                <p>{voucher.emergency_contact}</p>
+                <MultilineText>{voucher.emergency_contact}</MultilineText>
               </div>
             )}
             {order.notes && (
               <div>
                 <Text className="voucher-preview-section-title">Notes</Text>
-                <p>{order.notes}</p>
+                <MultilineText>{order.notes}</MultilineText>
               </div>
             )}
           </div>

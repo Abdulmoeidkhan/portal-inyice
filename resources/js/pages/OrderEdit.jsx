@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
+import { openRoute } from '../services/navigation';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
@@ -315,10 +316,10 @@ export default function OrderEdit() {
       width: 180,
       render: (_, invoice) => (
         <Space>
-          <Button size="small" icon={<FileTextOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}`)}>
+          <Button size="small" icon={<FileTextOutlined />} onClick={(event) => openRoute(navigate, `/invoices/${invoice.uid}`, event)}>
             Invoice
           </Button>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/invoices/${invoice.uid}?view=detailed`)}>
+          <Button size="small" icon={<EyeOutlined />} onClick={(event) => openRoute(navigate, `/invoices/${invoice.uid}?view=detailed`, event)}>
             Detailed
           </Button>
         </Space>
