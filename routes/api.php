@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\CompanyProfileController;
 use App\Http\Controllers\Api\InternalPortalController;
 use App\Http\Controllers\Api\ReferenceSearchController;
 use App\Http\Controllers\Api\EditLockController;
+use App\Http\Controllers\Api\ReceivingController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -118,6 +119,13 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     });
 
     Route::get('/reference-search', [ReferenceSearchController::class, 'index'])->name('referenceSearch.index');
+
+    Route::prefix('receivings')->controller(ReceivingController::class)->group(function () {
+        Route::get('/', 'index')->name('receivings.list');
+        Route::post('/', 'store')->middleware('throttle:sensitive-write')->name('receivings.create');
+        Route::patch('/{uid}', 'update')->middleware(['role:admin', 'throttle:sensitive-write'])->name('receivings.update');
+        Route::delete('/{uid}', 'destroy')->middleware(['role:admin', 'throttle:sensitive-write'])->name('receivings.delete');
+    });
 
     // ========== PAYMENTS ==========
     Route::prefix('payments')->controller(PaymentController::class)->middleware('role:admin,accounts')->group(function () {

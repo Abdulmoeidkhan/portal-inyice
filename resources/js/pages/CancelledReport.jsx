@@ -4,6 +4,7 @@ import { Button, Card, Col, Empty, Input, Popconfirm, Row, Statistic, Tag, Typog
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -15,6 +16,7 @@ export default function CancelledReport({ embedded = false }) {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), search: '' });
   const [recreatingUid, setRecreatingUid] = useState(null);
+  const [tablePagination, resetTablePagination] = useReportTablePagination();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   const fetchReport = async () => {
@@ -34,6 +36,7 @@ export default function CancelledReport({ embedded = false }) {
         throw new Error(data.error || data.message || 'Could not load cancelled report');
       }
 
+      resetTablePagination();
       setReport(data);
     } catch (error) {
       message.error(error.message);
@@ -135,7 +138,7 @@ export default function CancelledReport({ embedded = false }) {
       <Card title="Cancelled records">
         {!loading && report?.data?.length === 0
           ? <Empty description="No cancelled records" />
-          : <Table rowKey="uid" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 'max-content' }} pagination={{ pageSize: 25, showSizeChanger: true }} />}
+          : <Table rowKey="uid" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 'max-content' }} pagination={tablePagination} />}
       </Card>
     </>
   );

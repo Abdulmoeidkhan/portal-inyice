@@ -4,6 +4,7 @@ import { Button, Card, Col, Empty, Input, Row, Select, Space, Statistic, Tag, Ty
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -18,6 +19,7 @@ export default function PaymentReport({ direction = 'payment' }) {
   const [counterparties, setCounterparties] = useState({ customers: [], vendors: [] });
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), counterparty_type: undefined, counterparty_id: undefined, payment_method: undefined, search: '' });
+  const [tablePagination, resetTablePagination] = useReportTablePagination();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   const fetchReport = async () => {
@@ -25,7 +27,7 @@ export default function PaymentReport({ direction = 'payment' }) {
     try {
       const params = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
       const response = await fetch(`/api/v1/reports/${isReceipt ? 'receipts' : 'payments'}?${params}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
-      const data = await response.json(); if (!response.ok) throw new Error(data.message || `Could not load ${title.toLowerCase()}`); setReport(data);
+      const data = await response.json(); if (!response.ok) throw new Error(data.message || `Could not load ${title.toLowerCase()}`); resetTablePagination(); setReport(data);
     } catch (error) { message.error(error.message); } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -62,6 +64,6 @@ export default function PaymentReport({ direction = 'payment' }) {
     </div>
     {report && <><Row gutter={[16, 16]} style={{ marginBottom: 16 }}><Col xs={8}><Card><Statistic title="All records" value={report.summary.total_records} /></Card></Col><Col xs={8}><Card><Statistic title="Customer records" value={report.summary.customer_records} /></Card></Col><Col xs={8}><Card><Statistic title="Vendor records" value={report.summary.vendor_records} /></Card></Col></Row>
       {report.summary.by_currency.length > 0 && <Card title={`${isReceipt ? 'Money in' : 'Money out'} by currency`} style={{ marginBottom: 16 }}><Space size="large" wrap>{report.summary.by_currency.map((item) => <Statistic key={item.currency_code} title={`${item.currency_code} · ${item.count} records`} value={item.amount} precision={2} />)}</Space></Card>}</>}
-    <Card title={`${isReceipt ? 'Receipt' : 'Payment'} records`}>{!loading && report?.data?.length === 0 ? <Empty description="No matching records" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1235 }} pagination={{ pageSize: 25, showSizeChanger: true }} />}</Card>
+    <Card title={`${isReceipt ? 'Receipt' : 'Payment'} records`}>{!loading && report?.data?.length === 0 ? <Empty description="No matching records" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1235 }} pagination={tablePagination} />}</Card>
   </div>;
 }

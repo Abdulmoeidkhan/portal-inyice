@@ -4,6 +4,7 @@ import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statist
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -39,6 +40,8 @@ export default function ProfitReport() {
   });
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const { token: themeToken } = theme.useToken();
+  const [groupPagination, resetGroupPagination] = useReportTablePagination();
+  const [detailPagination, resetDetailPagination] = useReportTablePagination();
 
   const groupLabel = useMemo(() => label(filters.group_by), [filters.group_by]);
   const hasEntitySelection = filters.entity_id === 'all' || Number(filters.entity_id) > 0;
@@ -89,6 +92,8 @@ export default function ProfitReport() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Could not load profit report');
+      resetGroupPagination();
+      resetDetailPagination();
       setReport(data);
     } catch (error) {
       message.error(error.message);
@@ -259,7 +264,7 @@ export default function ProfitReport() {
         ) : !loading && report?.data?.length === 0 ? (
           <Empty description="No matching profit data" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1580 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={groupColumns} dataSource={report?.data || []} scroll={{ x: 1580 }} pagination={groupPagination} />
         )}
       </Card>
 
@@ -269,7 +274,7 @@ export default function ProfitReport() {
         ) : !loading && report?.details?.length === 0 ? (
           <Empty description="No matching orders" />
         ) : (
-          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2625 }} pagination={{ pageSize: 25, showSizeChanger: true }} />
+          <Table rowKey="key" loading={loading} columns={detailColumns} dataSource={report?.details || []} scroll={{ x: 2625 }} pagination={detailPagination} />
         )}
       </Card>
     </div>

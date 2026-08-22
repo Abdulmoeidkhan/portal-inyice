@@ -1,6 +1,6 @@
 import React from 'react';
-import { DownloadOutlined } from '@ant-design/icons';
-import { Button, Space, Table as AntTable } from 'antd';
+import { DownOutlined, DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Space, Table as AntTable } from 'antd';
 
 const getCurrentUser = () => {
   try {
@@ -53,6 +53,11 @@ const flattenColumns = (columns = []) => columns.flatMap((column) => {
 });
 
 const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const escapeHtml = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('"', '&quot;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;');
 
 const normalizeSortValue = (value) => {
   const text = nodeToText(value).trim();
@@ -139,6 +144,73 @@ const downloadCsv = ({ columns, dataSource, fileName }) => {
   URL.revokeObjectURL(url);
 };
 
+const printTablePdf = ({ columns, dataSource, title }) => {
+  const exportColumns = flattenColumns(columns).filter((column) => columnTitle(column));
+  if (!exportColumns.length || !dataSource?.length) return;
+
+  const heading = nodeToText(title) || document.title || 'Table export';
+  const rows = dataSource.map((record, rowIndex) => exportColumns.map((column) => {
+    const rawValue = valueAtPath(record, column.dataIndex);
+    const renderedValue = typeof column.render === 'function'
+      ? column.render(rawValue, record, rowIndex)
+      : rawValue;
+
+    return nodeToText(renderedValue);
+  }));
+
+  document.getElementById('csv-table-pdf-frame')?.remove();
+
+  const frame = document.createElement('iframe');
+  frame.id = 'csv-table-pdf-frame';
+  frame.title = 'PDF table export';
+  frame.style.position = 'fixed';
+  frame.style.left = '0';
+  frame.style.top = '0';
+  frame.style.width = '1px';
+  frame.style.height = '1px';
+  frame.style.border = '0';
+  frame.style.opacity = '0';
+  frame.style.pointerEvents = 'none';
+  frame.style.zIndex = '-1';
+  document.body.appendChild(frame);
+
+  const printWindow = frame.contentWindow;
+  const printDocumentRef = frame.contentDocument || printWindow?.document;
+  if (!printWindow || !printDocumentRef) return;
+
+  printDocumentRef.open();
+  printDocumentRef.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(heading)}</title>
+  <style>
+    @page { size: landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; overflow: visible !important; background: #fff; color: #111827; font-family: Arial, sans-serif; }
+    body { padding: 12px; }
+    h1 { margin: 0 0 12px; font-size: 18px; line-height: 1.25; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 10px; }
+    th, td { border: 1px solid #d1d5db; padding: 5px 6px; text-align: left; vertical-align: top; overflow: visible; word-break: break-word; }
+    th { background: #f3f4f6; font-weight: 700; color: #111827; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(heading)}</h1>
+  <table>
+    <thead><tr>${exportColumns.map((column) => `<th>${escapeHtml(columnTitle(column))}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>
+</body>
+</html>`);
+  printDocumentRef.close();
+
+  printWindow.addEventListener('afterprint', () => frame.remove(), { once: true });
+  printWindow.focus();
+  printWindow.setTimeout(() => printWindow.print(), 100);
+};
+
 const defaultFileName = () => {
   const pageName = (document.title || 'table').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'table';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -152,21 +224,48 @@ function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownlo
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title
-    ? (currentPageData) => (
-      <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
-        <span>{typeof title === 'function' ? title(currentPageData) : title}</span>
-        {showCsvButton && (
-          <Button
-            className="csv-table-download-button"
-            size="small"
-            icon={<DownloadOutlined />}
-            onClick={() => downloadCsv({ columns, dataSource: rows, fileName: csvFileName || defaultFileName() })}
-          >
-            CSV
-          </Button>
-        )}
-      </Space>
-    )
+    ? (currentPageData) => {
+      const titleNode = typeof title === 'function' ? title(currentPageData) : title;
+      const fileName = csvFileName || defaultFileName();
+      const exportItems = [
+        { key: 'csv', icon: <DownloadOutlined />, label: 'CSV' },
+        { key: 'pdf', icon: <FilePdfOutlined />, label: 'PDF' },
+      ];
+      const handleExport = (data, exportTitle) => ({ key }) => {
+        if (key === 'csv') {
+          downloadCsv({ columns, dataSource: data, fileName });
+          return;
+        }
+
+        printTablePdf({ columns, dataSource: data, title: exportTitle });
+      };
+
+      return (
+        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
+          <span>{titleNode}</span>
+          {showCsvButton && (
+            <Space size={8}>
+              <Dropdown
+                trigger={['click']}
+                menu={{ items: exportItems, onClick: handleExport(currentPageData, titleNode) }}
+              >
+                <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />}>
+                  CSV/PDF <DownOutlined />
+                </Button>
+              </Dropdown>
+              <Dropdown
+                trigger={['click']}
+                menu={{ items: exportItems, onClick: handleExport(rows, typeof title === 'function' ? title(rows) : title) }}
+              >
+                <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />}>
+                  ALL CSV/PDF <DownOutlined />
+                </Button>
+              </Dropdown>
+            </Space>
+          )}
+        </Space>
+      );
+    }
     : undefined;
 
   return <AntTable {...props} columns={enhancedColumns} dataSource={dataSource} title={renderTitle} />;

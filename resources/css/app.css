@@ -454,6 +454,81 @@ body {
   text-align: center;
 }
 
+.receivings-page {
+  gap: 12px;
+}
+
+.receivings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--app-text) 7%, transparent);
+}
+
+.receivings-title h2,
+.receivings-title p {
+  margin: 0;
+}
+
+.receivings-title h2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.receivings-title p {
+  margin-top: 4px;
+  color: var(--app-muted);
+}
+
+.receivings-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.receivings-stat {
+  min-width: 116px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-primary) 8%);
+}
+
+.receivings-stat span {
+  display: block;
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.receivings-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.receivings-entry-card {
+  border: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+}
+
+.receivings-entry-card .ant-card-body {
+  padding: 14px 16px;
+}
+
+.receivings-entry-card .ant-form-item {
+  margin-bottom: 0;
+}
+
 .financial-entry-toolbar {
   display: flex;
   align-items: center;
@@ -1233,6 +1308,20 @@ body {
 }
 
 @media (max-width: 760px) {
+  .receivings-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .receivings-stats {
+    justify-content: stretch;
+  }
+
+  .receivings-stat {
+    flex: 1;
+    min-width: 0;
+  }
+
   .financial-entry-hero,
   .financial-entry-toolbar {
     align-items: stretch;

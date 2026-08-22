@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -17,6 +18,7 @@ export default function DiscountReport() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), discount_type: undefined, customer_id: undefined, search: '' });
+  const [tablePagination, resetTablePagination] = useReportTablePagination();
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const navigate = useNavigate();
 
@@ -28,6 +30,7 @@ export default function DiscountReport() {
       const response = await fetch(`/api/v1/reports/discounts?${params}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Could not load discount report');
+      resetTablePagination();
       setReport(data);
     } catch (error) {
       message.error(error.message);
@@ -104,7 +107,7 @@ export default function DiscountReport() {
       )}
 
       <Card title="Discount records">
-        {!loading && report?.data?.length === 0 ? <Empty description="No matching discounts" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1700 }} pagination={{ pageSize: 25, showSizeChanger: true }} />}
+        {!loading && report?.data?.length === 0 ? <Empty description="No matching discounts" /> : <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} scroll={{ x: 1700 }} pagination={tablePagination} />}
       </Card>
     </div>
   );

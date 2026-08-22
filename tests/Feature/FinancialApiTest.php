@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\ProfitShare;
 use App\Models\Role;
 use App\Models\Receipt;
+use App\Models\Receiving;
 use App\Models\RefundAllocation;
 use App\Models\VendorPaymentAllocation;
 use App\Models\Tenant;
@@ -2552,6 +2553,76 @@ class FinancialApiTest extends TestCase
         $this->patchJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'], [])->assertForbidden();
         $this->postJson('/api/v1/receipts/customer/record', [])->assertForbidden();
         $this->postJson('/api/v1/payments/customer', [])->assertForbidden();
+    }
+
+    public function test_sales_can_create_receivings_but_only_admin_can_manage_them(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $sales = $this->salesUserForContext($ctx);
+
+        Sanctum::actingAs($sales);
+
+        $created = $this->postJson('/api/v1/receivings', [
+            'amount' => 123.45,
+            'paid_by' => 'Walk-in Customer',
+            'reference_customer_id' => $ctx['customer']->id,
+            'notes' => 'Initial counter note',
+        ])->assertCreated()
+            ->assertJsonPath('receiving.paid_by', 'Walk-in Customer')
+            ->assertJsonPath('receiving.notes', 'Initial counter note')
+            ->assertJsonPath('receiving.received_by.name', 'Sales Tester')
+            ->json('receiving');
+
+        $this->getJson('/api/v1/receivings')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $created['uid'])
+            ->assertJsonPath('data.0.reference_customer.name', 'Test Customer');
+
+        $this->patchJson('/api/v1/receivings/' . $created['uid'], [
+            'amount' => 200,
+            'paid_by' => 'Edited by sales',
+            'notes' => 'Sales edit should fail',
+        ])->assertForbidden();
+        $this->deleteJson('/api/v1/receivings/' . $created['uid'])->assertForbidden();
+
+        Sanctum::actingAs($ctx['user']);
+
+        $this->patchJson('/api/v1/receivings/' . $created['uid'], [
+            'amount' => 200,
+            'paid_by' => 'Edited by admin',
+            'reference_customer_id' => null,
+            'notes' => 'Admin adjusted note',
+        ])->assertOk()
+            ->assertJsonPath('receiving.amount', '200.0000')
+            ->assertJsonPath('receiving.paid_by', 'Edited by admin')
+            ->assertJsonPath('receiving.notes', 'Admin adjusted note');
+
+        $this->deleteJson('/api/v1/receivings/' . $created['uid'])->assertOk();
+
+        $receiving = Receiving::withTrashed()->where('uid', $created['uid'])->firstOrFail();
+        $this->assertTrue($receiving->trashed());
+        $this->assertSame($ctx['user']->id, $receiving->deleted_by_user_id);
+
+        $this->getJson('/api/v1/receivings')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $created['uid'])
+            ->assertJsonPath('data.0.is_deleted', true);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => Receiving::class,
+            'model_id' => $receiving->id,
+            'action' => 'receiving_created',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => Receiving::class,
+            'model_id' => $receiving->id,
+            'action' => 'receiving_updated',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => Receiving::class,
+            'model_id' => $receiving->id,
+            'action' => 'receiving_deleted',
+        ]);
     }
 
     private function seedTenantContext(): array

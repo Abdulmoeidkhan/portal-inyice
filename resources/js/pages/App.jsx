@@ -49,6 +49,7 @@ import InternalPortal from './InternalPortal';
 import UserProfile from './UserProfile';
 import SalesFlow from './SalesFlow';
 import Payments from './Payments';
+import Receivings from './Receivings';
 import CustomerList from './CustomerList';
 import VendorList from './VendorList';
 import CustomerStatement from './CustomerStatement';
@@ -563,6 +564,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/orders/:uid/edit" element={<OrderEdit />} />
               <Route path="/reference-search" element={<ReferenceSearch />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
+              <Route path="/receivings" element={<Receivings />} />
               <Route path="/payments" element={canAccessPayments ? <Payments /> : <Navigate to="/" replace />} />
               <Route path="/profit-shares" element={canAccessPayments ? <ProfitShares /> : <Navigate to="/" replace />} />
               <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
@@ -810,6 +812,11 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           key: '/reference-search',
           label: <Link to="/reference-search">Reference Search</Link>,
           icon: <SearchOutlined />,
+        },
+        {
+          key: '/receivings',
+          label: <Link to="/receivings">Receivings</Link>,
+          icon: <DollarOutlined />,
         },
         ...(canAccessPayments ? [{
           key: '/profit-shares',
