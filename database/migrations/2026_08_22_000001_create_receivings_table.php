@@ -11,14 +11,14 @@ return new class extends Migration
         Schema::create('receivings', function (Blueprint $table) {
             $table->id();
             $table->string('uid', 26)->unique();
-            $table->string('receiving_number', 50)->nullable();
+            $table->string('receiving_number', 50);
             $table->unsignedBigInteger('tenant_id');
             $table->unsignedBigInteger('company_id');
             $table->decimal('amount', 18, 4);
             $table->string('status', 20)->default('received');
             $table->string('paid_by', 190);
             $table->unsignedBigInteger('received_by_user_id');
-            $table->unsignedBigInteger('created_by_user_id')->nullable();
+            $table->unsignedBigInteger('created_by_user_id');
             $table->unsignedBigInteger('updated_by_user_id')->nullable();
             $table->unsignedBigInteger('reference_customer_id')->nullable();
             $table->text('notes')->nullable();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Receiving;
 use Illuminate\Http\JsonResponse;
@@ -114,7 +115,7 @@ class ReceivingController extends Controller
             ->where('uid', $uid)
             ->firstOrFail();
 
-        DB::transaction(function () use ($request, $receiving, $validated, $customerId): void {
+        $receiving = DB::transaction(function () use ($request, $receiving, $validated, $customerId): Receiving {
             $oldValues = $this->receivingSnapshot($receiving);
 
             $receiving->update([
@@ -126,12 +127,15 @@ class ReceivingController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            $this->recordAudit('receiving_updated', $receiving->fresh(), $oldValues, $this->receivingSnapshot($receiving->fresh()));
+            $updatedReceiving = $receiving->fresh();
+            $this->recordAudit('receiving_updated', $updatedReceiving, $oldValues, $this->receivingSnapshot($updatedReceiving));
+
+            return $updatedReceiving;
         });
 
         return response()->json([
             'success' => true,
-            'receiving' => $this->serializeReceiving($receiving->fresh()->load(['receivedBy:id,name', 'createdBy:id,name', 'updatedBy:id,name', 'referenceCustomer:id,name'])),
+            'receiving' => $this->serializeReceiving($receiving->load(['receivedBy:id,name', 'createdBy:id,name', 'updatedBy:id,name', 'referenceCustomer:id,name'])),
         ]);
     }
 
@@ -157,7 +161,7 @@ class ReceivingController extends Controller
     {
         return [
             'amount' => 'required|numeric|min:0.01',
-            'status' => 'nullable|in:' . implode(',', [self::STATUS_RECEIVED, self::STATUS_CLEAR]),
+            'status' => 'nullable|in:'.implode(',', [self::STATUS_RECEIVED, self::STATUS_CLEAR]),
             'paid_by' => 'required|string|max:190',
             'reference_customer_id' => 'nullable|integer',
             'notes' => 'nullable|string|max:2000',
@@ -166,7 +170,7 @@ class ReceivingController extends Controller
 
     private function validatedCustomerId(?int $customerId): ?int
     {
-        if (!$customerId) {
+        if (! $customerId) {
             return null;
         }
 
@@ -176,7 +180,7 @@ class ReceivingController extends Controller
             ->where('id', $customerId)
             ->value('id');
 
-        if (!$scopedCustomerId) {
+        if (! $scopedCustomerId) {
             throw ValidationException::withMessages([
                 'reference_customer_id' => 'The selected customer is unavailable.',
             ]);
@@ -214,7 +218,7 @@ class ReceivingController extends Controller
 
     private function receivingSnapshot(?Receiving $receiving): ?array
     {
-        if (!$receiving) {
+        if (! $receiving) {
             return null;
         }
 
@@ -239,8 +243,9 @@ class ReceivingController extends Controller
     private function generateReceivingNumber(int $companyId): string
     {
         $prefix = 'REC';
-        $lastReceiving = Receiving::where('company_id', $companyId)
-            ->where('receiving_number', 'LIKE', $prefix . '%')
+        $lastReceiving = Receiving::withTrashed()
+            ->where('company_id', $companyId)
+            ->where('receiving_number', 'LIKE', $prefix.'%')
             ->orderByDesc('id')
             ->lockForUpdate()
             ->first();
@@ -248,16 +253,16 @@ class ReceivingController extends Controller
         $sequence = $lastReceiving ? ((int) substr((string) $lastReceiving->receiving_number, strlen($prefix))) + 1 : 1;
 
         do {
-            $receivingNumber = $prefix . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+            $receivingNumber = $prefix.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
             $sequence++;
-        } while (Receiving::where('company_id', $companyId)->where('receiving_number', $receivingNumber)->exists());
+        } while (Receiving::withTrashed()->where('company_id', $companyId)->where('receiving_number', $receivingNumber)->exists());
 
         return $receivingNumber;
     }
 
-    private function serializeCompany($company): ?array
+    private function serializeCompany(?Company $company): ?array
     {
-        if (!$company) {
+        if (! $company) {
             return null;
         }
 

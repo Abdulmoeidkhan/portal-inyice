@@ -64,21 +64,37 @@ const isActionColumn = (column) => {
     || dataIndex === 'actions';
 };
 
-const markActionColumn = (column) => {
+const markActionColumn = (column, parentActionColumn = false) => {
   if (column.hidden) return column;
+  const actionColumn = parentActionColumn || isActionColumn(column);
+  const markColumn = (targetColumn) => {
+    if (!actionColumn) return targetColumn;
+
+    return {
+      ...targetColumn,
+      className: appendClassName(targetColumn.className, 'csv-table-action-column'),
+      onHeaderCell: (...args) => {
+        const headerProps = typeof column.onHeaderCell === 'function' ? column.onHeaderCell(...args) : {};
+
+        return {
+          ...headerProps,
+          className: appendClassName(headerProps?.className, 'csv-table-action-column'),
+        };
+      },
+    };
+  };
 
   if (Array.isArray(column.children)) {
-    return {
+    return markColumn({
       ...column,
-      children: column.children.map(markActionColumn),
-    };
+      children: column.children.map((child) => markActionColumn(child, actionColumn)),
+    });
   }
 
-  if (!isActionColumn(column)) return column;
+  if (!actionColumn) return column;
 
-  return {
+  return markColumn({
     ...column,
-    className: appendClassName(column.className, 'csv-table-action-column'),
     onCell: (record, rowIndex) => {
       const cellProps = typeof column.onCell === 'function' ? column.onCell(record, rowIndex) : {};
 
@@ -87,20 +103,21 @@ const markActionColumn = (column) => {
         className: appendClassName(cellProps?.className, 'csv-table-action-column'),
       };
     },
-  };
+  });
 };
 
-const flattenColumns = (columns = []) => columns.flatMap((column) => {
+const flattenColumns = (columns = [], parentActionColumn = false) => columns.flatMap((column) => {
   if (column.hidden) return [];
-  if (Array.isArray(column.children)) return flattenColumns(column.children);
+  const actionColumn = parentActionColumn || isActionColumn(column);
+  if (Array.isArray(column.children)) return flattenColumns(column.children, actionColumn);
   if (!column.dataIndex && !column.key) return [];
+  if (actionColumn) return [];
 
   return [column];
 });
 
 const exportColumns = (columns = []) => flattenColumns(columns)
-  .filter((column) => columnTitle(column))
-  .filter((column) => !isActionColumn(column));
+  .filter((column) => columnTitle(column));
 
 const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 const escapeHtml = (value) => String(value ?? '')
