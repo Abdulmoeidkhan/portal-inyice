@@ -2555,7 +2555,7 @@ class FinancialApiTest extends TestCase
         $this->postJson('/api/v1/payments/customer', [])->assertForbidden();
     }
 
-    public function test_sales_can_create_receivings_but_only_admin_can_manage_them(): void
+    public function test_sales_can_create_receivings_accounts_can_clear_and_admin_can_delete_them(): void
     {
         $ctx = $this->seedTenantContext();
         $sales = $this->salesUserForContext($ctx);
@@ -2568,6 +2568,8 @@ class FinancialApiTest extends TestCase
             'reference_customer_id' => $ctx['customer']->id,
             'notes' => 'Initial counter note',
         ])->assertCreated()
+            ->assertJsonPath('receiving.receiving_number', 'REC0001')
+            ->assertJsonPath('receiving.status', 'received')
             ->assertJsonPath('receiving.paid_by', 'Walk-in Customer')
             ->assertJsonPath('receiving.notes', 'Initial counter note')
             ->assertJsonPath('receiving.received_by.name', 'Sales Tester')
@@ -2585,15 +2587,62 @@ class FinancialApiTest extends TestCase
         ])->assertForbidden();
         $this->deleteJson('/api/v1/receivings/' . $created['uid'])->assertForbidden();
 
+        $accountsRole = Role::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'code' => 'accounts',
+            'name' => 'Accounts',
+            'is_system' => false,
+        ]);
+        $accountsUser = User::create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $ctx['tenant']->id,
+            'company_id' => $ctx['company']->id,
+            'role_id' => $accountsRole->id,
+            'name' => 'Accounts Tester',
+            'email' => 'receiving-accounts-' . fake()->unique()->safeEmail(),
+            'password' => 'password123',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($accountsUser);
+
+        $this->getJson('/api/v1/receivings')
+            ->assertOk()
+            ->assertJsonPath('can_manage', true)
+            ->assertJsonPath('can_delete', false);
+
+        $this->patchJson('/api/v1/receivings/' . $created['uid'], [
+            'amount' => 200,
+            'status' => 'clear',
+            'paid_by' => 'Cleared by accounts',
+            'reference_customer_id' => null,
+            'notes' => 'Accounts cleared note',
+        ])->assertOk()
+            ->assertJsonPath('receiving.amount', '200.0000')
+            ->assertJsonPath('receiving.status', 'clear')
+            ->assertJsonPath('receiving.paid_by', 'Cleared by accounts')
+            ->assertJsonPath('receiving.notes', 'Accounts cleared note')
+            ->assertJsonPath('receiving.updated_by.name', 'Accounts Tester');
+
+        $this->getJson('/api/v1/receivings/' . $created['uid'])
+            ->assertOk()
+            ->assertJsonPath('receiving_number', 'REC0001')
+            ->assertJsonPath('company.display_name', 'API Test Company');
+
+        $this->deleteJson('/api/v1/receivings/' . $created['uid'])->assertForbidden();
+
         Sanctum::actingAs($ctx['user']);
 
         $this->patchJson('/api/v1/receivings/' . $created['uid'], [
             'amount' => 200,
+            'status' => 'clear',
             'paid_by' => 'Edited by admin',
             'reference_customer_id' => null,
             'notes' => 'Admin adjusted note',
         ])->assertOk()
             ->assertJsonPath('receiving.amount', '200.0000')
+            ->assertJsonPath('receiving.status', 'clear')
             ->assertJsonPath('receiving.paid_by', 'Edited by admin')
             ->assertJsonPath('receiving.notes', 'Admin adjusted note');
 

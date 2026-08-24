@@ -15,10 +15,14 @@ class Receiving extends Model
     protected $fillable = [
         'tenant_id',
         'uid',
+        'receiving_number',
         'company_id',
         'amount',
+        'status',
         'paid_by',
         'received_by_user_id',
+        'created_by_user_id',
+        'updated_by_user_id',
         'reference_customer_id',
         'notes',
         'received_at',
@@ -44,6 +48,16 @@ class Receiving extends Model
     public function receivedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by_user_id');
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 
     public function referenceCustomer(): BelongsTo

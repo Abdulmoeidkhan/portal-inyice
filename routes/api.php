@@ -122,8 +122,9 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
 
     Route::prefix('receivings')->controller(ReceivingController::class)->group(function () {
         Route::get('/', 'index')->name('receivings.list');
+        Route::get('/{uid}', 'show')->name('receivings.show');
         Route::post('/', 'store')->middleware('throttle:sensitive-write')->name('receivings.create');
-        Route::patch('/{uid}', 'update')->middleware(['role:admin', 'throttle:sensitive-write'])->name('receivings.update');
+        Route::patch('/{uid}', 'update')->middleware(['role:admin,accounts', 'throttle:sensitive-write'])->name('receivings.update');
         Route::delete('/{uid}', 'destroy')->middleware(['role:admin', 'throttle:sensitive-write'])->name('receivings.delete');
     });
 

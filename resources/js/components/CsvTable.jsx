@@ -44,6 +44,52 @@ const columnTitle = (column) => {
   return column.dataIndex || column.key || '';
 };
 
+const appendClassName = (current, next) => [current, next].filter(Boolean).join(' ');
+const columnIdentifier = (value) => {
+  if (Array.isArray(value)) return value.join('.');
+
+  return String(value || '');
+};
+
+const isActionColumn = (column) => {
+  const title = columnTitle(column).trim().toLowerCase();
+  const key = columnIdentifier(column.key).trim().toLowerCase();
+  const dataIndex = columnIdentifier(column.dataIndex).trim().toLowerCase();
+
+  return title === 'action'
+    || title === 'actions'
+    || key === 'action'
+    || key === 'actions'
+    || dataIndex === 'action'
+    || dataIndex === 'actions';
+};
+
+const markActionColumn = (column) => {
+  if (column.hidden) return column;
+
+  if (Array.isArray(column.children)) {
+    return {
+      ...column,
+      children: column.children.map(markActionColumn),
+    };
+  }
+
+  if (!isActionColumn(column)) return column;
+
+  return {
+    ...column,
+    className: appendClassName(column.className, 'csv-table-action-column'),
+    onCell: (record, rowIndex) => {
+      const cellProps = typeof column.onCell === 'function' ? column.onCell(record, rowIndex) : {};
+
+      return {
+        ...cellProps,
+        className: appendClassName(cellProps?.className, 'csv-table-action-column'),
+      };
+    },
+  };
+};
+
 const flattenColumns = (columns = []) => columns.flatMap((column) => {
   if (column.hidden) return [];
   if (Array.isArray(column.children)) return flattenColumns(column.children);
@@ -51,6 +97,10 @@ const flattenColumns = (columns = []) => columns.flatMap((column) => {
 
   return [column];
 });
+
+const exportColumns = (columns = []) => flattenColumns(columns)
+  .filter((column) => columnTitle(column))
+  .filter((column) => !isActionColumn(column));
 
 const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 const escapeHtml = (value) => String(value ?? '')
@@ -99,6 +149,7 @@ const columnSortValue = (column, record, rowIndex) => {
 
 const sortableColumn = (column, rows) => {
   if (column.hidden || column.sorter !== undefined) return column;
+  if (isActionColumn(column)) return column;
 
   if (Array.isArray(column.children)) {
     return {
@@ -120,12 +171,12 @@ const sortableColumn = (column, rows) => {
 const sortableColumns = (columns = [], rows = []) => columns.map((column) => sortableColumn(column, rows));
 
 const downloadCsv = ({ columns, dataSource, fileName }) => {
-  const exportColumns = flattenColumns(columns).filter((column) => columnTitle(column));
-  if (!exportColumns.length || !dataSource?.length) return;
+  const columnsForExport = exportColumns(columns);
+  if (!columnsForExport.length || !dataSource?.length) return;
 
   const rows = [
-    exportColumns.map(columnTitle),
-    ...dataSource.map((record, rowIndex) => exportColumns.map((column) => {
+    columnsForExport.map(columnTitle),
+    ...dataSource.map((record, rowIndex) => columnsForExport.map((column) => {
       const rawValue = valueAtPath(record, column.dataIndex);
       const renderedValue = typeof column.render === 'function'
         ? column.render(rawValue, record, rowIndex)
@@ -145,11 +196,11 @@ const downloadCsv = ({ columns, dataSource, fileName }) => {
 };
 
 const printTablePdf = ({ columns, dataSource, title }) => {
-  const exportColumns = flattenColumns(columns).filter((column) => columnTitle(column));
-  if (!exportColumns.length || !dataSource?.length) return;
+  const columnsForExport = exportColumns(columns);
+  if (!columnsForExport.length || !dataSource?.length) return;
 
   const heading = nodeToText(title) || document.title || 'Table export';
-  const rows = dataSource.map((record, rowIndex) => exportColumns.map((column) => {
+  const rows = dataSource.map((record, rowIndex) => columnsForExport.map((column) => {
     const rawValue = valueAtPath(record, column.dataIndex);
     const renderedValue = typeof column.render === 'function'
       ? column.render(rawValue, record, rowIndex)
@@ -199,7 +250,7 @@ const printTablePdf = ({ columns, dataSource, title }) => {
 <body>
   <h1>${escapeHtml(heading)}</h1>
   <table>
-    <thead><tr>${exportColumns.map((column) => `<th>${escapeHtml(columnTitle(column))}</th>`).join('')}</tr></thead>
+    <thead><tr>${columnsForExport.map((column) => `<th>${escapeHtml(columnTitle(column))}</th>`).join('')}</tr></thead>
     <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
   </table>
 </body>
@@ -220,7 +271,11 @@ const defaultFileName = () => {
 
 function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, sortable = true, ...props }) {
   const rows = Array.isArray(dataSource) ? dataSource : [];
-  const enhancedColumns = React.useMemo(() => (sortable ? sortableColumns(columns, rows) : columns), [columns, rows, sortable]);
+  const enhancedColumns = React.useMemo(() => {
+    const printableColumns = columns.map(markActionColumn);
+
+    return sortable ? sortableColumns(printableColumns, rows) : printableColumns;
+  }, [columns, rows, sortable]);
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title
