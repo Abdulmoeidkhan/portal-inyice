@@ -16,7 +16,7 @@ import { message } from '../services/feedback';
 
 const { Text, Title } = Typography;
 
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 const demoReport = {
   finance: {
