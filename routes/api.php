@@ -43,6 +43,9 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+    Route::patch('/user', [AuthController::class, 'updateProfile'])
+        ->middleware('throttle:sensitive-write')
+        ->name('auth.profile.update');
 
     Route::prefix('company-users')->controller(CompanyUserController::class)->group(function () {
         Route::get('/', 'index')->middleware('role:owner,admin')->name('companyUsers.list');

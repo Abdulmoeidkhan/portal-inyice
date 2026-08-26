@@ -578,7 +578,7 @@ export default function OrderList() {
   ];
 
   return (
-    <div className="page-shell page-fade-up">
+    <div className="page-shell page-fade-up orders-page">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
         <Title level={2} style={{ margin: 0 }}>Orders</Title>
         <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -586,7 +586,7 @@ export default function OrderList() {
         </Paragraph>
       </div>
 
-      <Card className="border-beam-aurora">
+      <Card className="border-beam-aurora orders-list-card">
         <div className="list-toolbar">
           <Input.Search
             className="responsive-search"

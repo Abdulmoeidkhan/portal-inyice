@@ -69,6 +69,25 @@ class AuthSecurityApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_authenticated_user_can_update_profile_name(): void
+    {
+        $ctx = $this->seedContext('admin');
+
+        Sanctum::actingAs($ctx['user']);
+
+        $this->patchJson('/api/v1/user', [
+            'name' => 'Updated Profile Name',
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('user.name', 'Updated Profile Name')
+            ->assertJsonPath('user.email', $ctx['user']->email);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $ctx['user']->id,
+            'name' => 'Updated Profile Name',
+        ]);
+    }
+
     public function test_signin_is_rate_limited_after_too_many_attempts(): void
     {
         for ($i = 0; $i < 6; $i++) {

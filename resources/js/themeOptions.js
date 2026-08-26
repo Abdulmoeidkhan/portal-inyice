@@ -25,7 +25,7 @@ export const THEME_STYLE_TOKENS = {
     colorSuccess: '#22c55e',
     colorWarning: '#f97316',
     colorError: '#ef4444',
-    colorInfo: '#262626',
+    colorInfo: '#71717a',
     borderRadius: 10,
   },
   cartoon: {

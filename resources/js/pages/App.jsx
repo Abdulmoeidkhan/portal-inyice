@@ -65,6 +65,7 @@ const AUTH_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const AUTH_LAST_ACTIVITY_KEY = 'auth_last_activity_at';
 const AUTH_ACTIVITY_THROTTLE_MS = 60 * 1000;
 const AUTH_UNAUTHORIZED_EVENT = 'inyice:auth-unauthorized';
+const USER_UPDATED_EVENT = 'inyice:user-updated';
 const CALCULATOR_HISTORY_KEY = 'calculator_history';
 
 const calculate = (left, operator, right) => {
@@ -139,6 +140,14 @@ const NotFound = () => (
 
 function getAuthToken() {
   return localStorage.getItem('auth_token') || localStorage.getItem('token');
+}
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
+  }
 }
 
 function AppCalculator({ open, onClose }) {
@@ -383,14 +392,33 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
   const [floatControlsVisible, setFloatControlsVisible] = useState(true);
   const [showMoveTop, setShowMoveTop] = useState(false);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [user, setUser] = useState(getStoredUser);
   const selectedKey = menuItems
     .flatMap((item) => (item.children ? item.children : [item]))
     .find((item) => item.key === location.pathname)?.key || '/';
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
   const canAccessPayments = ['owner', 'admin', 'accounts'].includes(user?.role);
   const canAccessReports = user?.role !== 'sales';
   const canAccessCancelledReport = ['owner', 'admin'].includes(user?.role);
+
+  useEffect(() => {
+    const syncUser = (event) => {
+      setUser(event.detail || getStoredUser());
+    };
+    const syncUserFromStorage = (event) => {
+      if (event.key === 'user') {
+        setUser(getStoredUser());
+      }
+    };
+
+    window.addEventListener(USER_UPDATED_EVENT, syncUser);
+    window.addEventListener('storage', syncUserFromStorage);
+
+    return () => {
+      window.removeEventListener(USER_UPDATED_EVENT, syncUser);
+      window.removeEventListener('storage', syncUserFromStorage);
+    };
+  }, []);
 
   useEffect(() => {
     let idleTimer;

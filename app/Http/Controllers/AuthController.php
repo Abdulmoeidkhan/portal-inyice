@@ -64,21 +64,31 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'uid' => $user->uid,
-                'name' => $user->name,
-                'email' => $user->email,
-                'tenant_id' => $user->tenant_id,
-                'company_id' => $user->company_id,
-                'role' => $user->role?->code,
-                'role_name' => $user->role?->name,
-                'is_system_user' => (bool) $user->role?->is_system,
-                'tenant_name' => $user->tenant?->name,
-                'company_name' => $user->company?->display_name,
-                'company_is_paid' => (bool) $user->company?->is_paid,
-                'company_sales_can_edit_cost' => (bool) $user->company?->sales_can_edit_cost,
-            ],
+            'user' => $this->serializeUser($user),
+        ]);
+    }
+
+    /**
+     * Update the signed-in user's profile details.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $request->merge([
+            'name' => trim((string) $request->input('name', '')),
+        ]);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+        ]);
+
+        $user = $request->user();
+        $user->forceFill([
+            'name' => $validated['name'],
+        ])->save();
+
+        return response()->json([
+            'success' => true,
+            'user' => $this->serializeUser($user->loadMissing(['role', 'company', 'tenant'])),
         ]);
     }
 
@@ -93,5 +103,27 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Logged out successfully',
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeUser(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'uid' => $user->uid,
+            'name' => $user->name,
+            'email' => $user->email,
+            'tenant_id' => $user->tenant_id,
+            'company_id' => $user->company_id,
+            'role' => $user->role?->code,
+            'role_name' => $user->role?->name,
+            'is_system_user' => (bool) $user->role?->is_system,
+            'tenant_name' => $user->tenant?->name,
+            'company_name' => $user->company?->display_name,
+            'company_is_paid' => (bool) $user->company?->is_paid,
+            'company_sales_can_edit_cost' => (bool) $user->company?->sales_can_edit_cost,
+        ];
     }
 }
