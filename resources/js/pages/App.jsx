@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Modal } from 'antd';
 import {
@@ -22,6 +22,11 @@ import {
   CalculatorOutlined,
   SearchOutlined,
   SwapOutlined,
+  ArrowLeftOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DragOutlined,
+  SnippetsOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import ThemeMenuButton from '../components/ThemeMenuButton';
@@ -67,6 +72,9 @@ const AUTH_ACTIVITY_THROTTLE_MS = 60 * 1000;
 const AUTH_UNAUTHORIZED_EVENT = 'inyice:auth-unauthorized';
 const USER_UPDATED_EVENT = 'inyice:user-updated';
 const CALCULATOR_HISTORY_KEY = 'calculator_history';
+const CALCULATOR_DRAG_MARGIN = 12;
+
+const clamp = (value, min, max) => Math.min(Math.max(value, Math.min(min, max)), Math.max(min, max));
 
 const calculate = (left, operator, right) => {
   if (operator === '+') return left + right;
@@ -151,10 +159,14 @@ function getStoredUser() {
 }
 
 function AppCalculator({ open, onClose }) {
+  const dragRef = useRef(null);
+  const dragStateRef = useRef(null);
   const [display, setDisplay] = useState('0');
   const [storedValue, setStoredValue] = useState(null);
   const [operator, setOperator] = useState(null);
   const [waitingForValue, setWaitingForValue] = useState(false);
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
   const [history, setHistory] = useState(() => {
     try {
       const savedHistory = JSON.parse(localStorage.getItem(CALCULATOR_HISTORY_KEY) || '[]');
@@ -167,6 +179,109 @@ function AppCalculator({ open, onClose }) {
   useEffect(() => {
     localStorage.setItem(CALCULATOR_HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
   }, [history]);
+
+  const getDragBounds = useCallback(() => {
+    const node = dragRef.current;
+    if (!node) {
+      return { left: 0, right: 0, top: 0, bottom: 0 };
+    }
+
+    const rect = node.getBoundingClientRect();
+    const baseLeft = rect.left - dragPosition.x;
+    const baseTop = rect.top - dragPosition.y;
+
+    return {
+      left: CALCULATOR_DRAG_MARGIN - baseLeft,
+      right: window.innerWidth - CALCULATOR_DRAG_MARGIN - baseLeft - rect.width,
+      top: CALCULATOR_DRAG_MARGIN - baseTop,
+      bottom: window.innerHeight - CALCULATOR_DRAG_MARGIN - baseTop - rect.height,
+    };
+  }, [dragPosition]);
+
+  const handleDragStart = useCallback((event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+
+    dragStateRef.current = {
+      bounds: getDragBounds(),
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startX: dragPosition.x,
+      startY: dragPosition.y,
+    };
+    setIsDragging(true);
+    event.preventDefault();
+  }, [dragPosition, getDragBounds]);
+
+  useEffect(() => {
+    if (!isDragging) return undefined;
+
+    const handlePointerMove = (event) => {
+      const dragState = dragStateRef.current;
+      if (!dragState || (event.pointerId !== undefined && event.pointerId !== dragState.pointerId)) return;
+
+      const nextX = dragState.startX + event.clientX - dragState.startPointerX;
+      const nextY = dragState.startY + event.clientY - dragState.startPointerY;
+
+      setDragPosition({
+        x: clamp(nextX, dragState.bounds.left, dragState.bounds.right),
+        y: clamp(nextY, dragState.bounds.top, dragState.bounds.bottom),
+      });
+    };
+
+    const handlePointerUp = (event) => {
+      const dragState = dragStateRef.current;
+      if (dragState && event.pointerId !== undefined && event.pointerId !== dragState.pointerId) return;
+
+      dragStateRef.current = null;
+      setIsDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isDragging]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const keepInViewport = () => {
+      setDragPosition((current) => {
+        const node = dragRef.current;
+        if (!node) return current;
+
+        const rect = node.getBoundingClientRect();
+        const baseLeft = rect.left - current.x;
+        const baseTop = rect.top - current.y;
+
+        return {
+          x: clamp(
+            current.x,
+            CALCULATOR_DRAG_MARGIN - baseLeft,
+            window.innerWidth - CALCULATOR_DRAG_MARGIN - baseLeft - rect.width,
+          ),
+          y: clamp(
+            current.y,
+            CALCULATOR_DRAG_MARGIN - baseTop,
+            window.innerHeight - CALCULATOR_DRAG_MARGIN - baseTop - rect.height,
+          ),
+        };
+      });
+    };
+
+    window.addEventListener('resize', keepInViewport);
+    keepInViewport();
+
+    return () => {
+      window.removeEventListener('resize', keepInViewport);
+    };
+  }, [open]);
 
   const addHistory = (entry) => {
     setHistory((current) => [entry, ...current].slice(0, 50));
@@ -311,6 +426,8 @@ function AppCalculator({ open, onClose }) {
         Delete: 'C',
         Escape: 'Escape',
         ',': '.',
+        x: '*',
+        X: '*',
       };
       const key = keyMap[event.key] || event.key;
 
@@ -339,29 +456,91 @@ function AppCalculator({ open, onClose }) {
     };
   }, [display, open, operator, storedValue, waitingForValue, onClose]);
 
+  const renderButtonContent = (label) => {
+    if (label === 'Back') return <ArrowLeftOutlined />;
+    if (label === 'Paste') return <SnippetsOutlined />;
+    if (label === 'C') return <DeleteOutlined />;
+    if (label === '*') return 'x';
+    return label;
+  };
+
+  const getButtonTitle = (label) => {
+    if (label === 'Back') return 'Backspace';
+    if (label === 'Paste') return 'Paste value';
+    if (label === 'C') return 'Clear';
+    if (label === '*') return 'Multiply';
+    if (label === '/') return 'Divide';
+    if (label === '+') return 'Add';
+    if (label === '-') return 'Subtract';
+    if (label === '=') return 'Equals';
+    if (label === '%') return 'Percent';
+    if (label === '.') return 'Decimal point';
+    return label;
+  };
+
   return (
     <Modal
       className="app-calculator-modal"
-      title="Calculator"
+      title={(
+        <div className="app-calculator-title">
+          <button
+            type="button"
+            className="app-calculator-drag-handle"
+            title="Drag calculator"
+            onPointerDown={handleDragStart}
+            onDoubleClick={() => setDragPosition({ x: 0, y: 0 })}
+          >
+            <DragOutlined />
+            <span>Calculator</span>
+          </button>
+          <Button size="small" type="text" onClick={() => setDragPosition({ x: 0, y: 0 })}>
+            Center
+          </Button>
+        </div>
+      )}
       open={open}
       onCancel={onClose}
       footer={null}
       width={380}
       destroyOnClose={false}
+      mask={false}
+      maskClosable={false}
+      modalRender={(modal) => (
+        <div
+          ref={dragRef}
+          className={`app-calculator-drag-shell${isDragging ? ' is-dragging' : ''}`}
+          style={{ transform: `translate(${dragPosition.x}px, ${dragPosition.y}px)` }}
+        >
+          {modal}
+        </div>
+      )}
     >
       <div className="app-calculator-display">
-        <Text type="secondary">{operator && storedValue !== null ? `${formatCalculatorValue(storedValue)} ${operator}` : 'Ready'}</Text>
-        <strong>{display}</strong>
-        <Button size="small" onClick={() => copyValue()}>Copy</Button>
+        <div className="app-calculator-display-meta">
+          <Text type="secondary">{operator && storedValue !== null ? `${formatCalculatorValue(storedValue)} ${operator}` : 'Ready'}</Text>
+          <Button
+            size="small"
+            type="text"
+            icon={<CopyOutlined />}
+            title="Copy value"
+            aria-label="Copy calculator value"
+            onClick={() => copyValue()}
+          />
+        </div>
+        <strong title={display}>{display}</strong>
       </div>
       <div className="app-calculator-grid">
         {buttons.flat().map((label) => (
           <Button
             key={label}
+            className="app-calculator-key"
             type={['=', '+', '-', '*', '/'].includes(label) ? 'primary' : 'default'}
+            danger={label === 'C'}
+            title={getButtonTitle(label)}
+            aria-label={getButtonTitle(label)}
             onClick={() => handleButton(label)}
           >
-            {label}
+            {renderButtonContent(label)}
           </Button>
         ))}
       </div>

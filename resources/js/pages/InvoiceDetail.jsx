@@ -6,6 +6,7 @@ import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
+import { backToRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
@@ -170,6 +171,7 @@ export default function InvoiceDetail({ shared = false }) {
   const [lockConflict, setLockConflict] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   const detailed = new URLSearchParams(location.search).get('view') === 'detailed';
+  const backToInvoices = () => backToRoute(navigate, location, '/invoices');
 
   useEffect(() => {
     let acquiredLock = false;
@@ -247,7 +249,7 @@ export default function InvoiceDetail({ shared = false }) {
           message={`${userName} is working on this invoice`}
           description="This invoice is temporarily locked for editing. Try again after they finish or the lock expires."
           action={(
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/invoices')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={backToInvoices}>
               Back to Invoices
             </Button>
           )}
@@ -284,7 +286,7 @@ export default function InvoiceDetail({ shared = false }) {
   return (
     <div className="page-shell page-fade-up invoice-document">
       <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
-        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/invoices')}>Back</Button>}
+        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={backToInvoices}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Download PDF</Button>
         {!shared && !invoice.is_virtual_invoice && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}

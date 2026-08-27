@@ -204,7 +204,7 @@ export default function InvoiceList() {
     setActionLoadingKey(`${invoice.uid}:edit`);
     try {
       await acquireEditLock('order', invoice.order.uid);
-      navigate(`/orders/${invoice.order.uid}/edit`);
+      openRoute(navigate, `/orders/${invoice.order.uid}/edit`);
     } catch (error) {
       if (error.status === 423) {
         Modal.warning({
@@ -357,7 +357,7 @@ export default function InvoiceList() {
       message.success(data.message || 'Order duplicated');
       fetchInvoices();
       if (data.order?.uid) {
-        navigate(`/orders/${data.order.uid}/edit`);
+        openRoute(navigate, `/orders/${data.order.uid}/edit`);
       }
     }
   };

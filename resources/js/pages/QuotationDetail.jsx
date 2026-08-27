@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Typography, Watermark } from 'antd';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
+import { backToRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
@@ -123,6 +124,7 @@ const quotationRows = (order) => {
 
 export default function QuotationDetail({ shared = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { uid, token } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -193,7 +195,7 @@ export default function QuotationDetail({ shared = false }) {
   return (
     <div className="page-shell page-fade-up invoice-document quotation-document">
       <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
-        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>Back</Button>}
+        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => backToRoute(navigate, location, '/orders')}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareQuotation}>Copy share link</Button>

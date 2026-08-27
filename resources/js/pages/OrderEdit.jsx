@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Affix, Alert, Button, Card, Collapse, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
-import { openRoute } from '../services/navigation';
+import { backToRoute, openRoute } from '../services/navigation';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
@@ -223,6 +223,7 @@ const currentUserIsSales = () => {
 export default function OrderEdit() {
   const { uid } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm();
   const [gdsForm] = Form.useForm();
   const [order, setOrder] = useState(null);
@@ -624,6 +625,7 @@ export default function OrderEdit() {
   };
 
   const handleSave = () => submitOrder(false);
+  const backToOrders = () => backToRoute(navigate, location, '/orders');
 
   const openInvoiceDateModal = () => {
     setInvoiceDate(dayjs());
@@ -683,7 +685,7 @@ export default function OrderEdit() {
           message={`${userName} is working on this order`}
           description="This order is temporarily locked for editing. Try again after they finish or the lock expires."
           action={(
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={backToOrders}>
               Back to Orders
             </Button>
           )}
@@ -696,7 +698,7 @@ export default function OrderEdit() {
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')} style={{ width: 'fit-content' }}>
+          <Button icon={<ArrowLeftOutlined />} onClick={backToOrders} style={{ width: 'fit-content' }}>
             Back to Orders
           </Button>
           <Title level={2} style={{ margin: 0 }}>
@@ -711,7 +713,7 @@ export default function OrderEdit() {
       <Affix className="edit-order-action-affix" offsetTop={10} target={affixTarget}>
         <Card className="edit-order-action-card border-beam-aurora" style={{ marginBottom: 16 }}>
           <Space className="edit-order-actions">
-            <Button danger onClick={() => navigate('/orders')}>Cancel</Button>
+            <Button danger onClick={backToOrders}>Cancel</Button>
             {canCreateInvoice && (
               <Button type={isRefundRequestOrder ? 'primary' : 'default'} danger={isRefundRequestOrder} icon={<FileTextOutlined />} loading={invoiceSaving} onClick={openInvoiceDateModal}>
                 {isRefundRequestOrder ? 'Refund' : 'Invoice'}

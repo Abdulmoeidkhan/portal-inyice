@@ -1,5 +1,17 @@
 const isModifiedNavigationClick = (event) => Boolean(event?.ctrlKey || event?.metaKey);
 
+const currentRoute = () => `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+const safeReturnPath = (path) => (
+  typeof path === 'string'
+  && path.startsWith('/')
+  && !path.startsWith('//')
+    ? path
+    : null
+);
+
+export const routeStateFromCurrentLocation = () => ({ from: currentRoute() });
+
 export const openRoute = (navigate, path, event) => {
   if (isModifiedNavigationClick(event)) {
     event.preventDefault?.();
@@ -12,7 +24,15 @@ export const openRoute = (navigate, path, event) => {
     return;
   }
 
-  navigate(path);
+  navigate(path, { state: routeStateFromCurrentLocation() });
+};
+
+export const backToRoute = (navigate, location, fallbackPath) => {
+  const fallback = safeReturnPath(fallbackPath) || '/';
+  const from = safeReturnPath(location?.state?.from);
+  const current = `${location?.pathname || ''}${location?.search || ''}${location?.hash || ''}`;
+
+  navigate(from && from !== current ? from : fallback);
 };
 
 export const createDeferredRouteOpener = (event) => {

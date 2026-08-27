@@ -2448,33 +2448,103 @@ body {
   transform: translateY(10px);
 }
 
+.app-calculator-modal {
+  max-width: calc(100vw - 24px);
+}
+
+.app-calculator-modal .ant-modal-content {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--app-border) 82%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 18px 44px color-mix(in srgb, #000 20%, transparent);
+}
+
+.app-calculator-modal .ant-modal-header {
+  margin: 0;
+  padding: 12px 48px 10px 16px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.app-calculator-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
+}
+
+.app-calculator-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-weight: 700;
+  touch-action: none;
+  cursor: grab;
+}
+
+.app-calculator-drag-handle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-calculator-drag-shell.is-dragging .app-calculator-drag-handle {
+  cursor: grabbing;
+}
+
 .app-calculator-modal .ant-modal-body {
   display: grid;
   gap: 14px;
+  padding: 14px 16px 16px;
 }
 
 .app-calculator-display {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  padding: 14px;
+  padding: 12px 14px 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--app-primary) 5%, var(--app-surface));
   text-align: right;
 }
 
+.app-calculator-display-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 8px;
+}
+
+.app-calculator-display-meta .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-calculator-display strong {
   min-width: 0;
   overflow: hidden;
   color: var(--app-text);
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1.15;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-calculator-display .ant-btn {
   justify-self: end;
+  flex: 0 0 auto;
 }
 
 .app-calculator-grid {
@@ -2484,9 +2554,16 @@ body {
 }
 
 .app-calculator-grid .ant-btn {
-  height: 42px;
+  height: 44px;
   min-width: 0;
   padding-inline: 6px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.app-calculator-grid .ant-btn-primary {
+  box-shadow: none;
 }
 
 .app-calculator-history {
@@ -2505,7 +2582,7 @@ body {
 .app-calculator-history-list {
   display: grid;
   gap: 6px;
-  max-height: 190px;
+  max-height: min(190px, 28vh);
   overflow-y: auto;
 }
 
@@ -2534,6 +2611,22 @@ body {
   .app-move-top-float {
     right: 16px !important;
     bottom: 18px;
+  }
+
+  .app-calculator-modal {
+    max-width: calc(100vw - 20px);
+  }
+
+  .app-calculator-modal .ant-modal-header {
+    padding-left: 14px;
+  }
+
+  .app-calculator-modal .ant-modal-body {
+    padding: 12px 14px 14px;
+  }
+
+  .app-calculator-display strong {
+    font-size: 28px;
   }
 
   .invoice-paper .ant-card-body {

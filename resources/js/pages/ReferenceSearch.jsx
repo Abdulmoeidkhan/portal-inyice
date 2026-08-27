@@ -133,7 +133,7 @@ export default function ReferenceSearch() {
             </Button>
           )}
           {row.order_uid && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/orders/${row.order_uid}/edit`)}>
+            <Button size="small" icon={<EditOutlined />} onClick={(event) => openRoute(navigate, `/orders/${row.order_uid}/edit`, event)}>
               Edit
             </Button>
           )}

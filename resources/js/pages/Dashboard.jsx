@@ -13,6 +13,7 @@ import {
 import { Column, Pie } from '@ant-design/plots';
 import { useNavigate } from 'react-router-dom';
 import { message } from '../services/feedback';
+import { openRoute } from '../services/navigation';
 
 const { Text, Title } = Typography;
 
@@ -447,7 +448,7 @@ export default function Dashboard() {
 
   const openVoucher = (event) => {
     if (event?.order_uid) {
-      navigate(`/orders/${event.order_uid}/voucher`);
+      openRoute(navigate, `/orders/${event.order_uid}/voucher`);
     }
   };
 

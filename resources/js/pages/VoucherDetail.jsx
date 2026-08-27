@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Result, Skeleton, Space } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { printDocument } from '../services/printDocument';
+import { backToRoute } from '../services/navigation';
 import VoucherPreview from './sales-flow/VoucherPreview';
 
 const authHeaders = () => {
@@ -26,6 +27,7 @@ const copyLink = async (url) => {
 
 export default function VoucherDetail({ shared = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { uid, token } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export default function VoucherDetail({ shared = false }) {
   return (
     <div className="page-shell page-fade-up voucher-detail-page">
       <Space className="voucher-screen-actions">
-        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>Back</Button>}
+        {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => backToRoute(navigate, location, '/orders')}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareVoucher}>

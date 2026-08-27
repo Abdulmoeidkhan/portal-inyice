@@ -1408,6 +1408,7 @@ class ReportService
     ): array {
         $departureDate = $this->voucherDates($order, 'flights', 'date');
         $checkinDate = $this->voucherDates($order, 'hotels', 'check_in');
+        $serviceDate = $this->voucherLastServiceDate($order);
         $profit = $revenue - $cost;
         $profitAfterSharing = $profit - $sharedOut + $sharedIn;
 
@@ -1424,7 +1425,7 @@ class ReportService
             'invoice_date' => $order->invoice?->invoice_date?->toDateString(),
             'departure_date' => $departureDate,
             'checkin_date' => $checkinDate,
-            'service_date' => $this->joinDateValues($departureDate, $checkinDate),
+            'service_date' => $serviceDate,
             'status' => $order->status,
             'customer_name' => $order->customer?->name,
             'vendor_name' => $order->vendor?->name,
@@ -1522,26 +1523,12 @@ class ReportService
         return collect($this->voucherDateList($order, $section, $field))->join(' / ');
     }
 
-    private function joinDateValues(string ...$values): string
-    {
-        return collect($values)
-            ->flatMap(fn ($value) => explode(' / ', $value))
-            ->map(fn ($value) => trim($value))
-            ->filter()
-            ->unique()
-            ->values()
-            ->join(' / ');
-    }
-
     private function orderMatchesVoucherDateRange(Order $order, string $dateBy, string $fromDate, string $toDate): bool
     {
         $dates = match ($dateBy) {
             'departure' => $this->voucherDateList($order, 'flights', 'date'),
             'checkin' => $this->voucherDateList($order, 'hotels', 'check_in'),
-            'service' => collect([
-                ...$this->voucherDateList($order, 'flights', 'date'),
-                ...$this->voucherDateList($order, 'hotels', 'check_in'),
-            ])->unique()->values()->all(),
+            'service' => array_filter([$this->voucherLastServiceDate($order)]),
             default => [],
         };
 
@@ -1583,5 +1570,28 @@ class ReportService
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function voucherLastServiceDate(Order $order): string
+    {
+        return $this->latestDateValue([
+            ...$this->voucherDateList($order, 'flights', 'date'),
+            ...$this->voucherDateList($order, 'hotels', 'check_out'),
+        ]);
+    }
+
+    private function latestDateValue(array $values): string
+    {
+        return collect($values)
+            ->map(function ($value): ?Carbon {
+                try {
+                    return Carbon::parse($value)->startOfDay();
+                } catch (\Throwable) {
+                    return null;
+                }
+            })
+            ->filter()
+            ->sortByDesc(fn (Carbon $date) => $date->timestamp)
+            ->first()?->toDateString() ?? '';
     }
 }

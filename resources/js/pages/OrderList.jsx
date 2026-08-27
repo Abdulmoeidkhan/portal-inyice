@@ -392,7 +392,7 @@ export default function OrderList() {
           message.success(data.message || 'Order duplicated');
           fetchOrders(pagination.current);
           if (data.order?.uid) {
-            navigate(`/orders/${data.order.uid}/edit`);
+            openRoute(navigate, `/orders/${data.order.uid}/edit`);
           }
         } catch (error) {
           message.error(error.message || 'Failed to duplicate order');
@@ -686,7 +686,7 @@ export default function OrderList() {
           <Space>
             <Button
               icon={<ArrowsAltOutlined />}
-              onClick={() => editingOrder && navigate(`/orders/${editingOrder.uid}/edit`)}
+              onClick={(event) => editingOrder && openRoute(navigate, `/orders/${editingOrder.uid}/edit`, event)}
             >
               Open Full Form
             </Button>
@@ -740,7 +740,7 @@ export default function OrderList() {
             <Button
               block
               icon={<ArrowsAltOutlined />}
-              onClick={() => editingOrder && navigate(`/orders/${editingOrder.uid}/edit`)}
+              onClick={(event) => editingOrder && openRoute(navigate, `/orders/${editingOrder.uid}/edit`, event)}
             >
               Open Full Form
             </Button>

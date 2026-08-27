@@ -353,6 +353,58 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('details.0.discount', 100);
     }
 
+    public function test_profit_report_service_date_uses_latest_checkout_or_return_flight(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $ctx['order']->update([
+            'active_sections' => ['flights', 'hotels'],
+            'meta' => [
+                'active_sections' => ['flights', 'hotels'],
+                'flights' => [
+                    ['flight_no' => 'PK301', 'from' => 'LHE', 'to' => 'JED', 'date' => '2026-09-01'],
+                    ['flight_no' => 'PK302', 'from' => 'JED', 'to' => 'LHE', 'date' => '2026-09-12'],
+                ],
+                'hotels' => [
+                    ['hotel_name' => 'Makkah Stay', 'check_in' => '2026-09-02', 'check_out' => '2026-09-10'],
+                ],
+            ],
+        ]);
+
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/reports/profit?from_date=2026-09-10&to_date=2026-09-10&date_by=service&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'details');
+
+        $this->getJson('/api/v1/reports/profit?from_date=2026-09-12&to_date=2026-09-12&date_by=service&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('details.0.service_date', '2026-09-12');
+
+        $ctx['order']->update([
+            'meta' => [
+                'active_sections' => ['flights', 'hotels'],
+                'flights' => [
+                    ['flight_no' => 'PK301', 'from' => 'LHE', 'to' => 'JED', 'date' => '2026-09-01'],
+                    ['flight_no' => 'PK302', 'from' => 'JED', 'to' => 'LHE', 'date' => '2026-09-12'],
+                ],
+                'hotels' => [
+                    ['hotel_name' => 'Makkah Stay', 'check_in' => '2026-09-02', 'check_out' => '2026-09-15'],
+                ],
+            ],
+        ]);
+
+        $this->getJson('/api/v1/reports/profit?from_date=2026-09-12&to_date=2026-09-12&date_by=service&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'details');
+
+        $this->getJson('/api/v1/reports/profit?from_date=2026-09-15&to_date=2026-09-15&date_by=service&group_by=customer&entity_id=' . $ctx['customer']->id)
+            ->assertOk()
+            ->assertJsonPath('details.0.service_date', '2026-09-15');
+    }
+
     public function test_company_can_create_more_than_fifty_invoices_per_month(): void
     {
         $ctx = $this->seedTenantContext();
