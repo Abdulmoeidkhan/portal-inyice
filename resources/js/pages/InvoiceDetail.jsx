@@ -7,7 +7,6 @@ import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 import { backToRoute } from '../services/navigation';
-import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -42,6 +41,38 @@ const uniqueNames = (values) => {
     });
 };
 const hasRowValue = (row, keys) => keys.some((key) => firstFilled(row?.[key]));
+const InvoicePrintTable = ({ columns, dataSource, rowKey }) => (
+  <div className="invoice-lines-table">
+    <table>
+      <colgroup>
+        {columns.map((column) => (
+          <col key={column.key} style={{ width: column.width }} />
+        ))}
+      </colgroup>
+      <thead>
+        <tr>
+          {columns.map((column) => (
+            <th key={column.key} style={{ textAlign: column.align || 'left' }}>{column.title}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {dataSource.map((row, rowIndex) => (
+          <tr key={typeof rowKey === 'function' ? rowKey(row, rowIndex) : row[rowKey] ?? row.uid ?? rowIndex}>
+            {columns.map((column) => {
+              const value = column.dataIndex ? row[column.dataIndex] : undefined;
+              return (
+                <td key={column.key} style={{ textAlign: column.align || 'left' }}>
+                  {column.render ? column.render(value, row, rowIndex) : value}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 const serviceDefinitions = [
   { key: 'flights', label: 'Flights', metaKey: 'pricing', fields: ['pax_name', 'flight_ticket_no', 'flight_sales'] },
   { key: 'hotels', label: 'Hotels', metaKey: 'hotels', fields: ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'sales', 'amount'] },
@@ -331,12 +362,12 @@ export default function InvoiceDetail({ shared = false }) {
             </div>
           </div>
           {detailed ? (
-            <Table className="invoice-lines-table" rowKey="id" pagination={false} csvDownload={false} sortable={false} dataSource={detailedRows} columns={[
-              { title: '#', width: 54, render: (_, __, index) => index + 1 },
-              { title: 'Item & Description', dataIndex: 'public_description', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
-              { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
-              { title: 'Rate', dataIndex: 'unit_price', width: 130, align: 'right', render: (value) => money(value) },
-              { title: 'Amount', dataIndex: 'total_price', width: 140, align: 'right', render: (value) => money(value) },
+            <InvoicePrintTable rowKey="id" dataSource={detailedRows} columns={[
+              { title: '#', key: 'index', width: '8%', render: (_, __, index) => index + 1 },
+              { title: 'Item & Description', dataIndex: 'public_description', key: 'description', width: '50%', render: (value, row) => <><Text strong>{row.service_name}</Text><br /><Text type="secondary">{value || '-'}</Text><br /><Text type="secondary">{row.breakup}</Text></> },
+              { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: '10%', align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+              { title: 'Rate', dataIndex: 'unit_price', key: 'rate', width: '15%', align: 'right', render: (value) => money(value) },
+              { title: 'Amount', dataIndex: 'total_price', key: 'amount', width: '17%', align: 'right', render: (value) => money(value) },
 
             ]} />
           ) : (
@@ -344,23 +375,19 @@ export default function InvoiceDetail({ shared = false }) {
               {passengerRows.length > 0 && (
                 <div className="invoice-mini-section">
                   <Title level={4}>Passenger</Title>
-                  <Table
-                    className="invoice-lines-table"
+                  <InvoicePrintTable
                     rowKey="id"
-                    pagination={false}
-                    csvDownload={false}
-                    sortable={false}
                     dataSource={passengerRows}
                     columns={[
-                      { title: 'Passenger', dataIndex: 'name', render: (value) => value || '-' },
+                      { title: 'Passenger', dataIndex: 'name', key: 'name', width: '100%', render: (value) => value || '-' },
                     ]}
                   />
                 </div>
               )}
-              <Table className="invoice-lines-table" rowKey="key" pagination={false} csvDownload={false} sortable={false} dataSource={serviceRows} columns={[
-                { title: '#', width: 54, render: (_, __, index) => index + 1 },
-                { title: 'Item & Description', dataIndex: 'service', render: (value) => <Text strong>{value}</Text> },
-                { title: 'Qty', dataIndex: 'quantity', width: 90, align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
+              <InvoicePrintTable rowKey="key" dataSource={serviceRows} columns={[
+                { title: '#', key: 'index', width: '8%', render: (_, __, index) => index + 1 },
+                { title: 'Item & Description', dataIndex: 'service', key: 'service', width: '78%', render: (value) => <Text strong>{value}</Text> },
+                { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: '14%', align: 'right', render: (value) => money(value).replace(/\.00$/, '') },
               ]} />
             </>
           )}
@@ -379,16 +406,16 @@ export default function InvoiceDetail({ shared = false }) {
           {hasReceiptRows && (
             <div className="invoice-receipts">
               <Title level={4}>Receipts & Payments</Title>
-              <Table rowKey="id" pagination={false} csvDownload={false} sortable={false} dataSource={settlementRows} columns={[
-                { title: 'Date', dataIndex: 'settlement_date', width: 115, render: formatDate },
+              <InvoicePrintTable rowKey="id" dataSource={settlementRows} columns={[
+                { title: 'Date', dataIndex: 'settlement_date', key: 'date', width: '18%', render: formatDate },
                 {
-                  title: 'Receipt / Reference', render: (_, row) => {
+                  title: 'Receipt / Reference', key: 'reference', width: '42%', render: (_, row) => {
                     const document = documentForSettlement(row);
                     return document?.receipt_number || document?.payment_number || row.notes || 'Applied balance';
                   }
                 },
-                { title: 'Method', width: 130, render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
-                { title: 'Amount', width: 140, align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
+                { title: 'Method', key: 'method', width: '20%', render: (_, row) => documentForSettlement(row)?.payment_method || row.settlement_type },
+                { title: 'Amount', key: 'amount', width: '20%', align: 'right', render: (_, row) => money(toNumber(row.amount_received) || toNumber(row.amount_to_advance) || toNumber(row.amount_refunded)) },
               ]} />
             </div>
           )}

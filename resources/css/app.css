@@ -1945,17 +1945,59 @@ body {
 
 .voucher-preview-section .ant-table-wrapper {
   margin-top: 4px;
+  width: 100%;
+}
+
+.voucher-preview-table {
+  width: 100%;
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.voucher-preview-table table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: #102033;
+  background: #ffffff;
+}
+
+.voucher-preview-table th,
+.voucher-preview-table td {
+  padding: 8px 10px;
+  color: #102033;
+  font-size: 11px;
+  line-height: 1.28;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.1);
+  background: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.voucher-preview-table th {
+  font-weight: 800;
+  border-bottom-color: rgba(15, 27, 45, 0.14);
+  background: #edf4fb;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
 .voucher-preview-section .ant-table {
+  width: 100%;
   color: #102033;
   background: #ffffff;
 }
 
 .voucher-preview-section .ant-table-container,
 .voucher-preview-section .ant-table-content {
+  width: 100%;
   overflow: visible !important;
   background: #ffffff;
+}
+
+.voucher-preview-section .ant-table table {
+  width: 100% !important;
 }
 
 .voucher-preview .ant-table-wrapper,
@@ -2169,6 +2211,34 @@ body {
 
 .invoice-lines-table {
   margin-top: 12px;
+  width: 100%;
+  overflow: visible;
+}
+
+.invoice-lines-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.invoice-lines-table th,
+.invoice-lines-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #d1d5db;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.invoice-lines-table th {
+  background: #383a36;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
 .invoice-lines-table .ant-table {
@@ -3452,6 +3522,38 @@ body {
     padding: 3px 5px !important;
     font-size: 9px !important;
     line-height: 1.18 !important;
+  }
+
+  .voucher-preview-table,
+  .voucher-preview-table table {
+    width: 100% !important;
+  }
+
+  .voucher-preview-table table {
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .voucher-preview-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .voucher-preview-table th,
+  .voucher-preview-table td {
+    padding: 3px 5px !important;
+    color: #102033 !important;
+    font-size: 9px !important;
+    line-height: 1.18 !important;
+    background: #ffffff !important;
+    overflow-wrap: anywhere;
+  }
+
+  .voucher-preview-table th {
+    font-weight: 800 !important;
+    background: #edf4fb !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .voucher-preview-footer {

@@ -1,9 +1,8 @@
 import React from 'react';
-import { Empty, Typography, Watermark } from 'antd';
+import { Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
 import { getAirportCity } from './airportLookup';
 import { stripUtcMidnightSuffix } from '../../services/dateFormat';
-import Table from '../../components/CsvTable';
 
 const { Text, Title } = Typography;
 
@@ -175,8 +174,21 @@ const compactColumns = (columns, data) => columns.filter((column) => {
   return data.some((row) => hasValue(row?.[key]));
 });
 
+const columnKey = (column, index) => String(column.key || column.dataIndex || column.title || index);
+
+const renderPrintCell = (column, row, index) => {
+  const value = column.dataIndex ? row?.[column.dataIndex] : undefined;
+
+  return column.render ? column.render(value, row, index) : value;
+};
+
 const PreviewTable = ({ columns, data }) => {
   const visibleColumns = compactColumns(columns, data);
+  const totalWidth = visibleColumns.reduce((sum, column) => sum + Number(column.width || 120), 0) || 1;
+  const printColumns = visibleColumns.map((column) => ({
+    ...column,
+    width: `${((Number(column.width || 120) / totalWidth) * 100).toFixed(4)}%`,
+  }));
   const keyedData = data.map((row, index) => ({
     ...row,
     __previewRowKey: row.key || `${index}:${visibleColumns.map((column) => row?.[column.dataIndex] ?? '').join('|')}`,
@@ -187,17 +199,35 @@ const PreviewTable = ({ columns, data }) => {
   }
 
   return (
-    <Table
-      size="small"
-      rowKey="__previewRowKey"
-      columns={visibleColumns}
-      dataSource={keyedData}
-      pagination={false}
-      csvDownload={false}
-      sortable={false}
-      scroll={{ x: 'max-content' }}
-      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" /> }}
-    />
+    <div className="voucher-preview-table">
+      <table>
+        <colgroup>
+          {printColumns.map((column, index) => (
+            <col key={columnKey(column, index)} style={{ width: column.width }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            {printColumns.map((column, index) => (
+              <th key={columnKey(column, index)} style={{ textAlign: column.align || 'left' }}>
+                {column.title}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {keyedData.map((row, rowIndex) => (
+            <tr key={row.__previewRowKey}>
+              {printColumns.map((column, columnIndex) => (
+                <td key={columnKey(column, columnIndex)} style={{ textAlign: column.align || 'left' }}>
+                  {renderPrintCell(column, row, rowIndex)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 

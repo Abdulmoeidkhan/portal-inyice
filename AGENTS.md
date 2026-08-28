@@ -4,6 +4,7 @@ Read this file before making changes in this repository.
 
 ## Project Workflow
 
+- At the start of repository work, use the applicable project tools without waiting for a reminder: Graphify for codebase context, Laravel Boost MCP for Laravel/PHP/API/database work, Ant Design MCP for Ant Design UI work, and any other MCP/tool that fits the task.
 - Do not run `npm run build`, `npm.cmd run build`, or other production frontend builds unless the user explicitly asks for a build or approves it for the current task.
 - Prefer lighter checks for frontend edits, such as JSX parsing, targeted lint/type checks if available, or focused tests.
 - Use Laravel Boost MCP before Laravel/PHP/API/database work. Start with `application_info`, and use `search_docs` for Laravel ecosystem documentation when documentation is needed.
