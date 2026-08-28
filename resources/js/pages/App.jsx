@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Modal } from 'antd';
+import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Modal, Alert } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -29,6 +29,13 @@ import {
   SnippetsOutlined,
 } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import {
+  cachedResponse,
+  offlineBlockedResponse,
+  readCachedApiResponse,
+  requestMethod,
+  writeCachedApiResponse,
+} from '../services/offlineCache';
 import ThemeMenuButton from '../components/ThemeMenuButton';
 
 // Components
@@ -134,6 +141,10 @@ function isProtectedApiRequest(input) {
     && !path.startsWith('/api/v1/auth/login')
     && !path.startsWith('/api/v1/auth/logout')
     && !path.startsWith('/api/v1/shared-');
+}
+
+function offlineReadMessage() {
+  return 'You are offline and this data has not been synced on this device yet.';
 }
 
 const NotFound = () => (
@@ -564,7 +575,7 @@ function AppCalculator({ open, onClose }) {
   );
 }
 
-function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compactTheme, onChangeThemeMode, onChangeThemeStyle, onToggleCompactTheme }) {
+function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compactTheme, onChangeThemeMode, onChangeThemeStyle, onToggleCompactTheme, offline }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -760,6 +771,15 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
         </Header>
 
         <Content className="app-content">
+          {offline && (
+            <Alert
+              banner
+              type="warning"
+              message="Offline mode"
+              description="Showing synced data only. Updates are disabled until the connection is restored."
+              style={{ marginBottom: 16 }}
+            />
+          )}
           <div key={location.pathname} className="route-transition">
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -835,6 +855,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
 export default function App({ themeMode, themeStyle, compactTheme, onChangeThemeMode, onChangeThemeStyle, onToggleCompactTheme }) {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [offline, setOffline] = useState(() => !navigator.onLine);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -881,7 +902,37 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
     const originalFetch = window.fetch;
 
     window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
+      const [input, init = {}] = args;
+      const method = requestMethod(input, init);
+      const protectedRequest = isProtectedApiRequest(input);
+
+      if (protectedRequest && !navigator.onLine) {
+        if (method !== 'GET') {
+          return offlineBlockedResponse();
+        }
+
+        const cached = await readCachedApiResponse(input, init);
+
+        return cached ? cachedResponse(cached) : offlineBlockedResponse(offlineReadMessage());
+      }
+
+      let response;
+
+      try {
+        response = await originalFetch(...args);
+      } catch (error) {
+        if (protectedRequest && method === 'GET') {
+          const cached = await readCachedApiResponse(input, init);
+
+          return cached ? cachedResponse(cached) : offlineBlockedResponse(offlineReadMessage());
+        }
+
+        throw error;
+      }
+
+      if (protectedRequest && method === 'GET') {
+        writeCachedApiResponse(input, init, response);
+      }
 
       if (
         getAuthToken()
@@ -896,6 +947,19 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
 
     return () => {
       window.fetch = originalFetch;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -1179,7 +1243,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} />} />
+      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} offline={offline} />} />
     </Routes>
   );
 }

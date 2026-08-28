@@ -13,6 +13,15 @@ const container = document.getElementById('root');
 const root = window.__inyiceRoot || ReactDOM.createRoot(container);
 window.__inyiceRoot = root;
 
+const canUseServiceWorker = window.location.protocol === 'https:'
+  || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+if ('serviceWorker' in navigator && canUseServiceWorker) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+}
+
 function FeedbackBridge() {
   const { message } = AntdApp.useApp();
 

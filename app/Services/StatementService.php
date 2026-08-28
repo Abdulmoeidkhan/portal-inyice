@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\ExchangeRate;
 use App\Models\Order;
+use App\Models\OrderVendorCost;
 use App\Models\Payment;
 use App\Models\Receipt;
 use App\Models\Vendor;
@@ -186,7 +187,7 @@ class StatementService
                 $query->whereHas('invoice', fn ($invoice) => $invoice->whereNotIn('status', ['void', 'cancel']))
                     ->orWhereIn('status', self::CONFIRMED_REFUND_ORDER_STATUSES);
             })
-            ->with('invoice:id,order_id,invoice_date')
+            ->with(['customer:id,name', 'invoice:id,order_id,invoice_date', 'vendorCosts'])
             ->orderBy('created_at')
             ->get()
             ->filter(fn (Order $order) => $this->vendorPayableAmount($order, $vendorId) != 0.0);
@@ -218,12 +219,15 @@ class StatementService
         foreach ($orders as $order) {
             $payable = $this->vendorPayableAmount($order, $vendorId);
             $isRefund = $payable < 0;
+            $purchaseSummary = $this->vendorPurchaseSummary($order, $vendorId, $payable);
             $transactions->push([
                 'id' => 'order-' . $order->id,
                 'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
                 'type' => $isRefund ? 'vendor_refund' : 'payable',
                 'reference' => $order->order_number,
-                'description' => $order->notes ?: ($isRefund ? 'Vendor refund for order' : 'Vendor cost for order'),
+                'reference_url' => '/orders/' . $order->uid . '/edit',
+                'description' => $purchaseSummary['narration'],
+                'purchase_summary' => $purchaseSummary,
                 'vendor_payables' => $isRefund ? 0 : $payable,
                 'vendor_refunds' => $isRefund ? abs($payable) : 0,
                 'vendor_payments' => 0,
@@ -323,5 +327,336 @@ class StatementService
     public function vendorPayableAmount(Order $order, int $vendorId): float
     {
         return $order->vendorPayableAmountFor($vendorId);
+    }
+
+    private function vendorPurchaseSummary(Order $order, int $vendorId, float $payable): array
+    {
+        $customerName = trim((string) ($order->customer?->name ?: 'Walk-in Customer'));
+        $passengerDetails = $this->voucherPassengerDetails($order);
+        $passengerCount = count($passengerDetails) ?: $this->voucherPassengerCount($order);
+        $serviceRows = $this->vendorPurchaseRows($order, $vendorId, $payable);
+        $services = collect($serviceRows)
+            ->pluck('service')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($services === []) {
+            $services = ['SERVICE'];
+        }
+
+        $passengerLabel = $passengerCount === 1 ? '1 passenger' : $passengerCount . ' passengers';
+
+        return [
+            'order_uid' => $order->uid,
+            'order_number' => $order->order_number,
+            'booking_reference' => $order->booking_reference,
+            'customer_name' => $customerName,
+            'passenger_count' => $passengerCount,
+            'services' => $services,
+            'currency_code' => $order->currency_code,
+            'total_purchase_amount' => round($payable, 4),
+            'narration' => sprintf('%s (%s), %s', $customerName, $passengerLabel, implode(', ', $services)),
+            'passenger_details' => $passengerDetails,
+            'rows' => $serviceRows,
+        ];
+    }
+
+    private function voucherPassengerDetails(Order $order): array
+    {
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $passengers = collect($meta['passengers'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $pricingRows = collect($meta['pricing'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $visaRows = collect($meta['visa'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $rows = collect();
+
+        foreach ($passengers as $index => $passenger) {
+            $name = $this->firstFilled(
+                $passenger['name'] ?? null,
+                $pricingRows[$index]['pax_name'] ?? null,
+                $visaRows[$index]['passenger_name'] ?? null,
+                'Passenger ' . ($index + 1)
+            );
+            $pricing = $this->voucherPassengerRelatedRow($pricingRows, 'pax_name', $name, $index);
+            $visa = $this->voucherPassengerRelatedRow($visaRows, 'passenger_name', $name, $index);
+
+            $rows->push($this->voucherPassengerDetailRow($index, $name, $passenger, $pricing, $visa));
+        }
+
+        foreach ($pricingRows as $index => $pricing) {
+            $name = $this->firstFilled($pricing['pax_name'] ?? null, 'Passenger ' . ($index + 1));
+            if ($this->hasPassengerDetailRow($rows, $name)) {
+                continue;
+            }
+
+            $visa = $this->voucherPassengerRelatedRow($visaRows, 'passenger_name', $name, $index);
+            $rows->push($this->voucherPassengerDetailRow($rows->count(), $name, [], $pricing, $visa));
+        }
+
+        foreach ($visaRows as $index => $visa) {
+            $name = $this->firstFilled($visa['passenger_name'] ?? null, 'Passenger ' . ($index + 1));
+            if ($this->hasPassengerDetailRow($rows, $name)) {
+                continue;
+            }
+
+            $rows->push($this->voucherPassengerDetailRow($rows->count(), $name, [], [], $visa));
+        }
+
+        return $rows->values()->all();
+    }
+
+    private function voucherPassengerCount(Order $order): int
+    {
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $passengerNames = collect($meta['passengers'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(fn (array $row) => trim((string) ($row['name'] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($passengerNames->isNotEmpty()) {
+            return $passengerNames->count();
+        }
+
+        $fallbackNames = collect($meta['pricing'] ?? [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(fn (array $row) => trim((string) ($row['pax_name'] ?? '')))
+            ->merge(collect($meta['visa'] ?? [])
+                ->filter(fn ($row) => is_array($row))
+                ->map(fn (array $row) => trim((string) ($row['passenger_name'] ?? ''))))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return max(1, $fallbackNames->count());
+    }
+
+    private function voucherPassengerRelatedRow(Collection $rows, string $nameField, string $name, int $index): array
+    {
+        $matched = $rows->first(fn (array $row) => strcasecmp(trim((string) ($row[$nameField] ?? '')), $name) === 0);
+
+        if (is_array($matched)) {
+            return $matched;
+        }
+
+        $fallback = $rows[$index] ?? [];
+
+        return is_array($fallback) ? $fallback : [];
+    }
+
+    private function voucherPassengerDetailRow(int $index, string $name, array $passenger, array $pricing, array $visa): array
+    {
+        return [
+            'key' => 'passenger-' . $index,
+            'name' => $name,
+            'passport_no' => $this->firstFilled($passenger['passport_no'] ?? null, $passenger['passport_number'] ?? null),
+            'ticket_no' => $this->firstFilled($passenger['ticket_no'] ?? null, $pricing['flight_ticket_no'] ?? null),
+            'visa_publisher' => $this->firstFilled($passenger['visa_publisher'] ?? null, $visa['visa_publisher'] ?? null, $visa['visa_vendor'] ?? null),
+            'visa_no' => $this->firstFilled($passenger['visa_no'] ?? null, $visa['visa_no'] ?? null),
+            'notes' => $this->firstFilled($passenger['notes'] ?? null, $visa['notes'] ?? null),
+        ];
+    }
+
+    private function hasPassengerDetailRow(Collection $rows, string $name): bool
+    {
+        return $rows->contains(fn (array $row) => strcasecmp((string) ($row['name'] ?? ''), $name) === 0);
+    }
+
+    private function vendorPurchaseRows(Order $order, int $vendorId, float $payable): array
+    {
+        $meta = is_array($order->meta) ? $order->meta : [];
+        $costRows = $order->relationLoaded('vendorCosts')
+            ? $order->vendorCosts->where('vendor_id', $vendorId)->values()
+            : $order->vendorCosts()->where('vendor_id', $vendorId)->get();
+
+        if ($costRows->isNotEmpty()) {
+            return $this->sortVendorPurchaseRows($costRows
+                ->map(fn (OrderVendorCost $cost): array => $this->vendorPurchaseRowFromCost($cost, $meta))
+                ->values()
+                ->all());
+        }
+
+        $rows = $this->vendorPurchaseRowsFromVoucherMeta($meta, $vendorId);
+
+        if ($rows !== []) {
+            return $this->sortVendorPurchaseRows($rows);
+        }
+
+        return [[
+            'key' => 'order-total',
+            'service' => 'SERVICE',
+            'passenger' => $this->firstFilled($meta['passengers'][0]['name'] ?? null, $meta['pricing'][0]['pax_name'] ?? null, 'Unassigned'),
+            'details' => $order->notes ?: 'Order purchase',
+            'amount' => round($payable, 4),
+        ]];
+    }
+
+    private function vendorPurchaseRowFromCost(OrderVendorCost $cost, array $meta): array
+    {
+        $service = $this->statementServiceName($cost->service_type);
+        $source = $this->voucherServiceSourceRow($meta, $cost->service_type, (int) $cost->service_index);
+
+        return [
+            'key' => $cost->service_type . '-' . $cost->service_index . '-' . $cost->id,
+            'service' => $service,
+            'passenger' => $this->purchasePassengerName($cost->service_type, $source, $meta),
+            'details' => $this->purchaseDetails($cost->service_type, $source),
+            'amount' => round((float) $cost->amount, 4),
+        ];
+    }
+
+    private function vendorPurchaseRowsFromVoucherMeta(array $meta, int $vendorId): array
+    {
+        $rows = [];
+
+        foreach (($meta['pricing'] ?? []) as $index => $pricing) {
+            if (!is_array($pricing) || (int) ($pricing['vendor_id'] ?? 0) !== $vendorId) {
+                continue;
+            }
+
+            $amount = OrderVendorCost::toAmount($pricing['flight_cost'] ?? null);
+            if ($amount != 0.0) {
+                $rows[] = [
+                    'key' => 'flight-' . $index,
+                    'service' => 'FLIGHT',
+                    'passenger' => $this->purchasePassengerName('flight', $pricing, $meta),
+                    'details' => $this->purchaseDetails('flight', $pricing),
+                    'amount' => round($amount, 4),
+                ];
+            }
+        }
+
+        foreach (OrderVendorCost::SERVICE_SECTIONS as $section => $serviceType) {
+            foreach (($meta[$section] ?? []) as $index => $serviceRow) {
+                if (!is_array($serviceRow) || (int) ($serviceRow['vendor_id'] ?? 0) !== $vendorId) {
+                    continue;
+                }
+
+                $amount = OrderVendorCost::amountFromServiceRow($serviceRow);
+                if ($amount != 0.0) {
+                    $rows[] = [
+                        'key' => $serviceType . '-' . $index,
+                        'service' => $this->statementServiceName($serviceType),
+                        'passenger' => $this->purchasePassengerName($serviceType, $serviceRow, $meta),
+                        'details' => $this->purchaseDetails($serviceType, $serviceRow),
+                        'amount' => round($amount, 4),
+                    ];
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    private function voucherServiceSourceRow(array $meta, string $serviceType, int $index): array
+    {
+        $section = match ($serviceType) {
+            'flight' => 'pricing',
+            'hotel' => 'hotels',
+            'transfer' => 'transfers',
+            'city_tour' => 'city_tours',
+            'visa' => 'visa',
+            'other_service' => 'other_services',
+            default => null,
+        };
+
+        if ($section === null) {
+            return [];
+        }
+
+        $row = $meta[$section][$index] ?? [];
+
+        return is_array($row) ? $row : [];
+    }
+
+    private function statementServiceName(string $serviceType): string
+    {
+        return match ($serviceType) {
+            'flight' => 'FLIGHT',
+            'hotel' => 'HOTEL',
+            'visa' => 'VISA',
+            'transfer', 'city_tour' => 'TRANSPORT',
+            default => 'SERVICE',
+        };
+    }
+
+    private function sortVendorPurchaseRows(array $rows): array
+    {
+        $priority = [
+            'FLIGHT' => 10,
+            'HOTEL' => 20,
+            'VISA' => 30,
+            'TRANSPORT' => 40,
+            'SERVICE' => 50,
+        ];
+
+        return collect($rows)
+            ->sortBy(fn (array $row) => sprintf(
+                '%02d-%s',
+                $priority[$row['service'] ?? 'SERVICE'] ?? 90,
+                $row['key'] ?? ''
+            ))
+            ->values()
+            ->all();
+    }
+
+    private function purchasePassengerName(string $serviceType, array $row, array $meta): string
+    {
+        $firstPassenger = $this->firstFilled(
+            $meta['passengers'][0]['name'] ?? null,
+            $meta['pricing'][0]['pax_name'] ?? null,
+            $meta['visa'][0]['passenger_name'] ?? null,
+            'Unassigned'
+        );
+
+        return $this->firstFilled(
+            match ($serviceType) {
+                'flight' => $row['pax_name'] ?? null,
+                'visa' => $row['passenger_name'] ?? null,
+                'hotel' => $row['lead_passenger'] ?? null,
+                default => null,
+            },
+            $firstPassenger
+        );
+    }
+
+    private function purchaseDetails(string $serviceType, array $row): string
+    {
+        return match ($serviceType) {
+            'flight' => $this->joinFilled([$row['flight_ticket_no'] ?? null, $row['pnr'] ?? null, $row['gds_pnr'] ?? null], ' / ') ?: 'Flight purchase',
+            'hotel' => $this->joinFilled([$row['hotel_name'] ?? null, $row['city'] ?? null, $row['check_in'] ?? null, $row['check_out'] ?? null], ' / ') ?: 'Hotel purchase',
+            'visa' => $this->joinFilled([$row['visa_type'] ?? null, $row['visa_no'] ?? null, $row['validity'] ?? null], ' / ') ?: 'Visa purchase',
+            'transfer' => $this->joinFilled([$row['service'] ?? null, $row['from_city'] ?? null, $row['to_city'] ?? null, $row['vehicle'] ?? null], ' / ') ?: 'Transport purchase',
+            'city_tour' => $this->joinFilled([$row['title'] ?? null, $row['city'] ?? null, $row['date'] ?? null], ' / ') ?: 'Transport purchase',
+            'other_service' => $this->firstFilled($row['description'] ?? null, 'Service purchase'),
+            default => 'Order purchase',
+        };
+    }
+
+    private function firstFilled(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            if ($value !== null && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        return '';
+    }
+
+    private function joinFilled(array $values, string $separator): string
+    {
+        return collect($values)
+            ->map(fn ($value) => $value === null ? '' : trim((string) $value))
+            ->filter()
+            ->implode($separator);
     }
 }

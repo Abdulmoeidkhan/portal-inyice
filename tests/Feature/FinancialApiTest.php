@@ -2297,6 +2297,21 @@ class FinancialApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.net_amount', 430);
 
+        $vendorStatement = $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
+            ->assertOk();
+        $statementOrder = collect($vendorStatement->json('transactions'))
+            ->firstWhere('reference', $response->json('order.order_number'));
+
+        $this->assertNotNull($statementOrder);
+        $this->assertSame('/orders/' . $response->json('order.uid') . '/edit', $statementOrder['reference_url']);
+        $this->assertSame('Test Customer (2 passengers), FLIGHT, HOTEL, TRANSPORT', $statementOrder['description']);
+        $this->assertSame(2, $statementOrder['purchase_summary']['passenger_count']);
+        $this->assertSame(['FLIGHT', 'HOTEL', 'TRANSPORT'], $statementOrder['purchase_summary']['services']);
+        $this->assertCount(2, $statementOrder['purchase_summary']['passenger_details']);
+        $this->assertSame('First Passenger', $statementOrder['purchase_summary']['passenger_details'][0]['name']);
+        $this->assertSame('1234567890', $statementOrder['purchase_summary']['passenger_details'][0]['ticket_no']);
+        $this->assertCount(3, $statementOrder['purchase_summary']['rows']);
+
         $this->postJson('/api/v1/payments/vendor', [
             'vendor_id' => $ctx['vendor']->id,
             'amount' => 770,
