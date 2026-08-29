@@ -175,35 +175,51 @@ export default function OrderList() {
     }
   };
 
-  const fetchOrders = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
+  const orderQueryParams = ({ page, pageSize, search, status }) => {
+    const params = new URLSearchParams({
+      page,
+      per_page: pageSize,
+    });
+
+    if (search) {
+      params.set('search', search);
+    }
+
+    if (status) {
+      params.set('status', status);
+    }
+
+    return params;
+  };
+
+  const requestOrderPage = async ({
+    page = 1,
+    pageSize = pagination.pageSize,
+    search = searchTerm,
+    status = statusFilter,
+  } = {}) => {
+    const params = orderQueryParams({ page, pageSize, search, status });
+    const response = await fetch(`/api/v1/orders?${params}`, {
+      headers: authHeaders(),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to fetch orders');
+    }
+
+    return data;
+  };
+
+  const fetchOrders = async (page = pagination.current, search = searchTerm, status = statusFilter, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page,
-        per_page: pagination.pageSize,
-      });
-
-      if (search) {
-        params.set('search', search);
-      }
-
-      if (status) {
-        params.set('status', status);
-      }
-
-      const response = await fetch(`/api/v1/orders?${params}`, {
-        headers: authHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch orders');
-      }
-
-      const data = await response.json();
+      const data = await requestOrderPage({ page, pageSize, search, status });
       setOrders(data.data || []);
       setPagination((prev) => ({
         ...prev,
         current: page,
+        pageSize,
         total: data.total || 0,
       }));
     } catch (error) {
@@ -236,13 +252,37 @@ export default function OrderList() {
   const handleSearch = (value) => {
     const search = value.trim();
     setSearchTerm(search);
-    fetchOrders(1, search, statusFilter);
+    fetchOrders(1, search, statusFilter, pagination.pageSize);
   };
 
   const handleStatusFilter = (value) => {
     const status = value || '';
     setStatusFilter(status);
-    fetchOrders(1, searchTerm, status);
+    fetchOrders(1, searchTerm, status, pagination.pageSize);
+  };
+
+  const handleTableChange = (nextPagination) => {
+    const pageSize = nextPagination.pageSize || pagination.pageSize;
+    const page = pageSize !== pagination.pageSize ? 1 : nextPagination.current || 1;
+    fetchOrders(page, searchTerm, statusFilter, pageSize);
+  };
+
+  const fetchAllOrdersForExport = async () => {
+    const search = searchTerm;
+    const status = statusFilter;
+    const pageSize = 100;
+    let page = 1;
+    let lastPage = 1;
+    const allOrders = [];
+
+    do {
+      const data = await requestOrderPage({ page, pageSize, search, status });
+      allOrders.push(...(data.data || []));
+      lastPage = Math.max(1, Number(data.last_page || Math.ceil(Number(data.total || 0) / pageSize) || 1));
+      page += 1;
+    } while (page <= lastPage);
+
+    return allOrders;
   };
 
   useEffect(() => {
@@ -611,6 +651,8 @@ export default function OrderList() {
             scroll={{ x: 'max-content' }}
             columns={columns}
             dataSource={orders}
+            exportAllDataSource={fetchAllOrdersForExport}
+            csvFileName="orders.csv"
             rowKey="id"
             onRow={(record) => compactActions ? {
               className: 'mobile-row-clickable',
@@ -620,7 +662,7 @@ export default function OrderList() {
               current: pagination.current,
               pageSize: pagination.pageSize,
               total: pagination.total,
-              onChange: (page) => fetchOrders(page, searchTerm, statusFilter),
+              onChange: (page, pageSize) => handleTableChange({ current: page, pageSize }),
             }}
           />
         </Spin>

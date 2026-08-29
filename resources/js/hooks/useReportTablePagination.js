@@ -18,7 +18,6 @@ export default function useReportTablePagination(defaultPageSize = 25) {
     ...pagination,
     showSizeChanger: true,
     onChange: handleChange,
-    onShowSizeChange: handleChange,
   }), [handleChange, pagination]);
 
   return [tablePagination, resetPagination];

@@ -1,6 +1,7 @@
 import React from 'react';
 import { DownOutlined, DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { Button, Dropdown, Space, Table as AntTable } from 'antd';
+import { message } from '../services/feedback';
 
 const getCurrentUser = () => {
   try {
@@ -286,13 +287,39 @@ const defaultFileName = () => {
   return `${pageName}-${timestamp}.csv`;
 };
 
-function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownload = true, sortable = true, ...props }) {
+const defaultPageSizeOptions = [10, 20, 50, 100];
+const defaultShowTotal = (total, range) => `${range[0]}-${range[1]} of ${total}`;
+
+function CsvTable({
+  title,
+  columns = [],
+  dataSource = [],
+  csvFileName,
+  csvDownload = true,
+  sortable = true,
+  exportAllDataSource,
+  pagination,
+  ...props
+}) {
+  const [exportingAll, setExportingAll] = React.useState(false);
   const rows = Array.isArray(dataSource) ? dataSource : [];
   const enhancedColumns = React.useMemo(() => {
     const printableColumns = columns.map(markActionColumn);
 
     return sortable ? sortableColumns(printableColumns, rows) : printableColumns;
   }, [columns, rows, sortable]);
+  const tablePagination = React.useMemo(() => {
+    if (pagination === false) return false;
+
+    const paginationProps = pagination && typeof pagination === 'object' ? pagination : {};
+
+    return {
+      showSizeChanger: true,
+      pageSizeOptions: defaultPageSizeOptions,
+      showTotal: defaultShowTotal,
+      ...paginationProps,
+    };
+  }, [pagination]);
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title
@@ -303,13 +330,35 @@ function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownlo
         { key: 'csv', icon: <DownloadOutlined />, label: 'CSV' },
         { key: 'pdf', icon: <FilePdfOutlined />, label: 'PDF' },
       ];
-      const handleExport = (data, exportTitle) => ({ key }) => {
-        if (key === 'csv') {
-          downloadCsv({ columns, dataSource: data, fileName });
-          return;
+      const resolveExportRows = async (data) => (typeof data === 'function' ? data() : data);
+      const resolveExportTitle = (exportTitle, data) => (typeof exportTitle === 'function' ? exportTitle(data) : exportTitle);
+      const handleExport = (data, exportTitle, isAllExport = false) => async ({ key }) => {
+        if (isAllExport) {
+          setExportingAll(true);
         }
 
-        printTablePdf({ columns, dataSource: data, title: exportTitle });
+        try {
+          const exportRows = await resolveExportRows(data);
+          const rowsForExport = Array.isArray(exportRows) ? exportRows : [];
+          if (!rowsForExport.length) {
+            message.info('No rows available to export');
+            return;
+          }
+
+          const resolvedTitle = resolveExportTitle(exportTitle, rowsForExport);
+          if (key === 'csv') {
+            downloadCsv({ columns, dataSource: rowsForExport, fileName });
+            return;
+          }
+
+          printTablePdf({ columns, dataSource: rowsForExport, title: resolvedTitle });
+        } catch (error) {
+          message.error(error.message || 'Export failed');
+        } finally {
+          if (isAllExport) {
+            setExportingAll(false);
+          }
+        }
       };
 
       return (
@@ -327,9 +376,9 @@ function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownlo
               </Dropdown>
               <Dropdown
                 trigger={['click']}
-                menu={{ items: exportItems, onClick: handleExport(rows, typeof title === 'function' ? title(rows) : title) }}
+                menu={{ items: exportItems, onClick: handleExport(exportAllDataSource || rows, title, true) }}
               >
-                <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />}>
+                <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />} loading={exportingAll}>
                   ALL CSV/PDF <DownOutlined />
                 </Button>
               </Dropdown>
@@ -340,7 +389,7 @@ function CsvTable({ title, columns = [], dataSource = [], csvFileName, csvDownlo
     }
     : undefined;
 
-  return <AntTable {...props} columns={enhancedColumns} dataSource={dataSource} title={renderTitle} />;
+  return <AntTable {...props} columns={enhancedColumns} dataSource={dataSource} pagination={tablePagination} title={renderTitle} />;
 }
 
 CsvTable.Summary = AntTable.Summary;

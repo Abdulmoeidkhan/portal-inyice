@@ -70,38 +70,54 @@ export default function InvoiceList() {
     label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
   }));
 
-  const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter) => {
+  const invoiceQueryParams = ({ page, pageSize, search, status }) => {
+    const params = new URLSearchParams({
+      page,
+      per_page: pageSize,
+    });
+
+    if (status) {
+      params.set('status', status);
+    }
+
+    if (search) {
+      params.set('search', search);
+    }
+
+    return params;
+  };
+
+  const requestInvoicePage = async ({
+    page = 1,
+    pageSize = pagination.pageSize,
+    search = searchTerm,
+    status = statusFilter,
+  } = {}) => {
+    const params = invoiceQueryParams({ page, pageSize, search, status });
+    const response = await fetch(`/api/v1/invoices?${params}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to fetch invoices');
+    }
+
+    return data;
+  };
+
+  const fetchInvoices = async (page = pagination.current, search = searchTerm, status = statusFilter, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page,
-        per_page: pagination.pageSize,
-      });
-
-      if (status) {
-        params.set('status', status);
-      }
-
-      if (search) {
-        params.set('search', search);
-      }
-
-      const response = await fetch(`/api/v1/invoices?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch invoices');
-      }
-
-      const data = await response.json();
+      const data = await requestInvoicePage({ page, pageSize, search, status });
       setInvoices(data.data || []);
       setPagination((prev) => ({
         ...prev,
         current: page,
+        pageSize,
         total: data.total || 0,
       }));
     } catch (error) {
@@ -112,7 +128,7 @@ export default function InvoiceList() {
   };
 
   useEffect(() => {
-    fetchInvoices(1, searchTerm, statusFilter);
+    fetchInvoices(1, searchTerm, statusFilter, pagination.pageSize);
   }, [statusFilter]);
 
   useEffect(() => {
@@ -140,7 +156,31 @@ export default function InvoiceList() {
   const handleSearch = (value) => {
     const search = value.trim();
     setSearchTerm(search);
-    fetchInvoices(1, search, statusFilter);
+    fetchInvoices(1, search, statusFilter, pagination.pageSize);
+  };
+
+  const handleTableChange = (nextPagination) => {
+    const pageSize = nextPagination.pageSize || pagination.pageSize;
+    const page = pageSize !== pagination.pageSize ? 1 : nextPagination.current || 1;
+    fetchInvoices(page, searchTerm, statusFilter, pageSize);
+  };
+
+  const fetchAllInvoicesForExport = async () => {
+    const search = searchTerm;
+    const status = statusFilter;
+    const pageSize = 100;
+    let page = 1;
+    let lastPage = 1;
+    const allInvoices = [];
+
+    do {
+      const data = await requestInvoicePage({ page, pageSize, search, status });
+      allInvoices.push(...(data.data || []));
+      lastPage = Math.max(1, Number(data.last_page || Math.ceil(Number(data.total || 0) / pageSize) || 1));
+      page += 1;
+    } while (page <= lastPage);
+
+    return allInvoices;
   };
 
   const getStatusColor = (status) => {
@@ -693,6 +733,8 @@ export default function InvoiceList() {
             scroll={{ x: 'max-content' }}
             columns={columns}
             dataSource={invoices}
+            exportAllDataSource={fetchAllInvoicesForExport}
+            csvFileName="invoices.csv"
             rowKey="id"
             onRow={(invoice) => ({
               className: 'mobile-row-clickable',
@@ -709,7 +751,7 @@ export default function InvoiceList() {
               current: pagination.current,
               pageSize: pagination.pageSize,
               total: pagination.total,
-              onChange: (page) => fetchInvoices(page),
+              onChange: (page, pageSize) => handleTableChange({ current: page, pageSize }),
             }}
           />
         </Spin>
