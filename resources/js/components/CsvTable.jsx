@@ -1,6 +1,6 @@
 import React from 'react';
-import { DownOutlined, DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Space, Table as AntTable } from 'antd';
+import { DownOutlined, DownloadOutlined, FilePdfOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Input, Space, Table as AntTable } from 'antd';
 import { message } from '../services/feedback';
 
 const getCurrentUser = () => {
@@ -156,6 +156,76 @@ const compareSortValues = (left, right) => {
   return String(left.value).localeCompare(String(right.value), undefined, { numeric: true, sensitivity: 'base' });
 };
 
+const columnFilterText = (column, record) => {
+  const rawValue = valueAtPath(record, column.dataIndex);
+  const renderedValue = typeof column.render === 'function'
+    ? column.render(rawValue, record)
+    : rawValue;
+
+  return nodeToText(renderedValue ?? rawValue).toLowerCase();
+};
+
+const canAddTextFilter = (column) => {
+  if (column.hidden || isActionColumn(column)) return false;
+  if (!column.dataIndex && typeof column.render !== 'function') return false;
+
+  return column.filterDropdown === undefined
+    && column.filters === undefined
+    && column.onFilter === undefined;
+};
+
+const filterableColumn = (column) => {
+  if (column.hidden) return column;
+
+  if (Array.isArray(column.children)) {
+    return {
+      ...column,
+      children: column.children.map(filterableColumn),
+    };
+  }
+
+  if (!canAddTextFilter(column)) return column;
+
+  const title = columnTitle(column) || 'column';
+
+  return {
+    ...column,
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+      <div className="csv-table-filter-dropdown" onKeyDown={(event) => event.stopPropagation()}>
+        <Input
+          autoFocus
+          allowClear
+          placeholder={`Search ${title}`}
+          value={selectedKeys[0] || ''}
+          onChange={(event) => setSelectedKeys(event.target.value ? [event.target.value] : [])}
+          onPressEnter={() => confirm()}
+        />
+        <Space>
+          <Button
+            type="primary"
+            size="small"
+            icon={<SearchOutlined />}
+            onClick={() => confirm()}
+          >
+            Search
+          </Button>
+          <Button
+            size="small"
+            onClick={() => {
+              clearFilters?.();
+              confirm();
+            }}
+          >
+            Reset
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />,
+    onFilter: (value, record) => columnFilterText(column, record).includes(String(value || '').toLowerCase()),
+  };
+};
+
 const columnSortValue = (column, record, rowIndex) => {
   const rawValue = valueAtPath(record, column.dataIndex);
   const renderedValue = typeof column.render === 'function'
@@ -187,6 +257,7 @@ const sortableColumn = (column, rows) => {
 };
 
 const sortableColumns = (columns = [], rows = []) => columns.map((column) => sortableColumn(column, rows));
+const filterableColumns = (columns = []) => columns.map(filterableColumn);
 
 const downloadCsv = ({ columns, dataSource, fileName }) => {
   const columnsForExport = exportColumns(columns);
@@ -289,6 +360,46 @@ const defaultFileName = () => {
 
 const defaultPageSizeOptions = [10, 20, 50, 100];
 const defaultShowTotal = (total, range) => `${range[0]}-${range[1]} of ${total}`;
+const toPositivePageSize = (value) => {
+  const pageSize = Number(value);
+
+  return Number.isFinite(pageSize) && pageSize > 0 ? pageSize : null;
+};
+
+const pageSizeOptionsWithAll = ({ pageSizeOptions = defaultPageSizeOptions, pageSize, total }) => {
+  const optionSet = new Set(
+    pageSizeOptions
+      .map(toPositivePageSize)
+      .filter(Boolean),
+  );
+  const currentPageSize = toPositivePageSize(pageSize);
+  const totalRows = toPositivePageSize(total);
+
+  if (currentPageSize) {
+    optionSet.add(currentPageSize);
+  }
+
+  if (totalRows) {
+    optionSet.add(totalRows);
+  }
+
+  return [...optionSet].sort((left, right) => left - right);
+};
+
+const sizeChangerWithAllOption = (showSizeChanger, options, total) => {
+  if (showSizeChanger === false) return false;
+
+  const totalRows = toPositivePageSize(total);
+  const selectProps = typeof showSizeChanger === 'object' ? showSizeChanger : {};
+
+  return {
+    ...selectProps,
+    options: options.map((value) => ({
+      value,
+      label: totalRows && value === totalRows ? 'All / Page' : `${value} / page`,
+    })),
+  };
+};
 
 function CsvTable({
   title,
@@ -305,21 +416,28 @@ function CsvTable({
   const rows = Array.isArray(dataSource) ? dataSource : [];
   const enhancedColumns = React.useMemo(() => {
     const printableColumns = columns.map(markActionColumn);
+    const filteredColumns = filterableColumns(printableColumns);
 
-    return sortable ? sortableColumns(printableColumns, rows) : printableColumns;
+    return sortable ? sortableColumns(filteredColumns, rows) : filteredColumns;
   }, [columns, rows, sortable]);
   const tablePagination = React.useMemo(() => {
     if (pagination === false) return false;
 
     const paginationProps = pagination && typeof pagination === 'object' ? pagination : {};
+    const total = toPositivePageSize(paginationProps.total) || rows.length;
+    const pageSizeOptions = pageSizeOptionsWithAll({
+      pageSizeOptions: paginationProps.pageSizeOptions || defaultPageSizeOptions,
+      pageSize: paginationProps.pageSize,
+      total,
+    });
 
     return {
-      showSizeChanger: true,
-      pageSizeOptions: defaultPageSizeOptions,
-      showTotal: defaultShowTotal,
       ...paginationProps,
+      showSizeChanger: sizeChangerWithAllOption(paginationProps.showSizeChanger ?? true, pageSizeOptions, total),
+      pageSizeOptions,
+      showTotal: paginationProps.showTotal || defaultShowTotal,
     };
-  }, [pagination]);
+  }, [pagination, rows.length]);
   const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
 
   const renderTitle = showCsvButton || title

@@ -19,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
+    private const MAX_PAGE_SIZE = 10000;
+
     private const PRICING_COST_PROFIT_FIELDS = [
         'flight_cost',
         'flight_profit',
@@ -68,7 +70,7 @@ class InvoiceController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = max(1, min(100, (int) $request->query('per_page', 50)));
+        $perPage = max(1, min(self::MAX_PAGE_SIZE, (int) $request->query('per_page', 50)));
         $page = max(1, (int) $request->query('page', 1));
         $status = $request->query('status');
         $customerId = $request->query('customer_id');

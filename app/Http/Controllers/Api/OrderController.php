@@ -22,6 +22,8 @@ use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
+    private const MAX_PAGE_SIZE = 10000;
+
     private const PACKAGE_TYPES = [
         'Ticket Only',
         'Visa Only',
@@ -424,7 +426,7 @@ class OrderController extends Controller
                 });
             })
             ->orderByDesc('id')
-            ->paginate(max(1, min(100, (int) $request->query('per_page', 20))));
+            ->paginate(max(1, min(self::MAX_PAGE_SIZE, (int) $request->query('per_page', 20))));
 
         if ($this->shouldHideCostProfit($user)) {
             $orders->getCollection()->transform(fn (Order $order) => $this->orderForUser($order, $user));

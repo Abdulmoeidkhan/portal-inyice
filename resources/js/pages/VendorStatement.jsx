@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Descriptions, Drawer, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
-import { ExportOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ExportOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
@@ -138,13 +138,12 @@ export default function VendorStatement() {
                 ))}
               </Row>
             </Card>
-            <Card className="border-beam-aurora" title="Vendor Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
+            <Card className="border-beam-aurora" title="Vendor Activity">
               <Table
                 scroll={{ x: 'max-content' }}
                 columns={columns}
                 dataSource={statement.transactions}
                 rowKey="id"
-                pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
                     <Table.Summary.Cell index={0} colSpan={4}><Text strong>Total</Text></Table.Summary.Cell>

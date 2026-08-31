@@ -26,7 +26,13 @@ class InternalPortalController extends Controller
 
         $query = Company::withoutGlobalScopes()
             ->with('tenant:id,name,code')
-            ->withCount(['users', 'customers', 'vendors', 'orders', 'invoices'])
+            ->withCount([
+                'users',
+                'customers',
+                'vendors',
+                'orders',
+                'invoices as invoices_count' => fn ($invoice) => $invoice->where('status', '!=', 'cancel'),
+            ])
             ->whereHas('tenant', fn ($tenant) => $tenant->where('code', '!=', 'INYICE'))
             ->orderBy('display_name');
 
@@ -333,11 +339,13 @@ class InternalPortalController extends Controller
 
     private function serializeCompanySummary(Company $company): array
     {
-        $monthStart = now()->startOfMonth()->toDateString();
-        $monthEnd = now()->endOfMonth()->toDateString();
+        $today = now();
+        $monthStart = $today->copy()->startOfMonth()->toDateString();
+        $monthEnd = $today->copy()->endOfMonth()->toDateString();
 
         $monthlyInvoices = Invoice::withoutGlobalScopes()
             ->where('company_id', $company->id)
+            ->where('status', '!=', 'cancel')
             ->whereBetween('invoice_date', [$monthStart, $monthEnd])
             ->count();
 
@@ -370,7 +378,13 @@ class InternalPortalController extends Controller
     private function serializeCompanyDetail(Company $company): array
     {
         return [
-            ...$this->serializeCompanySummary($company->loadCount(['users', 'customers', 'vendors', 'orders', 'invoices'])),
+            ...$this->serializeCompanySummary($company->loadCount([
+                'users',
+                'customers',
+                'vendors',
+                'orders',
+                'invoices as invoices_count' => fn ($invoice) => $invoice->where('status', '!=', 'cancel'),
+            ])),
             'address' => $company->address,
             'country_code' => $company->country_code,
             'default_timezone' => $company->default_timezone,
@@ -391,6 +405,7 @@ class InternalPortalController extends Controller
                 ->get(['uid', 'order_number', 'booking_reference', 'status', 'currency_code', 'total_amount', 'created_at']),
             'invoices' => Invoice::withoutGlobalScopes()
                 ->where('company_id', $company->id)
+                ->where('status', '!=', 'cancel')
                 ->orderByDesc('invoice_date')
                 ->limit(10)
                 ->get(['uid', 'invoice_number', 'invoice_date', 'status', 'currency_code', 'total_amount', 'outstanding_amount']),

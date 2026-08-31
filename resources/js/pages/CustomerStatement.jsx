@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
-import { PrinterOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
@@ -75,7 +74,7 @@ export default function CustomerStatement() {
   const transactionColumns = [
     { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name' }] : []),
-    { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description' },
+    { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description',width: 450, },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
@@ -132,13 +131,12 @@ export default function CustomerStatement() {
                 ))}
               </Row>
             </Card>
-            <Card className="border-beam-aurora" title="Invoice Activity" extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>}>
+            <Card className="border-beam-aurora" title="Invoice Activity">
               <Table
                 scroll={{ x: 'max-content' }}
                 columns={columns}
                 dataSource={statement.customer_currency_invoices}
                 rowKey="invoice_uid"
-                pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
                     <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 4 : 3}><Text strong>Total</Text></Table.Summary.Cell>
@@ -156,7 +154,6 @@ export default function CustomerStatement() {
                 columns={transactionColumns}
                 dataSource={statement.transactions}
                 rowKey="id"
-                pagination={false}
                 summary={() => (
                   <Table.Summary.Row>
                     <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 5 : 4}><Text strong>Total</Text></Table.Summary.Cell>

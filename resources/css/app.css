@@ -2489,6 +2489,26 @@ body {
   white-space: nowrap;
 }
 
+.csv-table-filter-dropdown {
+  width: 220px;
+  padding: 8px;
+}
+
+.csv-table-filter-dropdown .ant-input,
+.csv-table-filter-dropdown .ant-input-affix-wrapper {
+  margin-bottom: 8px;
+}
+
+.csv-table-filter-dropdown .ant-space {
+  display: flex;
+  width: 100%;
+}
+
+.csv-table-filter-dropdown .ant-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .app-utility-float {
   right: 24px !important;
   bottom: 92px;
@@ -2673,6 +2693,16 @@ body {
 }
 
 @media (max-width: 720px) {
+  body.tawk-mobile-hidden iframe[src*="tawk.to"],
+  body.tawk-mobile-hidden iframe[title*="chat"],
+  body.tawk-mobile-hidden div[id*="tawk"],
+  body.tawk-mobile-hidden div[class*="tawk"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
   .app-utility-float {
     right: 16px !important;
     bottom: 96px;
