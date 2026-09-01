@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
@@ -299,6 +300,8 @@ class OrderController extends Controller
             ->findOrFail((int) $validated['customer_id']);
 
         $voucher = $this->voucherForUserWrite($validated['voucher'], null, $user);
+        $this->validateVoucherCostVendors($voucher);
+
         $currencyCode = strtoupper($validated['currency_code'] ?? $company->base_currency_code);
         $status = $validated['status'] ?? 'order';
 
@@ -665,6 +668,13 @@ class OrderController extends Controller
         $customer = Customer::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
             ->findOrFail((int) $validated['customer_id']);
+        $voucher = isset($validated['voucher'])
+            ? $this->voucherForUserWrite($validated['voucher'], $order->meta ?? [], $user)
+            : null;
+
+        if ($voucher) {
+            $this->validateVoucherCostVendors($voucher);
+        }
 
         if (
             $this->isSalesStaff($user)
@@ -710,10 +720,7 @@ class OrderController extends Controller
         $createdInvoice = null;
         $voidedInvoice = null;
 
-        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $companyId, $activeInvoice, $previousStatus, $isCancellingOrder, &$createdOrder, &$createdInvoice, &$voidedInvoice): void {
-            $voucher = isset($validated['voucher'])
-                ? $this->voucherForUserWrite($validated['voucher'], $order->meta ?? [], $user)
-                : null;
+        DB::transaction(function () use ($order, $validated, $customer, $user, $tenantId, $companyId, $activeInvoice, $previousStatus, $isCancellingOrder, $voucher, &$createdOrder, &$createdInvoice, &$voidedInvoice): void {
             $totalAmount = $validated['total_amount'] ?? $order->total_amount;
             $meta = $order->meta ?? [];
 
@@ -1887,6 +1894,62 @@ class OrderController extends Controller
         }
 
         return null;
+    }
+
+    private function validateVoucherCostVendors(array $voucher): void
+    {
+        $errors = [];
+        $activeSections = $voucher['active_sections'] ?? [];
+        $hasActiveSection = fn (string $section): bool => empty($activeSections) || in_array($section, $activeSections, true);
+        $addError = function (string $field, string $label, int $index) use (&$errors): void {
+            $errors[$field] = ["Select a vendor before saving the cost in {$label} row " . ($index + 1) . '.'];
+        };
+
+        if ($hasActiveSection('flights')) {
+            foreach (($voucher['pricing'] ?? []) as $index => $pricing) {
+                if (!is_array($pricing)) {
+                    continue;
+                }
+
+                $cost = OrderVendorCost::toAmount($pricing['flight_cost'] ?? null);
+                $vendorId = (int) ($pricing['vendor_id'] ?? 0);
+
+                if ($cost != 0.0 && $vendorId <= 0) {
+                    $addError("voucher.pricing.{$index}.vendor_id", 'flight amount', (int) $index);
+                }
+            }
+        }
+
+        $serviceLabels = [
+            'hotels' => 'hotel',
+            'transfers' => 'transfer',
+            'city_tours' => 'city tour',
+            'visa' => 'visa',
+            'other_services' => 'service',
+        ];
+
+        foreach ($serviceLabels as $section => $label) {
+            if (!$hasActiveSection($section)) {
+                continue;
+            }
+
+            foreach (($voucher[$section] ?? []) as $index => $serviceRow) {
+                if (!is_array($serviceRow)) {
+                    continue;
+                }
+
+                $cost = OrderVendorCost::toAmount($serviceRow['cost'] ?? null);
+                $vendorId = (int) ($serviceRow['vendor_id'] ?? 0);
+
+                if ($cost != 0.0 && $vendorId <= 0) {
+                    $addError("voucher.{$section}.{$index}.vendor_id", $label, (int) $index);
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     private function metaWithCancelApproval(array $meta, $user, ?Order $newOrder = null): array

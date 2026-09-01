@@ -960,12 +960,12 @@ body {
   background: #c4c9d4;
 }
 
-.dashboard-cashflow-chart {
+.dashboard-performance-chart {
   display: grid;
   gap: 12px;
 }
 
-.dashboard-cashflow-legend {
+.dashboard-performance-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -973,34 +973,34 @@ body {
   font-weight: 700;
 }
 
-.dashboard-cashflow-legend span {
+.dashboard-performance-legend span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.cash-dot {
+.performance-dot {
   width: 10px;
   height: 10px;
   border: 1px solid color-mix(in srgb, var(--app-text) 22%, transparent);
   border-radius: 3px;
 }
 
-.cash-dot.inflow {
+.performance-dot.sales {
   background: #058b49;
   border-color: #058b49;
 }
 
-.cash-dot.outflow {
+.performance-dot.purchase {
   background: repeating-linear-gradient(135deg, #ffffff 0 4px, #d8d8d8 4px 7px);
 }
 
-.cash-dot.net {
+.performance-dot.profit-loss {
   background: #d9a51d;
   border-radius: 50%;
 }
 
-.dashboard-cashflow-bars {
+.dashboard-performance-bars {
   position: relative;
   display: grid;
   grid-template-columns: repeat(10, minmax(24px, 1fr));
@@ -1011,7 +1011,7 @@ body {
   overflow: hidden;
 }
 
-.dashboard-cashflow-line {
+.dashboard-performance-line {
   position: absolute;
   inset: 12px 6px 34px;
   z-index: 2;
@@ -1020,14 +1020,14 @@ body {
   pointer-events: none;
 }
 
-.dashboard-cashflow-line polyline {
+.dashboard-performance-line polyline {
   fill: none;
   stroke: #d9a51d;
   stroke-width: 2.4;
   vector-effect: non-scaling-stroke;
 }
 
-.dashboard-cashflow-day {
+.dashboard-performance-month {
   position: relative;
   z-index: 1;
   display: grid;
@@ -1036,7 +1036,7 @@ body {
   gap: 8px;
 }
 
-.dashboard-cashflow-bars-stack {
+.dashboard-performance-bars-stack {
   display: flex;
   height: 148px;
   align-items: end;
@@ -1046,23 +1046,23 @@ body {
   border-bottom: 1px solid var(--app-border);
 }
 
-.dashboard-cashflow-bars-stack .bar {
+.dashboard-performance-bars-stack .bar {
   display: block;
   width: min(14px, 38%);
   min-height: 6px;
   border-radius: 4px 4px 0 0;
 }
 
-.dashboard-cashflow-bars-stack .bar.inflow {
+.dashboard-performance-bars-stack .bar.sales {
   background: #058b49;
 }
 
-.dashboard-cashflow-bars-stack .bar.outflow {
+.dashboard-performance-bars-stack .bar.purchase {
   background: repeating-linear-gradient(135deg, #ffffff 0 5px, #d8d8d8 5px 8px);
   border: 1px solid #c8c8c8;
 }
 
-.dashboard-cashflow-day .ant-typography {
+.dashboard-performance-month .ant-typography {
   margin: 0;
   font-size: 11px;
   white-space: nowrap;
@@ -1369,7 +1369,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-cashflow-bars {
+  .dashboard-performance-bars {
     overflow-x: auto;
     grid-template-columns: repeat(10, minmax(44px, 1fr));
   }

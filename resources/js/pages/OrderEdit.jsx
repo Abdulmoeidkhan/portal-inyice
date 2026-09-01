@@ -28,6 +28,7 @@ import {
   syncVisaNumberFields,
 } from './sales-flow/defaults';
 import { coerceRefundVoucherValues } from './sales-flow/refundValues';
+import { findVoucherCostVendorError } from './sales-flow/voucherValidation';
 import { parseGdsData } from './sales-flow/gdsParser';
 import GdsParserCard from './sales-flow/GdsParserCard';
 import Table from '../components/CsvTable';
@@ -542,6 +543,13 @@ export default function OrderEdit() {
       };
       const isRefundSubmit = isRefundOrderStatus(values.status) || (isRefundOrderStatus(order?.status) && values.status === 'cancel');
       const voucherPayload = sanitizeVoucherForSubmit(isRefundSubmit ? coerceRefundVoucherValues(voucher) : voucher);
+      const costVendorError = findVoucherCostVendorError(voucherPayload);
+
+      if (costVendorError) {
+        message.error(costVendorError);
+        return;
+      }
+
       const isCancellingOrder = values.status === 'cancel' && order?.status !== 'cancel';
 
       if (isCancellingOrder && !password) {

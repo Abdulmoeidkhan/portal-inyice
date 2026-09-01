@@ -122,6 +122,21 @@ class ReportController extends Controller
         return response()->json($report);
     }
 
+    public function performanceReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+        ]);
+
+        return response()->json($this->reportService->performanceReport(
+            (int) auth()->user()->tenant_id,
+            (int) auth()->user()->company_id,
+            $validated['from_date'],
+            $validated['to_date'],
+        ));
+    }
+
     public function profitReport(Request $request): JsonResponse
     {
         $validated = $request->validate([

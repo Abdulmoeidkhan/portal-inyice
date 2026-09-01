@@ -18,6 +18,7 @@ import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import { CreateOrderCard } from './sales-flow/OrderInvoiceCards';
+import { findVoucherCostVendorError } from './sales-flow/voucherValidation';
 
 const { Title, Paragraph } = Typography;
 
@@ -231,6 +232,12 @@ export default function SalesFlow() {
           ...voucher.contact,
         },
       };
+      const costVendorError = findVoucherCostVendorError(voucherPayload);
+
+      if (costVendorError) {
+        message.error(costVendorError);
+        return;
+      }
 
       const data = await createOrderFromVoucherApi({
         company_id: values.company_id || undefined,

@@ -289,7 +289,7 @@ export default function VoucherPreview({ order }) {
       <Watermark
         content={showInyiceWatermark ? 'InYice' : undefined}
         rotate={-24}
-        gap={[140, 120]}
+        gap={[240, 220]}
         font={{ color: 'rgba(0, 0, 0, 0.1)', fontSize: 28, fontWeight: 700 }}
       >
         <header className="voucher-preview-header">

@@ -1842,6 +1842,14 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('summary.total_invoices', 1)
             ->assertJsonPath('data.0.period', '2026-08-10');
 
+        $performance = $this->getJson('/api/v1/reports/performance?from_date=2026-08-01&to_date=2026-08-31');
+        $performance->assertOk()
+            ->assertJsonPath('data.0.period', '2026-08')
+            ->assertJsonPath('data.0.currency_code', 'PKR')
+            ->assertJsonPath('data.0.sales', 1000)
+            ->assertJsonPath('data.0.purchase', 1000)
+            ->assertJsonPath('data.0.profit_loss', 0);
+
         $this->getJson('/api/v1/reports/receipts?from_date=2026-08-10&to_date=2026-08-10')
             ->assertOk()
             ->assertJsonPath('summary.total_records', 1);
@@ -1959,6 +1967,77 @@ class FinancialApiTest extends TestCase
             'uid' => $invoice['uid'],
             'order_id' => $ctx['order']->id,
         ]);
+    }
+
+    public function test_revenue_report_excludes_cancelled_and_void_invoices(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $activeInvoice = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+            'invoice_date' => '2026-08-10',
+        ])->assertCreated()->json('invoice');
+
+        foreach (['cancel', 'void'] as $status) {
+            Invoice::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $ctx['tenant']->id,
+                'company_id' => $ctx['company']->id,
+                'order_id' => $ctx['order']->id,
+                'customer_id' => $ctx['customer']->id,
+                'invoice_number' => 'INV-IGNORED-' . strtoupper($status),
+                'invoice_date' => '2026-08-10',
+                'due_date' => '2026-09-09',
+                'currency_code' => 'PKR',
+                'subtotal' => 500,
+                'tax_amount' => 0,
+                'total_amount' => 500,
+                'outstanding_amount' => 500,
+                'advance_balance' => 0,
+                'status' => $status,
+            ]);
+        }
+
+        $this->getJson('/api/v1/reports/revenue?from_date=2026-08-10&to_date=2026-08-10&group_by=day')
+            ->assertOk()
+            ->assertJsonPath('summary.total_invoices', 1)
+            ->assertJsonPath('summary.total_revenue', (int) $activeInvoice['total_amount'])
+            ->assertJsonPath('summary.total_outstanding', (int) $activeInvoice['outstanding_amount'])
+            ->assertJsonPath('data.0.invoice_count', 1)
+            ->assertJsonPath('data.0.total_revenue', (int) $activeInvoice['total_amount']);
+    }
+
+    public function test_revenue_report_week_grouping_keeps_years_separate(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        foreach ([['2025-01-02', 300], ['2026-01-01', 700]] as [$invoiceDate, $amount]) {
+            Invoice::create([
+                'uid' => (string) Str::ulid(),
+                'tenant_id' => $ctx['tenant']->id,
+                'company_id' => $ctx['company']->id,
+                'order_id' => $ctx['order']->id,
+                'customer_id' => $ctx['customer']->id,
+                'invoice_number' => 'INV-WEEK-' . str_replace('-', '', $invoiceDate),
+                'invoice_date' => $invoiceDate,
+                'due_date' => $invoiceDate,
+                'currency_code' => 'PKR',
+                'subtotal' => $amount,
+                'tax_amount' => 0,
+                'total_amount' => $amount,
+                'outstanding_amount' => 0,
+                'advance_balance' => 0,
+                'status' => 'paid',
+            ]);
+        }
+
+        $this->getJson('/api/v1/reports/revenue?from_date=2025-01-01&to_date=2026-01-03&group_by=week')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.period', '2025-W01')
+            ->assertJsonPath('data.0.total_revenue', 300)
+            ->assertJsonPath('data.1.period', '2026-W01')
+            ->assertJsonPath('data.1.total_revenue', 700);
     }
 
     public function test_refund_order_duplicate_stays_refund_request(): void
@@ -2168,6 +2247,7 @@ class FinancialApiTest extends TestCase
                     'passenger_name' => 'Second Passenger',
                     'vendor_id' => $secondVendor->id,
                     'visa_vendor' => $secondVendor->name,
+                    'visa_no' => 'VISA-7788',
                     'amount' => 100,
                 ]],
                 'hotels' => [[
@@ -2187,6 +2267,7 @@ class FinancialApiTest extends TestCase
                     'service' => 'Airport transfer',
                     'from_city' => 'Jeddah',
                     'to_city' => 'Makkah',
+                    'vehicle' => 'Hiace',
                     'cost' => 80,
                     'profit' => 40,
                     'sales' => 120,
@@ -2299,18 +2380,30 @@ class FinancialApiTest extends TestCase
 
         $vendorStatement = $this->getJson('/api/v1/statements/vendor/' . $ctx['vendor']->id)
             ->assertOk();
-        $statementOrder = collect($vendorStatement->json('transactions'))
-            ->firstWhere('reference', $response->json('order.order_number'));
+        $statementRows = collect($vendorStatement->json('transactions'))
+            ->where('order_number', $response->json('order.order_number'))
+            ->values();
 
-        $this->assertNotNull($statementOrder);
-        $this->assertSame('/orders/' . $response->json('order.uid') . '/edit', $statementOrder['reference_url']);
-        $this->assertSame('Test Customer (2 passengers), FLIGHT, HOTEL, TRANSPORT', $statementOrder['description']);
-        $this->assertSame(2, $statementOrder['purchase_summary']['passenger_count']);
-        $this->assertSame(['FLIGHT', 'HOTEL', 'TRANSPORT'], $statementOrder['purchase_summary']['services']);
-        $this->assertCount(2, $statementOrder['purchase_summary']['passenger_details']);
-        $this->assertSame('First Passenger', $statementOrder['purchase_summary']['passenger_details'][0]['name']);
-        $this->assertSame('1234567890', $statementOrder['purchase_summary']['passenger_details'][0]['ticket_no']);
-        $this->assertCount(3, $statementOrder['purchase_summary']['rows']);
+        $this->assertCount(3, $statementRows);
+        $this->assertSame(['FLIGHT', 'HOTEL', 'TRANSPORT'], $statementRows->pluck('service')->all());
+        $this->assertSame([400.0, 300.0, 70.0], $statementRows->pluck('vendor_payables')->map(fn ($value) => (float) $value)->all());
+        $this->assertSame('/orders/' . $response->json('order.uid') . '/edit', $statementRows[0]['reference_url']);
+        $this->assertSame('Passenger: First Passenger | PNR: ZXCV12 | Departure: 2026-07-01 | Flight: PK301', $statementRows[0]['description']);
+        $this->assertSame('Hotel: Clock Tower | Check-in: 2026-07-01 | Check-out: 2026-07-05 | Nights: 4 | City: Makkah', $statementRows[1]['description']);
+        $this->assertSame('Journey: Ziarat - Madinah | Passenger: First Passenger', $statementRows[2]['description']);
+
+        $secondVendorStatement = $this->getJson('/api/v1/statements/vendor/' . $secondVendor->id)
+            ->assertOk();
+        $secondVendorRows = collect($secondVendorStatement->json('transactions'))
+            ->where('order_number', $response->json('order.order_number'))
+            ->values();
+
+        $this->assertCount(4, $secondVendorRows);
+        $this->assertSame(['FLIGHT', 'VISA', 'TRANSPORT', 'SERVICE'], $secondVendorRows->pluck('service')->all());
+        $this->assertSame('Passenger: Second Passenger | PNR: ZXCV12 | Departure: 2026-07-01 | Flight: PK301', $secondVendorRows[0]['description']);
+        $this->assertSame('Visa No: VISA-7788 | Passenger: Second Passenger', $secondVendorRows[1]['description']);
+        $this->assertSame('Journey: Jeddah to Makkah | Car: Hiace | Passenger: First Passenger', $secondVendorRows[2]['description']);
+        $this->assertSame('Wheelchair assistance', $secondVendorRows[3]['description']);
 
         $this->postJson('/api/v1/payments/vendor', [
             'vendor_id' => $ctx['vendor']->id,
@@ -2332,6 +2425,61 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('data.0.revenue', 1595)
             ->assertJsonPath('data.0.cost', 1200)
             ->assertJsonPath('data.0.profit', 395);
+    }
+
+    public function test_voucher_cost_requires_vendor_when_creating_order(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/orders/create-from-voucher', [
+            'customer_id' => $ctx['customer']->id,
+            'currency_code' => 'PKR',
+            'status' => 'order',
+            'voucher' => [
+                'active_sections' => ['flights'],
+                'pricing' => [[
+                    'pax_name' => 'Cost Passenger',
+                    'flight_cost' => 250,
+                    'flight_sales' => 300,
+                ]],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['voucher.pricing.0.vendor_id']);
+
+        $this->postJson('/api/v1/orders/create-from-voucher', [
+            'customer_id' => $ctx['customer']->id,
+            'currency_code' => 'PKR',
+            'status' => 'order',
+            'voucher' => [
+                'active_sections' => ['flights'],
+                'pricing' => [[
+                    'pax_name' => 'Zero Cost Passenger',
+                    'flight_cost' => 0,
+                    'flight_sales' => 300,
+                ]],
+            ],
+        ])->assertCreated();
+    }
+
+    public function test_voucher_cost_requires_vendor_when_editing_order(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->patchJson('/api/v1/orders/' . $ctx['order']->uid, [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'order',
+            'currency_code' => 'PKR',
+            'total_amount' => 150,
+            'voucher' => [
+                'active_sections' => ['other_services'],
+                'other_services' => [[
+                    'description' => 'Service without vendor',
+                    'cost' => 100,
+                    'sales' => 150,
+                ]],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['voucher.other_services.0.vendor_id']);
     }
 
     public function test_customer_and_vendor_lists_show_outstanding_except_for_sales_role(): void

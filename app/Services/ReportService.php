@@ -520,18 +520,24 @@ class ReportService
     ): array {
         $invoices = Invoice::where('tenant_id', $tenantId)
             ->where('company_id', $companyId)
+            ->whereNotIn('status', ['void', 'cancel'])
             ->whereDate('invoice_date', '>=', $fromDate)
             ->whereDate('invoice_date', '<=', $toDate)
             ->with(['customer'])
             ->get();
 
-        $grouped = match($groupBy) {
-            'day' => $invoices->groupBy(fn($i) => Carbon::parse($i->invoice_date)->toDateString()),
-            'week' => $invoices->groupBy(fn($i) => Carbon::parse($i->invoice_date)->weekOfYear),
-            'month' => $invoices->groupBy(fn($i) => Carbon::parse($i->invoice_date)->format('Y-m')),
-            'year' => $invoices->groupBy(fn($i) => Carbon::parse($i->invoice_date)->year),
-            default => $invoices,
+        $periodKey = function (Invoice $invoice) use ($groupBy): string {
+            $date = Carbon::parse($invoice->invoice_date);
+
+            return match ($groupBy) {
+                'day' => $date->toDateString(),
+                'week' => sprintf('%d-W%02d', $date->isoWeekYear(), $date->isoWeek()),
+                'year' => (string) $date->year,
+                default => $date->format('Y-m'),
+            };
         };
+
+        $grouped = $invoices->groupBy($periodKey)->sortKeys();
 
         $report = [];
         foreach ($grouped as $period => $items) {
@@ -606,6 +612,48 @@ class ReportService
                 'total_customers' => $customers->count(),
                 'total_revenue' => $customerData->sum('total_invoiced'),
                 'total_outstanding' => $customerData->sum('total_outstanding'),
+            ],
+        ];
+    }
+
+    public function performanceReport(
+        int $tenantId,
+        int $companyId,
+        string $fromDate,
+        string $toDate
+    ): array {
+        $orders = $this->performanceOrders($tenantId, $companyId, $fromDate, $toDate);
+
+        $rows = $orders
+            ->groupBy(function (Order $order): string {
+                $period = Carbon::parse($order->invoice?->invoice_date ?? $order->created_at)->format('Y-m');
+                $currency = $order->invoice?->currency_code ?? $order->currency_code;
+
+                return $period . '|' . $currency;
+            })
+            ->map(fn (Collection $rows, string $key): array => $this->performanceRow($key, $rows))
+            ->sortBy(fn (array $row): string => $row['period'] . '|' . $row['currency_code'])
+            ->values();
+
+        return [
+            'report_date' => now()->toDateString(),
+            'company_id' => $companyId,
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'data' => $rows->all(),
+            'summary' => [
+                'total_sales' => round((float) $rows->sum('sales'), 4),
+                'total_purchase' => round((float) $rows->sum('purchase'), 4),
+                'total_profit_loss' => round((float) $rows->sum('profit_loss'), 4),
+                'by_currency' => $rows
+                    ->groupBy('currency_code')
+                    ->map(fn (Collection $currencyRows, string $currency): array => [
+                        'currency_code' => $currency,
+                        'sales' => round((float) $currencyRows->sum('sales'), 4),
+                        'purchase' => round((float) $currencyRows->sum('purchase'), 4),
+                        'profit_loss' => round((float) $currencyRows->sum('profit_loss'), 4),
+                    ])
+                    ->values()
+                    ->all(),
             ],
         ];
     }
@@ -713,8 +761,8 @@ class ReportService
     {
         $from = now()->startOfMonth()->toDateString();
         $to = now()->endOfMonth()->toDateString();
-        $cashflowFrom = now()->subDays(9)->toDateString();
-        $cashflowTo = now()->toDateString();
+        $performanceFrom = now()->subMonths(9)->startOfMonth()->toDateString();
+        $performanceTo = now()->endOfMonth()->toDateString();
 
         $invoice = Invoice::query()
             ->where('tenant_id', $tenantId)
@@ -810,35 +858,11 @@ class ReportService
             ])
             ->values();
 
-        $receiptsByDate = Receipt::query()
-            ->where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->whereDate('receipt_date', '>=', $cashflowFrom)
-            ->whereDate('receipt_date', '<=', $cashflowTo)
-            ->selectRaw('DATE(receipt_date) as date, COALESCE(SUM(amount), 0) as total')
-            ->groupByRaw('DATE(receipt_date)')
-            ->pluck('total', 'date');
-
-        $paymentsByDate = Payment::query()
-            ->where('tenant_id', $tenantId)
-            ->where('company_id', $companyId)
-            ->whereDate('payment_date', '>=', $cashflowFrom)
-            ->whereDate('payment_date', '<=', $cashflowTo)
-            ->selectRaw('DATE(payment_date) as date, COALESCE(SUM(amount), 0) as total')
-            ->groupByRaw('DATE(payment_date)')
-            ->pluck('total', 'date');
-
-        $cashflow = collect(range(0, 9))->map(function (int $index) use ($cashflowFrom, $receiptsByDate, $paymentsByDate) {
-            $date = Carbon::parse($cashflowFrom)->addDays($index);
-            $key = $date->toDateString();
-
-            return [
-                'date' => $key,
-                'label' => $date->format('M j'),
-                'inflow' => round((float) ($receiptsByDate[$key] ?? 0), 2),
-                'outflow' => round((float) ($paymentsByDate[$key] ?? 0), 2),
-            ];
-        });
+        $performance = $this->monthlyPerformanceRows(
+            $this->performanceOrders($tenantId, $companyId, $performanceFrom, $performanceTo),
+            $performanceFrom,
+            $performanceTo
+        );
 
         $revenue = (float) $invoice->invoiced;
         $profit = $revenue - (float) $cost;
@@ -874,12 +898,18 @@ class ReportService
                 ['type' => 'Cash In', 'value' => round((float) $cashIn, 2)],
                 ['type' => 'Cash Out', 'value' => round((float) $cashOut, 2)],
             ],
-            'cashflow' => $cashflow->all(),
+            'performance' => $performance,
             'outstanding' => $outstanding,
         ];
     }
 
     private function dashboardPurchaseTotal(int $tenantId, int $companyId, string $from, string $to): float
+    {
+        return $this->performanceOrders($tenantId, $companyId, $from, $to)
+            ->sum(fn (Order $order): float => $this->performancePurchaseForOrder($order));
+    }
+
+    private function performanceOrders(int $tenantId, int $companyId, string $from, string $to): Collection
     {
         return Order::query()
             ->where('tenant_id', $tenantId)
@@ -889,15 +919,60 @@ class ReportService
                 ->whereDate('invoice_date', '>=', $from)
                 ->whereDate('invoice_date', '<=', $to)
                 ->whereNotIn('status', ['void', 'cancel']))
-            ->with(['invoice:id,order_id,invoice_date', 'vendorCosts'])
-            ->get()
-            ->sum(function (Order $order): float {
-                if ($order->vendorCosts->isNotEmpty()) {
-                    return (float) $order->vendorCosts->sum('amount');
-                }
+            ->with(['invoice:id,order_id,invoice_date,currency_code,total_amount,status', 'vendorCosts'])
+            ->get();
+    }
 
-                return $order->vendor_id ? $order->vendorPayableAmountFor((int) $order->vendor_id) : 0.0;
-            });
+    private function monthlyPerformanceRows(Collection $orders, string $from, string $to): array
+    {
+        $grouped = $orders->groupBy(fn (Order $order): string => Carbon::parse($order->invoice?->invoice_date ?? $order->created_at)->format('Y-m'));
+        $cursor = Carbon::parse($from)->startOfMonth();
+        $lastMonth = Carbon::parse($to)->startOfMonth();
+        $rows = [];
+
+        while ($cursor->lessThanOrEqualTo($lastMonth)) {
+            $period = $cursor->format('Y-m');
+            $monthOrders = $grouped->get($period, collect());
+            $sales = (float) $monthOrders->sum(fn (Order $order): float => (float) ($order->invoice?->total_amount ?? $order->total_amount));
+            $purchase = (float) $monthOrders->sum(fn (Order $order): float => $this->performancePurchaseForOrder($order));
+
+            $rows[] = [
+                'period' => $period,
+                'label' => $cursor->format('M y'),
+                'sales' => round($sales, 2),
+                'purchase' => round($purchase, 2),
+                'profit_loss' => round($sales - $purchase, 2),
+            ];
+
+            $cursor->addMonth();
+        }
+
+        return $rows;
+    }
+
+    private function performanceRow(string $key, Collection $orders): array
+    {
+        [$period, $currency] = explode('|', $key, 2);
+        $sales = (float) $orders->sum(fn (Order $order): float => (float) ($order->invoice?->total_amount ?? $order->total_amount));
+        $purchase = (float) $orders->sum(fn (Order $order): float => $this->performancePurchaseForOrder($order));
+
+        return [
+            'key' => $key,
+            'period' => $period,
+            'currency_code' => $currency,
+            'sales' => round($sales, 4),
+            'purchase' => round($purchase, 4),
+            'profit_loss' => round($sales - $purchase, 4),
+        ];
+    }
+
+    private function performancePurchaseForOrder(Order $order): float
+    {
+        if ($order->vendorCosts->isNotEmpty()) {
+            return (float) $order->vendorCosts->sum('amount');
+        }
+
+        return $order->vendor_id ? $order->vendorPayableAmountFor((int) $order->vendor_id) : 0.0;
     }
 
     private function dashboardOutstandingBalances(int $tenantId, int $companyId): array

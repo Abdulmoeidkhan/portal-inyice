@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Descriptions, Drawer, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
-import { ExportOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
@@ -20,7 +19,6 @@ export default function VendorStatement() {
   const [loading, setLoading] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [purchaseSummary, setPurchaseSummary] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
 
   useEffect(() => {
@@ -53,14 +51,6 @@ export default function VendorStatement() {
     }
   };
 
-  const openPurchaseSummary = (event, record) => {
-    if (!record.purchase_summary) return;
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-
-    event.preventDefault();
-    setPurchaseSummary(record.purchase_summary);
-  };
-
   const columns = [
     { title: 'Date', dataIndex: 'date', key: 'date', render: dateOnly },
     { title: 'Type', dataIndex: 'type', render: (value) => <Tag color={String(value).includes('payment') ? 'green' : 'orange'}>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
@@ -72,36 +62,19 @@ export default function VendorStatement() {
         ? <a href={record.reference_url} target="_blank" rel="noreferrer">{value || '-'}</a>
         : value || '-',
     },
+    { title: 'Service', dataIndex: 'service', key: 'service', width: 120, render: (value) => value ? <Tag>{value}</Tag> : '-' },
     {
       title: 'Narration',
       dataIndex: 'description',
       key: 'description',
-      render: (value, record) => record.purchase_summary
-        ? <a href={record.reference_url || '#'} onClick={(event) => openPurchaseSummary(event, record)}>{value || '-'}</a>
-        : value || '-',
+      width: 360,
+      render: (value) => value || '-',
     },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
   ];
-  const purchaseColumns = [
-    { title: 'Service', dataIndex: 'service', key: 'service', width: 120, render: (value) => <Tag>{value || 'SERVICE'}</Tag> },
-    { title: 'Passenger', dataIndex: 'passenger', key: 'passenger', width: 180, render: (value) => value || '-' },
-    { title: 'Details', dataIndex: 'details', key: 'details', width: 260, render: (value) => value || '-' },
-    { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', width: 140, render: money },
-  ];
-  const passengerColumns = [
-    { title: 'Passenger Name', dataIndex: 'name', key: 'name', width: 200, render: (value) => value || '-' },
-    { title: 'Passport', dataIndex: 'passport_no', key: 'passport_no', width: 150, render: (value) => value || '-' },
-    { title: 'Ticket', dataIndex: 'ticket_no', key: 'ticket_no', width: 160, render: (value) => value || '-' },
-    { title: 'Visa Publisher', dataIndex: 'visa_publisher', key: 'visa_publisher', width: 180, render: (value) => value || '-' },
-    { title: 'Visa No', dataIndex: 'visa_no', key: 'visa_no', width: 150, render: (value) => value || '-' },
-    { title: 'Notes', dataIndex: 'notes', key: 'notes', width: 220, render: (value) => value || '-' },
-  ];
   const totals = statementTotals(statement?.transactions || []);
-  const purchaseRows = purchaseSummary?.rows || [];
-  const passengerRows = purchaseSummary?.passenger_details || [];
-  const purchaseTotal = purchaseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const summaryStats = statement ? [
     { title: 'Opening', value: Number(statement.summary.opening_balance), money: true },
     { title: 'Payables', value: Number(statement.summary.period_payables), money: true },
@@ -146,69 +119,14 @@ export default function VendorStatement() {
                 rowKey="id"
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={4}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={4} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={5} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={6} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={5}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={5} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={6} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={7} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
                   </Table.Summary.Row>
                 )}
               />
             </Card>
-            <Drawer
-              title="Purchase Summary"
-              open={Boolean(purchaseSummary)}
-              onClose={() => setPurchaseSummary(null)}
-              width={860}
-              extra={purchaseSummary?.order_uid && (
-                <Button
-                  icon={<ExportOutlined />}
-                  href={`/orders/${purchaseSummary.order_uid}/edit`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Order
-                </Button>
-              )}
-            >
-              {purchaseSummary && (
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  <Descriptions bordered column={1} size="small">
-                    <Descriptions.Item label="Order #">{purchaseSummary.order_number || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Booking Ref">{purchaseSummary.booking_reference || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Customer">{purchaseSummary.customer_name || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Passengers">{purchaseSummary.passenger_count || 0}</Descriptions.Item>
-                    <Descriptions.Item label="Services">{(purchaseSummary.services || []).join(', ') || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Purchase Total">
-                      {purchaseSummary.currency_code ? `${purchaseSummary.currency_code} ` : ''}{money(purchaseSummary.total_purchase_amount ?? purchaseTotal)}
-                    </Descriptions.Item>
-                  </Descriptions>
-                  <Text strong>Passenger Details</Text>
-                  <Table
-                    size="small"
-                    columns={passengerColumns}
-                    dataSource={passengerRows}
-                    rowKey="key"
-                    pagination={false}
-                    scroll={{ x: 1060 }}
-                  />
-                  <Text strong>Purchase Details</Text>
-                  <Table
-                    size="small"
-                    columns={purchaseColumns}
-                    dataSource={purchaseRows}
-                    rowKey="key"
-                    pagination={false}
-                    scroll={{ x: 700 }}
-                    summary={() => (
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><Text strong>Total</Text></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><Text strong>{money(purchaseTotal)}</Text></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    )}
-                  />
-                </Space>
-              )}
-            </Drawer>
           </>
         )}
       </Spin>

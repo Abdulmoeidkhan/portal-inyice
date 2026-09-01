@@ -218,24 +218,33 @@ class StatementService
         $transactions = collect();
         foreach ($orders as $order) {
             $payable = $this->vendorPayableAmount($order, $vendorId);
-            $isRefund = $payable < 0;
             $purchaseSummary = $this->vendorPurchaseSummary($order, $vendorId, $payable);
-            $transactions->push([
-                'id' => 'order-' . $order->id,
-                'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
-                'type' => $isRefund ? 'vendor_refund' : 'payable',
-                'reference' => $order->order_number,
-                'reference_url' => '/orders/' . $order->uid . '/edit',
-                'description' => $purchaseSummary['narration'],
-                'purchase_summary' => $purchaseSummary,
-                'vendor_payables' => $isRefund ? 0 : $payable,
-                'vendor_refunds' => $isRefund ? abs($payable) : 0,
-                'vendor_payments' => 0,
-                'vendor_receipts' => 0,
-                'debit' => $isRefund ? 0 : $payable,
-                'credit' => $isRefund ? abs($payable) : 0,
-                'sort_order' => 1,
-            ]);
+
+            foreach ($purchaseSummary['rows'] as $index => $purchaseRow) {
+                $amount = (float) ($purchaseRow['amount'] ?? 0);
+                if ($amount == 0.0) {
+                    continue;
+                }
+
+                $isRefund = $amount < 0;
+                $transactions->push([
+                    'id' => 'order-' . $order->id . '-' . ($purchaseRow['key'] ?? $index),
+                    'date' => $order->invoice?->invoice_date?->toDateString() ?? $order->created_at->toDateString(),
+                    'type' => $isRefund ? 'vendor_refund' : 'payable',
+                    'reference' => $order->order_number,
+                    'order_number' => $order->order_number,
+                    'reference_url' => '/orders/' . $order->uid . '/edit',
+                    'service' => $purchaseRow['service'] ?? 'SERVICE',
+                    'description' => $purchaseRow['details'] ?? $purchaseSummary['narration'],
+                    'vendor_payables' => $isRefund ? 0 : $amount,
+                    'vendor_refunds' => $isRefund ? abs($amount) : 0,
+                    'vendor_payments' => 0,
+                    'vendor_receipts' => 0,
+                    'debit' => $isRefund ? 0 : $amount,
+                    'credit' => $isRefund ? abs($amount) : 0,
+                    'sort_order' => 1,
+                ]);
+            }
         }
         foreach ($payments as $payment) {
             $transactions->push([
@@ -243,6 +252,8 @@ class StatementService
                 'date' => $payment->payment_date->toDateString(),
                 'type' => 'payment',
                 'reference' => $payment->payment_number,
+                'order_number' => null,
+                'service' => null,
                 'description' => $payment->description ?: 'Payment to vendor',
                 'vendor_payables' => 0,
                 'vendor_refunds' => 0,
@@ -256,7 +267,7 @@ class StatementService
         foreach ($receipts as $receipt) {
             $transactions->push([
                 'id' => 'receipt-' . $receipt->id, 'date' => $receipt->receipt_date->toDateString(), 'type' => 'receipt',
-                'reference' => $receipt->receipt_number, 'description' => $receipt->description ?: 'Receipt from vendor',
+                'reference' => $receipt->receipt_number, 'order_number' => null, 'service' => null, 'description' => $receipt->description ?: 'Receipt from vendor',
                 'vendor_payables' => 0, 'vendor_refunds' => 0, 'vendor_payments' => 0, 'vendor_receipts' => (float) $receipt->amount,
                 'debit' => (float) $receipt->amount, 'credit' => 0, 'sort_order' => 3,
             ]);
@@ -479,12 +490,12 @@ class StatementService
 
         if ($costRows->isNotEmpty()) {
             return $this->sortVendorPurchaseRows($costRows
-                ->map(fn (OrderVendorCost $cost): array => $this->vendorPurchaseRowFromCost($cost, $meta))
+                ->map(fn (OrderVendorCost $cost): array => $this->vendorPurchaseRowFromCost($cost, $meta, $order))
                 ->values()
                 ->all());
         }
 
-        $rows = $this->vendorPurchaseRowsFromVoucherMeta($meta, $vendorId);
+        $rows = $this->vendorPurchaseRowsFromVoucherMeta($meta, $vendorId, $order);
 
         if ($rows !== []) {
             return $this->sortVendorPurchaseRows($rows);
@@ -499,7 +510,7 @@ class StatementService
         ]];
     }
 
-    private function vendorPurchaseRowFromCost(OrderVendorCost $cost, array $meta): array
+    private function vendorPurchaseRowFromCost(OrderVendorCost $cost, array $meta, Order $order): array
     {
         $service = $this->statementServiceName($cost->service_type);
         $source = $this->voucherServiceSourceRow($meta, $cost->service_type, (int) $cost->service_index);
@@ -508,12 +519,12 @@ class StatementService
             'key' => $cost->service_type . '-' . $cost->service_index . '-' . $cost->id,
             'service' => $service,
             'passenger' => $this->purchasePassengerName($cost->service_type, $source, $meta),
-            'details' => $this->purchaseDetails($cost->service_type, $source),
+            'details' => $this->purchaseDetails($cost->service_type, $source, $meta, $order),
             'amount' => round((float) $cost->amount, 4),
         ];
     }
 
-    private function vendorPurchaseRowsFromVoucherMeta(array $meta, int $vendorId): array
+    private function vendorPurchaseRowsFromVoucherMeta(array $meta, int $vendorId, Order $order): array
     {
         $rows = [];
 
@@ -528,7 +539,7 @@ class StatementService
                     'key' => 'flight-' . $index,
                     'service' => 'FLIGHT',
                     'passenger' => $this->purchasePassengerName('flight', $pricing, $meta),
-                    'details' => $this->purchaseDetails('flight', $pricing),
+                    'details' => $this->purchaseDetails('flight', $pricing, $meta, $order),
                     'amount' => round($amount, 4),
                 ];
             }
@@ -546,7 +557,7 @@ class StatementService
                         'key' => $serviceType . '-' . $index,
                         'service' => $this->statementServiceName($serviceType),
                         'passenger' => $this->purchasePassengerName($serviceType, $serviceRow, $meta),
-                        'details' => $this->purchaseDetails($serviceType, $serviceRow),
+                        'details' => $this->purchaseDetails($serviceType, $serviceRow, $meta, $order),
                         'amount' => round($amount, 4),
                     ];
                 }
@@ -628,17 +639,95 @@ class StatementService
         );
     }
 
-    private function purchaseDetails(string $serviceType, array $row): string
+    private function purchaseDetails(string $serviceType, array $row, array $meta, Order $order): string
     {
         return match ($serviceType) {
-            'flight' => $this->joinFilled([$row['flight_ticket_no'] ?? null, $row['pnr'] ?? null, $row['gds_pnr'] ?? null], ' / ') ?: 'Flight purchase',
-            'hotel' => $this->joinFilled([$row['hotel_name'] ?? null, $row['city'] ?? null, $row['check_in'] ?? null, $row['check_out'] ?? null], ' / ') ?: 'Hotel purchase',
-            'visa' => $this->joinFilled([$row['visa_type'] ?? null, $row['visa_no'] ?? null, $row['validity'] ?? null], ' / ') ?: 'Visa purchase',
-            'transfer' => $this->joinFilled([$row['service'] ?? null, $row['from_city'] ?? null, $row['to_city'] ?? null, $row['vehicle'] ?? null], ' / ') ?: 'Transport purchase',
-            'city_tour' => $this->joinFilled([$row['title'] ?? null, $row['city'] ?? null, $row['date'] ?? null], ' / ') ?: 'Transport purchase',
-            'other_service' => $this->firstFilled($row['description'] ?? null, 'Service purchase'),
+            'flight' => $this->flightPurchaseDetails($row, $meta, $order),
+            'hotel' => $this->hotelPurchaseDetails($row),
+            'visa' => $this->visaPurchaseDetails($row, $meta),
+            'transfer' => $this->transferPurchaseDetails($row, $meta),
+            'city_tour' => $this->cityTourPurchaseDetails($row, $meta),
+            'other_service' => $this->firstFilled($row['description'] ?? null, $row['notes'] ?? null, 'Service purchase'),
             default => 'Order purchase',
         };
+    }
+
+    private function flightPurchaseDetails(array $row, array $meta, Order $order): string
+    {
+        $firstSector = collect($meta['flights'] ?? [])->first(fn ($flight) => is_array($flight)) ?: [];
+        $passenger = $this->purchasePassengerName('flight', $row, $meta);
+        $pnr = $this->firstFilled($row['pnr'] ?? null, $row['gds_pnr'] ?? null, $order->booking_reference, $meta['booking_reference'] ?? null);
+
+        return $this->joinFilled([
+            $this->labeledValue('Passenger', $passenger),
+            $this->labeledValue('PNR', $pnr),
+            $this->labeledValue('Departure', $firstSector['date'] ?? null),
+            $this->labeledValue('Flight', $firstSector['flight_no'] ?? null),
+        ], ' | ') ?: 'Flight purchase';
+    }
+
+    private function hotelPurchaseDetails(array $row): string
+    {
+        return $this->joinFilled([
+            $this->labeledValue('Hotel', $row['hotel_name'] ?? null),
+            $this->labeledValue('Check-in', $row['check_in'] ?? null),
+            $this->labeledValue('Check-out', $row['check_out'] ?? null),
+            $this->labeledValue('Nights', $this->hotelNightCount($row['check_in'] ?? null, $row['check_out'] ?? null)),
+            $this->labeledValue('City', $row['city'] ?? null),
+        ], ' | ') ?: 'Hotel purchase';
+    }
+
+    private function visaPurchaseDetails(array $row, array $meta): string
+    {
+        return $this->joinFilled([
+            $this->labeledValue('Visa No', $this->firstFilled($row['visa_no'] ?? null, $row['visa_number'] ?? null)),
+            $this->labeledValue('Passenger', $this->purchasePassengerName('visa', $row, $meta)),
+        ], ' | ') ?: 'Visa purchase';
+    }
+
+    private function transferPurchaseDetails(array $row, array $meta): string
+    {
+        $journey = $this->joinFilled([$row['from_city'] ?? null, $row['to_city'] ?? null], ' to ');
+
+        return $this->joinFilled([
+            $this->labeledValue('Journey', $this->firstFilled($journey, $row['service'] ?? null)),
+            $this->labeledValue('Car', $this->firstFilled($row['vehicle'] ?? null, $row['car_name'] ?? null, $row['car'] ?? null)),
+            $this->labeledValue('Passenger', $this->purchasePassengerName('transfer', $row, $meta)),
+        ], ' | ') ?: 'Transport purchase';
+    }
+
+    private function cityTourPurchaseDetails(array $row, array $meta): string
+    {
+        return $this->joinFilled([
+            $this->labeledValue('Journey', $this->joinFilled([$row['title'] ?? null, $row['city'] ?? null], ' - ')),
+            $this->labeledValue('Car', $this->firstFilled($row['vehicle'] ?? null, $row['car_name'] ?? null, $row['car'] ?? null)),
+            $this->labeledValue('Passenger', $this->purchasePassengerName('city_tour', $row, $meta)),
+        ], ' | ') ?: 'Transport purchase';
+    }
+
+    private function labeledValue(string $label, mixed $value): string
+    {
+        $value = $this->firstFilled($value);
+
+        return $value === '' ? '' : $label . ': ' . $value;
+    }
+
+    private function hotelNightCount(mixed $checkIn, mixed $checkOut): string
+    {
+        if ($this->firstFilled($checkIn) === '' || $this->firstFilled($checkOut) === '') {
+            return '';
+        }
+
+        try {
+            $start = Carbon::parse($checkIn)->startOfDay();
+            $end = Carbon::parse($checkOut)->startOfDay();
+        } catch (\Throwable) {
+            return '';
+        }
+
+        $nights = (int) $start->diffInDays($end, false);
+
+        return $nights > 0 ? (string) $nights : '';
     }
 
     private function firstFilled(mixed ...$values): string

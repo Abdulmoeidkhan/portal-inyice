@@ -44,6 +44,7 @@ import OrderList from './OrderList';
 import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
 import RevenueReport from './RevenueReport';
+import PerformanceReport from './PerformanceReport';
 import ProfitReport from './ProfitReport';
 import DiscountReport from './DiscountReport';
 import ProfitShares from './ProfitShares';
@@ -895,6 +896,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={canAccessReports ? <AgingReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/revenue" element={canAccessReports ? <RevenueReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/performance" element={canAccessReports ? <PerformanceReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/profit" element={canAccessReports ? <ProfitReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/discounts" element={canAccessReports ? <DiscountReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/payments" element={canAccessReports ? <PaymentReport /> : <Navigate to="/" replace />} />
@@ -1257,6 +1259,10 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         {
           key: '/reports/revenue',
           label: <Link to="/reports/revenue">Revenue Report</Link>,
+        },
+        {
+          key: '/reports/performance',
+          label: <Link to="/reports/performance">Performance Report</Link>,
         },
         {
           key: '/reports/profit',

@@ -61,14 +61,14 @@ const demoReport = {
       { type: 'Other', value: 38500 },
     ],
 
-    cashflow: [
-      { date: '2026-08-20', label: '20 Aug', inflow: 265000, outflow: 184000 },
-      { date: '2026-08-21', label: '21 Aug', inflow: 318000, outflow: 241000 },
-      { date: '2026-08-22', label: '22 Aug', inflow: 194000, outflow: 227000 },
-      { date: '2026-08-23', label: '23 Aug', inflow: 356000, outflow: 202000 },
-      { date: '2026-08-24', label: '24 Aug', inflow: 289000, outflow: 261000 },
-      { date: '2026-08-25', label: '25 Aug', inflow: 407000, outflow: 296000 },
-      { date: '2026-08-26', label: '26 Aug', inflow: 331000, outflow: 214000 },
+    performance: [
+      { period: '2026-03', label: 'Mar 26', sales: 2140000, purchase: 1575000, profit_loss: 565000 },
+      { period: '2026-04', label: 'Apr 26', sales: 2350000, purchase: 1690000, profit_loss: 660000 },
+      { period: '2026-05', label: 'May 26', sales: 1960000, purchase: 1510000, profit_loss: 450000 },
+      { period: '2026-06', label: 'Jun 26', sales: 2865000, purchase: 1940000, profit_loss: 925000 },
+      { period: '2026-07', label: 'Jul 26', sales: 2470000, purchase: 1710000, profit_loss: 760000 },
+      { period: '2026-08', label: 'Aug 26', sales: 3120000, purchase: 2180000, profit_loss: 940000 },
+      { period: '2026-09', label: 'Sep 26', sales: 2487500, purchase: 1718000, profit_loss: 769500 },
     ],
   },
 
@@ -358,16 +358,20 @@ export default function Dashboard() {
   const expenses = (finance?.expenses?.length ? finance.expenses : finance?.mix || [])
     .filter((item) => Number(item.value) > 0);
   const expenseTotal = expenses.reduce((total, item) => total + Number(item.value || 0), 0);
-  const cashflow = finance?.cashflow || [];
-  const maxCashflow = Math.max(
+  const performance = finance?.performance || [];
+  const maxPerformance = Math.max(
     1,
-    ...cashflow.flatMap((item) => [Number(item.inflow || 0), Number(item.outflow || 0)])
+    ...performance.flatMap((item) => [
+      Math.abs(Number(item.sales || 0)),
+      Math.abs(Number(item.purchase || 0)),
+      Math.abs(Number(item.profit_loss || 0)),
+    ])
   );
-  const cashflowPoints = cashflow
+  const performancePoints = performance
     .map((item, index) => {
-      const x = cashflow.length <= 1 ? 50 : (index / (cashflow.length - 1)) * 100;
-      const net = Number(item.inflow || 0) - Number(item.outflow || 0);
-      const y = 78 - ((net + maxCashflow) / (maxCashflow * 2)) * 56;
+      const x = performance.length <= 1 ? 50 : (index / (performance.length - 1)) * 100;
+      const net = Number(item.profit_loss || 0);
+      const y = 78 - ((net + maxPerformance) / (maxPerformance * 2)) * 56;
 
       return `${x},${Math.min(86, Math.max(12, y))}`;
     })
@@ -559,29 +563,29 @@ export default function Dashboard() {
               <Col xs={24} xl={12}>
                 <Card
                   className="dashboard-insight-card"
-                  title="Cashflow"
-                  extra={<Button size="small" onClick={() => navigate('/reports/payments')}>View report</Button>}
+                  title="Performance"
+                  extra={<Button size="small" onClick={() => navigate('/reports/performance')}>View report</Button>}
                 >
-                  {cashflow.length ? (
-                    <div className="dashboard-cashflow-chart">
-                      <div className="dashboard-cashflow-legend">
-                        <span><i className="cash-dot inflow" />Inflow</span>
-                        <span><i className="cash-dot outflow" />Outflow</span>
-                        <span><i className="cash-dot net" />Net change</span>
+                  {performance.length ? (
+                    <div className="dashboard-performance-chart">
+                      <div className="dashboard-performance-legend">
+                        <span><i className="performance-dot sales" />Sales</span>
+                        <span><i className="performance-dot purchase" />Purchase</span>
+                        <span><i className="performance-dot profit-loss" />Profit/Loss</span>
                       </div>
-                      <div className="dashboard-cashflow-bars">
-                        <svg className="dashboard-cashflow-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                          <polyline points={cashflowPoints} />
+                      <div className="dashboard-performance-bars">
+                        <svg className="dashboard-performance-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                          <polyline points={performancePoints} />
                         </svg>
-                        {cashflow.map((item) => {
-                          const inflow = Number(item.inflow || 0);
-                          const outflow = Number(item.outflow || 0);
+                        {performance.map((item) => {
+                          const sales = Number(item.sales || 0);
+                          const purchase = Number(item.purchase || 0);
 
                           return (
-                            <div key={item.date} className="dashboard-cashflow-day">
-                              <div className="dashboard-cashflow-bars-stack">
-                                <span className="bar inflow" style={{ height: `${Math.max(6, (inflow / maxCashflow) * 118)}px` }} title={`Inflow ${money(inflow)}`} />
-                                <span className="bar outflow" style={{ height: `${Math.max(6, (outflow / maxCashflow) * 118)}px` }} title={`Outflow ${money(outflow)}`} />
+                            <div key={item.period} className="dashboard-performance-month">
+                              <div className="dashboard-performance-bars-stack">
+                                <span className="bar sales" style={{ height: `${Math.max(6, (sales / maxPerformance) * 118)}px` }} title={`SALES ${money(sales)}`} />
+                                <span className="bar purchase" style={{ height: `${Math.max(6, (purchase / maxPerformance) * 118)}px` }} title={`Purchase ${money(purchase)}`} />
                               </div>
                               <Text type="secondary">{item.label}</Text>
                             </div>
@@ -590,7 +594,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No cashflow data" />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No performance data" />
                   )}
                 </Card>
               </Col>

@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
     Route::prefix('reports')->controller(ReportController::class)->middleware('role:admin,accounts')->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
+        Route::get('/performance', 'performanceReport')->name('reports.performance');
         Route::get('/profit', 'profitReport')->name('reports.profit');
         Route::get('/discounts', 'discountReport')->name('reports.discounts');
         Route::get('/payments', 'paymentReport')->name('reports.payments');
