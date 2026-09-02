@@ -1,9 +1,11 @@
 export const refundSignedFields = new Set([
   'amount',
   'cost',
+  'cost_base',
   'sales',
   'total',
   'flight_cost',
+  'flight_cost_base',
   'flight_sales',
   'flight_fare',
   'hotel_cost',

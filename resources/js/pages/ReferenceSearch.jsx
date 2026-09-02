@@ -109,7 +109,7 @@ export default function ReferenceSearch() {
 
   const columns = [
     { title: 'Type', dataIndex: 'type', width: 110, render: (value) => <Tag color={value === 'Invoice' ? 'blue' : value === 'Order' ? 'green' : 'default'}>{value}</Tag> },
-    { title: 'Reference', dataIndex: 'reference', width: 180, render: (value, row) => <Space direction="vertical" size={0}><Text strong>{value || '-'}</Text><Text type="secondary">{row.secondary_reference || ''}</Text></Space> },
+    { title: 'Reference', dataIndex: 'reference', width: 180, render: (value, row) => <Space orientation="vertical" size={0}><Text strong>{value || '-'}</Text><Text type="secondary">{row.secondary_reference || ''}</Text></Space> },
     { title: 'Customer / Party', dataIndex: 'customer', width: 200, render: (value) => value || '-' },
     { title: 'Date', dataIndex: 'date', width: 120, render: dateOnly },
     { title: 'Status', dataIndex: 'status', width: 130, render: (value) => value ? String(value).replaceAll('_', ' ') : '-' },

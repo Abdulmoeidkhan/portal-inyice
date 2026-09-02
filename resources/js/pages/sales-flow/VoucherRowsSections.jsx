@@ -97,16 +97,38 @@ const hasSection = (voucher, section) => voucher.active_sections.includes(sectio
 
 const flightPricingFields = [
   ['Ticket Number', 'flight_ticket_no', { min: 0, precision: 0 }],
-  ['Cost', 'flight_cost', { min: 0, precision: 2 }],
+  ['Base', 'flight_cost_base', { min: 0, precision: 2 }],
+  ['ROE', 'flight_cost_roe', { min: 0, precision: 6 }],
+  ['Equv/Cost', 'flight_cost', { min: 0, precision: 2 }],
   ['Profit', 'flight_profit', { precision: 2 }],
   ['Amount / Sales', 'flight_sales', { min: 0, precision: 2 }],
 ];
 
 const serviceMoneyFields = [
-  ['Cost', 'cost', { min: 0, precision: 2 }],
+  ['Base', 'cost_base', { min: 0, precision: 2 }],
+  ['ROE', 'cost_roe', { min: 0, precision: 6 }],
+  ['Equv/Cost', 'cost', { min: 0, precision: 2 }],
   ['Profit', 'profit', { precision: 2 }],
   ['Amount / Sales', 'sales', { min: 0, precision: 2 }],
 ];
+
+const flightCostExchangeFields = {
+  base: 'flight_cost_base',
+  roe: 'flight_cost_roe',
+  equv: 'flight_cost',
+};
+
+const serviceCostExchangeFields = {
+  base: 'cost_base',
+  roe: 'cost_roe',
+  equv: 'cost',
+};
+
+const flightCostProfitFields = new Set(['flight_cost_base', 'flight_cost_roe', 'flight_cost', 'flight_profit']);
+const blankableFlightPricingFields = new Set(['flight_ticket_no', 'flight_cost_base', 'flight_cost_roe']);
+const blankableServiceMoneyFields = new Set(['cost_base', 'cost_roe']);
+const serviceMoneyColProps = { xs: 24, sm: 12, md: 8, lg: 4, xl: 3 };
+const flightPricingColProps = { xs: 24, sm: 12, md: 8, lg: 4, xl: 3 };
 
 const toNumber = (value) => {
   if (value === null || value === undefined || value === '') {
@@ -142,6 +164,37 @@ const calculateNights = (checkIn, checkOut) => {
 const moneyValue = (value) => {
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+};
+
+const enteredNumber = (value) => {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return null;
+  }
+
+  const normalized = String(value).replace(/[^0-9.-]/g, '');
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const calculateCostExchangeUpdates = (row, fields, changedField, value) => {
+  const nextRow = { ...row, [changedField]: value };
+  const base = enteredNumber(nextRow[fields.base]);
+  const roe = enteredNumber(nextRow[fields.roe]);
+  const equv = enteredNumber(nextRow[fields.equv]);
+
+  if ((changedField === fields.base || changedField === fields.roe) && base !== null && roe !== null) {
+    return { [fields.equv]: moneyValue(base * roe) };
+  }
+
+  if (changedField === fields.equv && equv !== null) {
+    return {
+      [fields.base]: moneyValue(equv),
+      [fields.roe]: '1',
+    };
+  }
+
+  return {};
 };
 
 const AirportInput = ({ label, value, onChange }) => {
@@ -196,89 +249,114 @@ export default function VoucherRowsSections({
 
   const setPricingField = (idx, field, value) => {
     const row = voucher.pricing[idx] || {};
-    const fallbackValue = field === 'flight_ticket_no' ? '' : '0';
+    const fallbackValue = blankableFlightPricingFields.has(field) ? '' : '0';
     const numericValue = refundMode && refundSignedFields.has(field)
       ? signedRefundValue(value, fallbackValue)
       : value ?? fallbackValue;
-    const nextRow = { ...row, [field]: numericValue };
+    const updates = {
+      [field]: numericValue,
+      ...(canViewCostProfit ? calculateCostExchangeUpdates(row, flightCostExchangeFields, field, numericValue) : {}),
+    };
+    const nextRow = { ...row, ...updates };
     const cost = toNumber(nextRow.flight_cost);
     const profit = toNumber(nextRow.flight_profit);
     const sales = toNumber(nextRow.flight_sales);
+    const costChanged = field === 'flight_cost' || Object.prototype.hasOwnProperty.call(updates, 'flight_cost');
 
-    setRowField('pricing', idx, field, numericValue);
+    const applyUpdates = () => {
+      Object.entries(updates).forEach(([updateField, updateValue]) => {
+        setRowField('pricing', idx, updateField, updateValue);
+      });
+    };
 
     if (!canViewCostProfit) {
+      applyUpdates();
       return;
     }
 
-    if (field === 'flight_cost') {
+    if (costChanged) {
       if (cost !== null && profit !== null) {
-        setRowField('pricing', idx, 'flight_sales', moneyValue(cost + profit));
+        updates.flight_sales = moneyValue(cost + profit);
       } else if (cost !== null && sales !== null) {
-        setRowField('pricing', idx, 'flight_profit', moneyValue(sales - cost));
+        updates.flight_profit = moneyValue(sales - cost);
       }
     }
 
     if (field === 'flight_profit' && cost !== null && profit !== null) {
-      setRowField('pricing', idx, 'flight_sales', moneyValue(cost + profit));
+      updates.flight_sales = moneyValue(cost + profit);
     }
 
     if (field === 'flight_sales' && cost !== null && sales !== null) {
       if (cost === 0 && profit === 0 && sales !== 0) {
-        setRowField('pricing', idx, 'flight_cost', moneyValue(sales));
+        updates.flight_cost = moneyValue(sales);
       } else {
-        setRowField('pricing', idx, 'flight_profit', moneyValue(sales - cost));
+        updates.flight_profit = moneyValue(sales - cost);
       }
     }
+
+    applyUpdates();
   };
 
   const setServiceMoneyField = (section, idx, field, value) => {
     const row = voucher[section]?.[idx] || {};
+    const fallbackValue = blankableServiceMoneyFields.has(field) ? '' : '0';
     const numericValue = refundMode && refundSignedFields.has(field)
-      ? signedRefundValue(value)
-      : value ?? '0';
-    const nextRow = { ...row, [field]: numericValue };
+      ? signedRefundValue(value, fallbackValue)
+      : value ?? fallbackValue;
+    const updates = {
+      [field]: numericValue,
+      ...(canViewCostProfit ? calculateCostExchangeUpdates(row, serviceCostExchangeFields, field, numericValue) : {}),
+    };
+    const nextRow = { ...row, ...updates };
     const cost = toNumber(nextRow.cost);
     const profit = toNumber(nextRow.profit);
     const sales = toNumber(nextRow.sales);
+    const costChanged = field === 'cost' || Object.prototype.hasOwnProperty.call(updates, 'cost');
 
-    setRowField(section, idx, field, numericValue);
+    const applyUpdates = () => {
+      Object.entries(updates).forEach(([updateField, updateValue]) => {
+        setRowField(section, idx, updateField, updateValue);
+      });
+    };
 
     if (!canViewCostProfit) {
       if (field === 'sales') {
-        setRowField(section, idx, 'amount', moneyValue(sales || 0));
+        updates.amount = moneyValue(sales || 0);
       }
+      applyUpdates();
       return;
     }
 
-    if (field === 'cost') {
+    if (costChanged) {
       if (cost !== null && profit !== null) {
         const nextSales = moneyValue(cost + profit);
-        setRowField(section, idx, 'sales', nextSales);
-        setRowField(section, idx, 'amount', nextSales);
+        updates.sales = nextSales;
+        updates.amount = nextSales;
       } else if (cost !== null && sales !== null) {
-        setRowField(section, idx, 'profit', moneyValue(sales - cost));
+        updates.profit = moneyValue(sales - cost);
       }
     }
 
     if (field === 'profit' && cost !== null && profit !== null) {
       const nextSales = moneyValue(cost + profit);
-      setRowField(section, idx, 'sales', nextSales);
-      setRowField(section, idx, 'amount', nextSales);
+      updates.sales = nextSales;
+      updates.amount = nextSales;
     }
 
     if (field === 'sales' && cost !== null && sales !== null) {
-      setRowField(section, idx, 'amount', moneyValue(sales));
+      updates.amount = moneyValue(sales);
       if (cost === 0 && profit === 0 && sales !== 0) {
-        setRowField(section, idx, 'cost', moneyValue(sales));
+        updates.cost = moneyValue(sales);
       } else {
-        setRowField(section, idx, 'profit', moneyValue(sales - cost));
+        updates.profit = moneyValue(sales - cost);
       }
     }
+
+    applyUpdates();
   };
 
   const serviceVendorSelect = (section, idx, row, label = 'Vendor', nameField = 'vendor_name') => (
-    <Col xs={24} sm={12} md={8} lg={4} xl={6}>
+    <Col xs={24} sm={12} md={8} lg={4} xl={4}>
       <Text>{label}</Text>
       <Select
         allowClear
@@ -299,10 +377,10 @@ export default function VoucherRowsSections({
     : serviceMoneyFields.filter(([, field]) => field === 'sales');
   const visibleFlightPricingFields = canViewCostProfit
     ? flightPricingFields
-    : flightPricingFields.filter(([, field]) => !['flight_cost', 'flight_profit'].includes(field));
+    : flightPricingFields.filter(([, field]) => !flightCostProfitFields.has(field));
 
   const serviceMoneyInputs = (section, idx, row) => visibleServiceMoneyFields.map(([label, field, inputProps]) => (
-    <Col xs={24} sm={12} md={8} lg={4} xl={6} key={field}>
+    <Col {...serviceMoneyColProps} key={field}>
       <Text>{label}</Text>
       <InputNumber
         {...inputProps}
@@ -401,7 +479,7 @@ export default function VoucherRowsSections({
           <RowGroupCard title="Flight Amounts (Per Passenger)" rows={voucher.pricing} addLabel="+ Add Flight Amount" onAdd={() => addRow('pricing', blankPricing)} onRemove={(idx) => removeRow('pricing', idx)}>
             {(row, idx) => (
               <Row gutter={8}>
-                <Col xs={24} sm={12} md={8} lg={4} xl={4}>
+                <Col {...flightPricingColProps}>
                   <Text>Flight Vendor</Text>
                   <Select
                     allowClear
@@ -415,9 +493,9 @@ export default function VoucherRowsSections({
                     style={{ width: '100%' }}
                   />
                 </Col>
-                <Col xs={24} sm={12} md={8} lg={4} xl={4}><Text>Passenger</Text><Input value={row.pax_name || voucher.passengers[idx]?.name || ''} onChange={(e) => setRowField('pricing', idx, 'pax_name', e.target.value)} /></Col>
+                <Col {...flightPricingColProps}><Text>Passenger</Text><Input value={row.pax_name || voucher.passengers[idx]?.name || ''} onChange={(e) => setRowField('pricing', idx, 'pax_name', e.target.value)} /></Col>
                 {visibleFlightPricingFields.map(([label, field, inputProps]) => (
-                  <Col xs={24} sm={12} md={8} lg={4} xl={4} key={field}>
+                  <Col {...flightPricingColProps} key={field}>
                     <Text>{label}</Text>
                     <InputNumber
                       {...inputProps}

@@ -22,6 +22,10 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
   const [form, setForm] = useState(blankDiscount());
   const discounts = Array.isArray(voucher.discounts) ? voucher.discounts : [];
   const totals = useMemo(() => calculateVoucherTotals(voucher), [voucher]);
+  const discountTableRows = useMemo(() => discounts.map((discount, index) => ({
+    ...discount,
+    table_key: discount.key || discount.uid || `discount-${index}`,
+  })), [discounts]);
   const computedByKey = new Map(totals.discounts.map((discount) => [discount.key, discount]));
   const inputLimit = form.discount_type === 'percentage' ? 100 : Math.max(0, totals.grossTotal);
   const inputValue = form.discount_type === 'percentage' ? form.percentage : form.amount;
@@ -37,8 +41,10 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
       return;
     }
 
+    const normalizedDiscount = normalizedForm(form);
+    delete normalizedDiscount.table_key;
     const nextDiscount = {
-      ...normalizedForm(form),
+      ...normalizedDiscount,
       key: form.key || form.uid || `discount-${Date.now()}`,
       amount: form.discount_type === 'amount' ? String(value) : '',
       percentage: form.discount_type === 'percentage' ? String(value) : '',
@@ -70,7 +76,7 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
 
   return (
     <Card className="border-beam-aurora" style={{ marginTop: 16 }} title="Discounts">
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Text type="secondary">Gross total</Text>
@@ -88,9 +94,9 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
 
         <Table
           size="small"
-          rowKey={(row, index) => row.key || row.uid || `discount-${index}`}
+          rowKey="table_key"
           pagination={false}
-          dataSource={discounts}
+          dataSource={discountTableRows}
           locale={{ emptyText: 'No discounts added' }}
           columns={[
             { title: 'Reason', dataIndex: 'reason', render: (value) => value || 'Discount' },
@@ -150,20 +156,27 @@ export default function VoucherDiscountsCard({ voucher, onChangeDiscounts, curre
           <Col xs={24} md={8}>
             <div className="voucher-discount-field" style={discountFieldStyle}>
               <Text strong>{form.discount_type === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Text>
-              <InputNumber
-                className="voucher-discount-value-input"
-                min={0.01}
-                max={inputLimit}
-                precision={2}
-                controls={false}
-                addonAfter={form.discount_type === 'percentage' ? '%' : currencyCode}
-                value={inputValue === '' || inputValue === null || inputValue === undefined ? null : inputValue}
-                onChange={(value) => setForm((current) => ({
-                  ...current,
-                  [current.discount_type === 'percentage' ? 'percentage' : 'amount']: value ?? '',
-                }))}
-                style={discountControlStyle}
-              />
+              <Space.Compact style={discountControlStyle}>
+                <InputNumber
+                  className="voucher-discount-value-input"
+                  min={0.01}
+                  max={inputLimit}
+                  precision={2}
+                  controls={false}
+                  value={inputValue === '' || inputValue === null || inputValue === undefined ? null : inputValue}
+                  onChange={(value) => setForm((current) => ({
+                    ...current,
+                    [current.discount_type === 'percentage' ? 'percentage' : 'amount']: value ?? '',
+                  }))}
+                  style={discountControlStyle}
+                />
+                <Input
+                  readOnly
+                  aria-label="Discount value unit"
+                  value={form.discount_type === 'percentage' ? '%' : currencyCode}
+                  style={{ width: 76, textAlign: 'center' }}
+                />
+              </Space.Compact>
             </div>
           </Col>
           <Col xs={24} md={8}>

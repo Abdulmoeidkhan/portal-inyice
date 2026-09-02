@@ -411,7 +411,7 @@ export default function Payments() {
               value={customerId}
               onChange={selectCustomer}
               options={customers.map((item) => ({ value: item.id, label: `${item.name}${item.phone ? ` - ${item.phone}` : ''}` }))}
-              dropdownRender={(menu) => (
+              popupRender={(menu) => (
                 <>
                   {menu}
                   <Button type="link" block onClick={() => setCustomerModalOpen(true)}>+ Add Customer</Button>

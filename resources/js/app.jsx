@@ -6,7 +6,7 @@ import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd';
 import enUS from 'antd/locale/en_US';
 import '../css/app.css';
 import MainApp from './pages/App';
-import { setFeedbackMessage } from './services/feedback';
+import { setFeedbackMessage, setFeedbackModal } from './services/feedback';
 import { THEME_STYLE_TOKENS } from './themeOptions';
 
 const container = document.getElementById('root');
@@ -23,11 +23,12 @@ if ('serviceWorker' in navigator && canUseServiceWorker) {
 }
 
 function FeedbackBridge() {
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
 
   useEffect(() => {
     setFeedbackMessage(message);
-  }, [message]);
+    setFeedbackModal(modal);
+  }, [message, modal]);
 
   return null;
 }

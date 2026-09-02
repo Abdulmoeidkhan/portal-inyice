@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { App as AntdApp, Form, Input, Button, Card, Checkbox, Divider, Modal, Typography, Space } from 'antd';
+import { App as AntdApp, Form, Input, Button, Card, Checkbox, Divider, Typography, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -9,7 +9,7 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
   const navigate = useNavigate();
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
 
   const submitLogin = async (values, forceLogout = false) => {
     setLoading(true);
@@ -31,7 +31,7 @@ export default function Login({ onLoginSuccess }) {
         const error = await response.json().catch(() => ({}));
         if (response.status === 409 && error.session_conflict && !forceLogout) {
           setLoading(false);
-          Modal.confirm({
+          modal.confirm({
             title: 'Sign out old session?',
             content: error.message || 'This user is already logged in on another device. Sign out the old session to continue.',
             okText: 'Sign out old',

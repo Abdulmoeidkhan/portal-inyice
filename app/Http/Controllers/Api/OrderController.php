@@ -60,6 +60,8 @@ class OrderController extends Controller
     ];
 
     private const PRICING_COST_PROFIT_FIELDS = [
+        'flight_cost_base',
+        'flight_cost_roe',
         'flight_cost',
         'flight_profit',
         'hotel_cost',
@@ -75,6 +77,8 @@ class OrderController extends Controller
     ];
 
     private const SERVICE_COST_PROFIT_FIELDS = [
+        'cost_base',
+        'cost_roe',
         'cost',
         'profit',
     ];
@@ -204,6 +208,8 @@ class OrderController extends Controller
             'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.pricing.*.vendor_name' => 'nullable|string|max:255',
             'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
+            'voucher.pricing.*.flight_cost_base' => 'nullable|numeric',
+            'voucher.pricing.*.flight_cost_roe' => 'nullable|numeric',
             'voucher.pricing.*.flight_cost' => 'nullable|numeric',
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
             'voucher.pricing.*.flight_sales' => 'nullable|numeric',
@@ -234,6 +240,8 @@ class OrderController extends Controller
             'voucher.hotels.*.check_out' => 'nullable|date_format:Y-m-d',
             'voucher.hotels.*.lead_passenger' => 'nullable|string|max:255',
             'voucher.hotels.*.notes' => 'nullable|string',
+            'voucher.hotels.*.cost_base' => 'nullable|numeric',
+            'voucher.hotels.*.cost_roe' => 'nullable|numeric',
             'voucher.hotels.*.cost' => 'nullable|numeric',
             'voucher.hotels.*.profit' => 'nullable|numeric',
             'voucher.hotels.*.sales' => 'nullable|numeric',
@@ -248,6 +256,8 @@ class OrderController extends Controller
             'voucher.transfers.*.vehicle' => 'nullable|string|max:255',
             'voucher.transfers.*.contact_person' => 'nullable|string|max:255',
             'voucher.transfers.*.notes' => 'nullable|string',
+            'voucher.transfers.*.cost_base' => 'nullable|numeric',
+            'voucher.transfers.*.cost_roe' => 'nullable|numeric',
             'voucher.transfers.*.cost' => 'nullable|numeric',
             'voucher.transfers.*.profit' => 'nullable|numeric',
             'voucher.transfers.*.sales' => 'nullable|numeric',
@@ -260,6 +270,8 @@ class OrderController extends Controller
             'voucher.city_tours.*.attractions' => 'nullable|string',
             'voucher.city_tours.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.city_tours.*.notes' => 'nullable|string',
+            'voucher.city_tours.*.cost_base' => 'nullable|numeric',
+            'voucher.city_tours.*.cost_roe' => 'nullable|numeric',
             'voucher.city_tours.*.cost' => 'nullable|numeric',
             'voucher.city_tours.*.profit' => 'nullable|numeric',
             'voucher.city_tours.*.sales' => 'nullable|numeric',
@@ -273,6 +285,8 @@ class OrderController extends Controller
             'voucher.visa.*.visa_publisher' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
             'voucher.visa.*.notes' => 'nullable|string',
+            'voucher.visa.*.cost_base' => 'nullable|numeric',
+            'voucher.visa.*.cost_roe' => 'nullable|numeric',
             'voucher.visa.*.cost' => 'nullable|numeric',
             'voucher.visa.*.profit' => 'nullable|numeric',
             'voucher.visa.*.sales' => 'nullable|numeric',
@@ -282,6 +296,8 @@ class OrderController extends Controller
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
             'voucher.other_services.*.quantity' => 'nullable|integer|min:1',
+            'voucher.other_services.*.cost_base' => 'nullable|numeric',
+            'voucher.other_services.*.cost_roe' => 'nullable|numeric',
             'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
@@ -576,6 +592,8 @@ class OrderController extends Controller
             'voucher.pricing.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.pricing.*.vendor_name' => 'nullable|string|max:255',
             'voucher.pricing.*.flight_ticket_no' => ['nullable', 'regex:/^\d+$/'],
+            'voucher.pricing.*.flight_cost_base' => 'nullable|numeric',
+            'voucher.pricing.*.flight_cost_roe' => 'nullable|numeric',
             'voucher.pricing.*.flight_cost' => 'nullable|numeric',
             'voucher.pricing.*.flight_profit' => 'nullable|numeric',
             'voucher.pricing.*.flight_sales' => 'nullable|numeric',
@@ -606,6 +624,8 @@ class OrderController extends Controller
             'voucher.hotels.*.check_out' => 'nullable|date_format:Y-m-d',
             'voucher.hotels.*.lead_passenger' => 'nullable|string|max:255',
             'voucher.hotels.*.notes' => 'nullable|string',
+            'voucher.hotels.*.cost_base' => 'nullable|numeric',
+            'voucher.hotels.*.cost_roe' => 'nullable|numeric',
             'voucher.hotels.*.cost' => 'nullable|numeric',
             'voucher.hotels.*.profit' => 'nullable|numeric',
             'voucher.hotels.*.sales' => 'nullable|numeric',
@@ -620,6 +640,8 @@ class OrderController extends Controller
             'voucher.transfers.*.vehicle' => 'nullable|string|max:255',
             'voucher.transfers.*.contact_person' => 'nullable|string|max:255',
             'voucher.transfers.*.notes' => 'nullable|string',
+            'voucher.transfers.*.cost_base' => 'nullable|numeric',
+            'voucher.transfers.*.cost_roe' => 'nullable|numeric',
             'voucher.transfers.*.cost' => 'nullable|numeric',
             'voucher.transfers.*.profit' => 'nullable|numeric',
             'voucher.transfers.*.sales' => 'nullable|numeric',
@@ -632,6 +654,8 @@ class OrderController extends Controller
             'voucher.city_tours.*.attractions' => 'nullable|string',
             'voucher.city_tours.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.city_tours.*.notes' => 'nullable|string',
+            'voucher.city_tours.*.cost_base' => 'nullable|numeric',
+            'voucher.city_tours.*.cost_roe' => 'nullable|numeric',
             'voucher.city_tours.*.cost' => 'nullable|numeric',
             'voucher.city_tours.*.profit' => 'nullable|numeric',
             'voucher.city_tours.*.sales' => 'nullable|numeric',
@@ -645,6 +669,8 @@ class OrderController extends Controller
             'voucher.visa.*.visa_publisher' => 'nullable|string|max:255',
             'voucher.visa.*.visa_vendor' => 'nullable|string|max:255',
             'voucher.visa.*.notes' => 'nullable|string',
+            'voucher.visa.*.cost_base' => 'nullable|numeric',
+            'voucher.visa.*.cost_roe' => 'nullable|numeric',
             'voucher.visa.*.cost' => 'nullable|numeric',
             'voucher.visa.*.profit' => 'nullable|numeric',
             'voucher.visa.*.sales' => 'nullable|numeric',
@@ -654,6 +680,8 @@ class OrderController extends Controller
             'voucher.other_services.*.vendor_name' => 'nullable|string|max:255',
             'voucher.other_services.*.description' => 'nullable|string|max:255',
             'voucher.other_services.*.quantity' => 'nullable|integer|min:1',
+            'voucher.other_services.*.cost_base' => 'nullable|numeric',
+            'voucher.other_services.*.cost_roe' => 'nullable|numeric',
             'voucher.other_services.*.cost' => 'nullable|numeric',
             'voucher.other_services.*.profit' => 'nullable|numeric',
             'voucher.other_services.*.sales' => 'nullable|numeric',
@@ -1301,10 +1329,12 @@ class OrderController extends Controller
     {
         $negativeFields = [
             'amount',
+            'cost_base',
             'cost',
             'profit',
             'sales',
             'total',
+            'flight_cost_base',
             'flight_cost',
             'flight_profit',
             'flight_sales',
@@ -2000,11 +2030,11 @@ class OrderController extends Controller
         }
 
         $serviceRows = [
-            'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
-            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
-            'city_tours' => ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes', 'cost', 'profit', 'sales', 'amount'],
-            'visa' => ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
-            'other_services' => ['description', 'quantity', 'vendor_id', 'vendor_name', 'cost', 'profit', 'sales', 'amount'],
+            'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
+            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
+            'city_tours' => ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
+            'visa' => ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
+            'other_services' => ['description', 'quantity', 'vendor_id', 'vendor_name', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
         ];
 
         foreach ($serviceRows as $section => $keys) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Descriptions, Divider, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Popconfirm, Row, Segmented, Select, Space, Spin, Tag, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined, StopOutlined } from '@ant-design/icons';
-import { message } from '../services/feedback';
+import { dialog, message } from '../services/feedback';
 import { useNavigate } from 'react-router-dom';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock } from '../services/editLocks';
@@ -247,7 +247,7 @@ export default function InvoiceList() {
       openRoute(navigate, `/orders/${invoice.order.uid}/edit`);
     } catch (error) {
       if (error.status === 423) {
-        Modal.warning({
+        dialog.warning({
           title: 'Order is being edited',
           content: error?.data?.message || error.message || 'This order is currently locked for editing.',
         });
@@ -472,7 +472,7 @@ export default function InvoiceList() {
           danger: true,
           label: 'Delete refund',
           disabled: !invoice.has_refund_order || !invoice.can_delete_refund,
-          onClick: () => Modal.confirm({
+          onClick: () => dialog.confirm({
             title: 'Delete refund?',
             content: invoice.refund_order_number
               ? `This will delete refund ${invoice.refund_order_number} and its refund invoice.`
@@ -533,7 +533,7 @@ export default function InvoiceList() {
         icon: <RollbackOutlined />,
         label: 'Full refund',
         disabled: isRefundOrder || !invoice.order?.uid || isClosed || !invoice.can_create_refund_request,
-        onClick: () => Modal.confirm({
+        onClick: () => dialog.confirm({
           title: 'Create full refund invoice?',
           content: `This will create a refund request and immediately invoice it for ${invoice.currency_code} ${money(Math.abs(Number(invoice.total_amount || 0)))} as a negative invoice.`,
           okText: 'Create refund invoice',
@@ -548,7 +548,7 @@ export default function InvoiceList() {
         danger: true,
         label: 'Delete refund',
         disabled: !invoice.has_refund_order || !invoice.can_delete_refund,
-        onClick: () => Modal.confirm({
+        onClick: () => dialog.confirm({
           title: 'Delete refund?',
           content: invoice.refund_order_number
             ? `This will delete refund ${invoice.refund_order_number} and its refund invoice.`
@@ -587,7 +587,7 @@ export default function InvoiceList() {
         danger: true,
         label: 'Void Invoice',
         disabled: !invoice.can_void_invoice,
-        onClick: () => Modal.confirm({
+        onClick: () => dialog.confirm({
           title: 'Void this invoice?',
           content: 'This action will convert invoice values to zero and keep the previous cost/profit breakup in notes.',
           okText: 'Void',
@@ -763,7 +763,7 @@ export default function InvoiceList() {
         size="large"
       >
         {selectedInvoice && (
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="large" style={{ width: '100%' }}>
             <Descriptions bordered column={1} size="small">
               <Descriptions.Item label="Invoice #">{selectedInvoice.invoice_number || '-'}</Descriptions.Item>
               <Descriptions.Item label="Customer">{selectedInvoice.customer?.name || '-'}</Descriptions.Item>
@@ -860,15 +860,23 @@ export default function InvoiceList() {
           <Col xs={24} md={12}>
             <div className="discount-editor-field">
               <Typography.Text strong>{discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}</Typography.Text>
-              <InputNumber
-                className="discount-value-input"
-                min={0.01}
-                max={discountInputLimit}
-                precision={2}
-                addonAfter={discountType === 'percentage' ? '%' : discountInvoice?.currency_code}
-                value={discountAmount}
-                onChange={(value) => setDiscountAmount(Number(value || 0))}
-              />
+              <Space.Compact style={{ width: '100%' }}>
+                <InputNumber
+                  className="discount-value-input"
+                  min={0.01}
+                  max={discountInputLimit}
+                  precision={2}
+                  value={discountAmount}
+                  onChange={(value) => setDiscountAmount(Number(value || 0))}
+                  style={{ width: '100%' }}
+                />
+                <Input
+                  readOnly
+                  aria-label="Discount value unit"
+                  value={discountType === 'percentage' ? '%' : discountInvoice?.currency_code}
+                  style={{ width: 76, textAlign: 'center' }}
+                />
+              </Space.Compact>
             </div>
           </Col>
           <Col span={24}>

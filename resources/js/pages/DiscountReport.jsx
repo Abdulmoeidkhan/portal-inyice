@@ -53,8 +53,8 @@ export default function DiscountReport() {
 
   const columns = [
     { title: 'Discount Date', dataIndex: 'discount_date', width: 130, render: dateOnly },
-    { title: 'Invoice #', dataIndex: 'invoice_number', width: 170, render: (value, row) => <Space direction="vertical" size={0}><Text strong>{value || '-'}</Text><Text type="secondary">{dateOnly(row.invoice_date)}</Text></Space> },
-    { title: 'Order', dataIndex: 'order_number', width: 150, render: (value, row) => <Space direction="vertical" size={0}><Text>{value || '-'}</Text><Text type="secondary">{row.booking_reference || ''}</Text></Space> },
+    { title: 'Invoice #', dataIndex: 'invoice_number', width: 170, render: (value, row) => <Space orientation="vertical" size={0}><Text strong>{value || '-'}</Text><Text type="secondary">{dateOnly(row.invoice_date)}</Text></Space> },
+    { title: 'Order', dataIndex: 'order_number', width: 150, render: (value, row) => <Space orientation="vertical" size={0}><Text>{value || '-'}</Text><Text type="secondary">{row.booking_reference || ''}</Text></Space> },
     { title: 'Customer', dataIndex: 'customer_name', width: 190, render: (value) => value || '-' },
     { title: 'Type', dataIndex: 'discount_type', width: 120, render: (value) => <Tag color={value === 'percentage' ? 'purple' : 'blue'}>{label(value)}</Tag> },
     { title: 'Percent', dataIndex: 'percentage', width: 105, align: 'right', render: (value) => value === null || value === undefined ? '-' : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 })}%` },

@@ -166,7 +166,7 @@ export default function CompanyUsers() {
       key: 'name',
       width: compactUserTable ? 210 : undefined,
       render: (name, record) => (
-        <Space className="company-user-identity" direction="vertical" size={0}>
+        <Space className="company-user-identity" orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           <Text type="secondary">{record.email}</Text>
         </Space>

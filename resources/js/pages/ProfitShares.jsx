@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
-import { message } from '../services/feedback';
+import { dialog, message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
 
@@ -156,7 +156,7 @@ export default function ProfitShares() {
   };
 
   const deleteShare = (record) => {
-    Modal.confirm({
+    dialog.confirm({
       title: 'Delete profit share?',
       content: `${record.currency_code} ${money(record.amount)} from ${record.from_user?.name || '-'} to ${record.to_user?.name || '-'}`,
       okText: 'Delete',
@@ -324,7 +324,7 @@ export default function ProfitShares() {
         confirmLoading={saving}
         okText={editingShare ? 'Save' : 'Record'}
         width={680}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={saveShare}>
           <Row gutter={12}>

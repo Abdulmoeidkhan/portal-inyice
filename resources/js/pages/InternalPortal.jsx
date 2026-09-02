@@ -450,7 +450,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
       dataIndex: 'display_name',
       width: 88,
       render: (name, company) => (
-        <Space className="internal-company-name-cell" direction="vertical" size={0}>
+        <Space className="internal-company-name-cell" orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           <Text type="secondary">{company.tenant?.name || '-'}</Text>
         </Space>
@@ -652,7 +652,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                   />
                 </Card>
 
-                <Space direction="vertical" size={16} className="internal-detail-stack">
+                <Space orientation="vertical" size={16} className="internal-detail-stack">
                   <Card
                     className="border-beam-aurora"
                     loading={loadingDetail}
@@ -841,7 +841,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         cancelButtonProps={{ danger: true }}
         onOk={() => staffForm.submit()}
         confirmLoading={savingStaff}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={staffForm} layout="vertical" preserve={false} onFinish={createStaff}>
           <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Enter a name' }]}>
@@ -884,7 +884,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         cancelButtonProps={{ danger: true }}
         onOk={() => resetPasswordForm.submit()}
         confirmLoading={savingResetPassword}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={resetPasswordForm} layout="vertical" preserve={false} onFinish={resetManagedUserPassword}>
           <Form.Item name="password" label="New Password" rules={[{ required: true, min: 8, message: 'Use at least 8 characters' }]}>
@@ -914,7 +914,7 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         onCancel={() => setRecordModal({ open: false, type: '', data: null, loading: false })}
         footer={null}
         width={recordModal.type === 'orders' ? 1120 : 920}
-        destroyOnClose
+        destroyOnHidden
       >
         {recordModal.loading && <Text type="secondary">Loading details...</Text>}
         {!recordModal.loading && recordModal.type === 'orders' && recordModal.data && (

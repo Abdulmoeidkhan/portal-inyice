@@ -3,7 +3,7 @@ import { Button, Card, DatePicker, Descriptions, Drawer, Form, Grid, Input, Moda
 import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { message } from '../services/feedback';
+import { dialog, message } from '../services/feedback';
 import { acquireEditLock, releaseEditLock } from '../services/editLocks';
 import { openRoute } from '../services/navigation';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
@@ -148,7 +148,7 @@ export default function OrderList() {
       : openOrderStatusOptions;
 
   const showLockAlert = (error, fallback = 'This order is currently locked for editing.') => {
-    Modal.warning({
+    dialog.warning({
       title: 'Order is being edited',
       content: error?.data?.message || error?.message || fallback,
     });
@@ -411,7 +411,7 @@ export default function OrderList() {
   };
 
   const duplicateOrder = (order) => {
-    Modal.confirm({
+    dialog.confirm({
       title: 'Duplicate this order?',
       content: `Create a new editable order copied from ${order.order_number}.`,
       okText: 'Duplicate',
@@ -775,7 +775,7 @@ export default function OrderList() {
         {editingOrder?.meta && <VoucherSummaryCard voucher={editingOrder.meta} />}
 
         <Card className="border-beam-aurora" style={{ marginBottom: 12 }}>
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={8} style={{ width: '100%' }}>
             <Text type="secondary">
               Use the full form to edit voucher header, passengers, flights, visa, hotel, transfer, tour, and service rows.
             </Text>
@@ -804,7 +804,7 @@ export default function OrderList() {
           setCancelPassword('');
         }}
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Text type="secondary">Enter your login password to confirm this cancellation.</Text>
           <Input.Password
             autoComplete="current-password"
@@ -824,9 +824,9 @@ export default function OrderList() {
         okButtonProps={{ disabled: !invoiceDate }}
         onOk={createInvoice}
         onCancel={closeInvoiceModal}
-        destroyOnClose
+        destroyOnHidden
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Text type="secondary">Choose the {invoiceOrder?.status === 'refund_request' ? 'refund' : 'invoice'} date used for invoice registers and reports.</Text>
           <DatePicker
             autoFocus

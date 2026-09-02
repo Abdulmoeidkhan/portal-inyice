@@ -60,7 +60,7 @@ export function CreateOrderCard({ form, loading, createdOrder, onCreateOrder, sh
                 filterOption={false}
                 onSearch={loadCustomers}
                 options={customerOptions}
-                dropdownRender={(menu) => (
+                popupRender={(menu) => (
                   <>
                     {menu}
                     <Button type="link" block onClick={() => setCustomerModalOpen(true)}>+ Add Customer</Button>

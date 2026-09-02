@@ -3,7 +3,7 @@ import { Affix, Alert, Button, Card, Collapse, DatePicker, Form, Input, InputNum
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { message } from '../services/feedback';
+import { dialog, message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 import { backToRoute, openRoute } from '../services/navigation';
@@ -277,7 +277,7 @@ export default function OrderEdit() {
       title: 'Invoice',
       dataIndex: 'invoice_number',
       render: (value, invoice) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{value}</Typography.Text>
           <Typography.Text type="secondary">{String(invoice.created_at || '').slice(0, 16).replace('T', ' ')}</Typography.Text>
         </Space>
@@ -582,11 +582,11 @@ export default function OrderEdit() {
       const data = await response.json();
 
       if (response.status === 409 && data?.requires_invoice_revision) {
-        Modal.confirm({
+        dialog.confirm({
           title: 'Cancel invoice and create new order?',
           icon: <ExclamationCircleOutlined />,
           content: (
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <span>
                 Invoice {data.invoice?.invoice_number || ''} will be cancelled and its amount will become 0.
               </span>
@@ -705,7 +705,7 @@ export default function OrderEdit() {
   return (
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
-        <Space direction="vertical" size={4} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={4} style={{ width: '100%' }}>
           <Button icon={<ArrowLeftOutlined />} onClick={backToOrders} style={{ width: 'fit-content' }}>
             Back to Orders
           </Button>
@@ -871,7 +871,7 @@ export default function OrderEdit() {
           setCancelPassword('');
         }}
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Text type="secondary">Enter your login password to confirm this cancellation.</Text>
           <Input.Password
             autoComplete="current-password"
@@ -891,9 +891,9 @@ export default function OrderEdit() {
         okButtonProps={{ disabled: !invoiceDate }}
         onOk={createInvoice}
         onCancel={closeInvoiceDateModal}
-        destroyOnClose
+        destroyOnHidden
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Text type="secondary">Choose the {isRefundRequestOrder ? 'refund' : 'invoice'} date used for invoice registers and reports.</Text>
           <DatePicker
             autoFocus

@@ -604,9 +604,8 @@ function AppCalculator({ open, onClose }) {
       onCancel={onClose}
       footer={null}
       width={380}
-      destroyOnClose={false}
+      destroyOnHidden={false}
       mask={false}
-      maskClosable={false}
       modalRender={(modal) => (
         <div
           ref={dragRef}
