@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { printDocument } from '../services/printDocument';
 import { backToRoute } from '../services/navigation';
+import OrderInternalNotes from '../components/OrderInternalNotes';
 import VoucherPreview from './sales-flow/VoucherPreview';
 
 const authHeaders = () => {
@@ -114,6 +115,7 @@ export default function VoucherDetail({ shared = false }) {
         </Button>
       </Space>
       <VoucherPreview order={order} />
+      {!shared && <OrderInternalNotes order={order} onOrderChange={setOrder} />}
     </div>
   );
 }

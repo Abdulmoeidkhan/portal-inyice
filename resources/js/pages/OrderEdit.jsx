@@ -7,6 +7,7 @@ import { dialog, message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services/editLocks';
 import { backToRoute, openRoute } from '../services/navigation';
+import OrderInternalNotes from '../components/OrderInternalNotes';
 import VoucherHeaderCard from './sales-flow/VoucherHeaderCard';
 import VoucherRowsSections from './sales-flow/VoucherRowsSections';
 import VoucherDiscountsCard from './sales-flow/VoucherDiscountsCard';
@@ -802,6 +803,11 @@ export default function OrderEdit() {
                   embedded
                 />
               ),
+            },
+            {
+              key: 'internal-notes',
+              label: 'Internal Notes',
+              children: <OrderInternalNotes order={order} onOrderChange={setOrder} />,
             },
             {
               key: 'invoice-history',

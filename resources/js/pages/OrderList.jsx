@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { dialog, message } from '../services/feedback';
 import { acquireEditLock, releaseEditLock } from '../services/editLocks';
 import { openRoute } from '../services/navigation';
+import OrderInternalNotes from '../components/OrderInternalNotes';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import Table from '../components/CsvTable';
 
@@ -695,6 +696,8 @@ export default function OrderList() {
                 <Descriptions.Item label="Notes">{selectedOrder.notes || '-'}</Descriptions.Item>
               </Descriptions>
 
+              <OrderInternalNotes order={selectedOrder} onOrderChange={setSelectedOrder} />
+
               <div>
                 <Title level={4}>Order Items</Title>
                 <Space orientation="vertical" style={{ width: '100%' }}>
@@ -773,6 +776,8 @@ export default function OrderList() {
         </Form>
 
         {editingOrder?.meta && <VoucherSummaryCard voucher={editingOrder.meta} />}
+
+        <OrderInternalNotes order={editingOrder} onOrderChange={setEditingOrder} />
 
         <Card className="border-beam-aurora" style={{ marginBottom: 12 }}>
           <Space orientation="vertical" size={8} style={{ width: '100%' }}>

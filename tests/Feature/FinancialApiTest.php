@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceDiscount;
 use App\Models\Order;
+use App\Models\OrderInternalNote;
 use App\Models\OrderItem;
 use App\Models\OrderVendorCost;
 use App\Models\Payment;
@@ -23,6 +24,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use LogicException;
 use Tests\TestCase;
 
 class FinancialApiTest extends TestCase
@@ -1726,6 +1728,63 @@ class FinancialApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('uid', $ctx['order']->uid)
             ->assertJsonPath('order_number', $ctx['order']->order_number);
+    }
+
+    public function test_order_internal_notes_are_append_only_and_hidden_from_shared_voucher(): void
+    {
+        $ctx = $this->seedTenantContext();
+
+        $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/internal-notes', [
+            'body' => 'Call vendor before ticketing.',
+        ])->assertCreated()
+            ->assertJsonPath('note.body', 'Call vendor before ticketing.')
+            ->assertJsonPath('note.user.name', 'API Tester');
+
+        $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/internal-notes', [
+            'body' => 'Customer asked for aisle seats.',
+        ])->assertCreated()
+            ->assertJsonPath('note.body', 'Customer asked for aisle seats.');
+
+        $this->getJson('/api/v1/orders/' . $ctx['order']->uid)
+            ->assertOk()
+            ->assertJsonPath('internal_notes.0.body', 'Call vendor before ticketing.')
+            ->assertJsonPath('internal_notes.1.body', 'Customer asked for aisle seats.');
+
+        $this->assertDatabaseHas('order_internal_notes', [
+            'order_id' => $ctx['order']->id,
+            'body' => 'Call vendor before ticketing.',
+        ]);
+
+        $firstNote = OrderInternalNote::where('order_id', $ctx['order']->id)->orderBy('id')->firstOrFail();
+
+        try {
+            $firstNote->update(['body' => 'Changed note text']);
+            $this->fail('Internal notes should not be editable.');
+        } catch (LogicException) {
+            $this->assertSame('Call vendor before ticketing.', $firstNote->refresh()->body);
+        }
+
+        try {
+            $firstNote->delete();
+            $this->fail('Internal notes should not be deletable.');
+        } catch (LogicException) {
+            $this->assertDatabaseHas('order_internal_notes', [
+                'uid' => $firstNote->uid,
+                'body' => 'Call vendor before ticketing.',
+            ]);
+        }
+
+        $share = $this->postJson('/api/v1/orders/' . $ctx['order']->uid . '/share')
+            ->assertOk()
+            ->json();
+
+        auth()->guard('sanctum')->forgetUser();
+        auth()->forgetGuards();
+
+        $this->getJson('/api/v1/shared-vouchers/' . $share['share_token'])
+            ->assertOk()
+            ->assertJsonMissingPath('internal_notes')
+            ->assertJsonMissing(['body' => 'Call vendor before ticketing.']);
     }
 
     public function test_reference_search_finds_orders_invoices_and_voucher_metadata(): void

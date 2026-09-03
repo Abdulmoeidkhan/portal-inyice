@@ -165,6 +165,11 @@ class Order extends Model
         return $this->hasMany(OrderStatusHistory::class)->orderByDesc('created_at');
     }
 
+    public function internalNotes(): HasMany
+    {
+        return $this->hasMany(OrderInternalNote::class)->orderBy('created_at')->orderBy('id');
+    }
+
     public function vendorPaymentAllocations(): HasMany
     {
         return $this->hasMany(VendorPaymentAllocation::class);

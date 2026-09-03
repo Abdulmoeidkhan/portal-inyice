@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\OrderInternalNote;
 use App\Models\OrderItem;
 use App\Models\OrderVendorCost;
 use App\Models\User;
@@ -456,13 +457,59 @@ class OrderController extends Controller
 
     public function show(string $uid, Request $request): JsonResponse
     {
+        $user = $request->user();
+        $relations = ['customer', 'vendor', 'items', 'gdsParsedRecord', 'company', 'invoices.lines'];
+
+        if ($this->canUseInternalNotes($user)) {
+            $relations[] = 'internalNotes.user:id,uid,name,email';
+        }
+
         $order = Order::where('tenant_id', $request->user()->tenant_id)
             ->where('company_id', $request->user()->company_id)
             ->where('uid', $uid)
-            ->with(['customer', 'vendor', 'items', 'gdsParsedRecord', 'company', 'invoices.lines'])
+            ->with($relations)
             ->firstOrFail();
 
-        return response()->json($this->orderForUser($order, $request->user()));
+        return response()->json($this->orderForUser($order, $user));
+    }
+
+    public function storeInternalNote(string $uid, Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$this->canUseInternalNotes($user)) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'body' => 'required|string|max:5000',
+        ]);
+        $body = trim($validated['body']);
+
+        if ($body === '') {
+            throw ValidationException::withMessages([
+                'body' => ['Internal note cannot be empty.'],
+            ]);
+        }
+
+        $order = Order::where('tenant_id', $user->tenant_id)
+            ->where('company_id', $user->company_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+
+        $note = $order->internalNotes()->create([
+            'uid' => (string) Str::ulid(),
+            'tenant_id' => $order->tenant_id,
+            'user_id' => $user->id,
+            'body' => $body,
+            'created_at' => now(),
+        ]);
+        $note->load('user:id,uid,name,email');
+
+        return response()->json([
+            'success' => true,
+            'note' => $this->serializeInternalNote($note),
+        ], 201);
     }
 
     public function share(string $uid, Request $request): JsonResponse
@@ -1769,7 +1816,7 @@ class OrderController extends Controller
     private function orderForUser(Order $order, $user): array
     {
         if (!$this->shouldHideCostProfit($user)) {
-            return $this->normalizeResponseText($order->toArray());
+            return $this->serializeOrderForUser($order);
         }
 
         $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
@@ -1781,7 +1828,7 @@ class OrderController extends Controller
             });
         }
 
-        return $this->normalizeResponseText($order->toArray());
+        return $this->serializeOrderForUser($order);
     }
 
     private function voucherForUserWrite(array $voucher, ?array $existingMeta, $user): array
@@ -1896,6 +1943,39 @@ class OrderController extends Controller
     private function isSalesStaff($user): bool
     {
         return $user?->hasRole('sales') === true;
+    }
+
+    private function canUseInternalNotes($user): bool
+    {
+        return $user?->hasAnyRole(['admin', 'sales', 'accounts']) === true;
+    }
+
+    private function serializeOrderForUser(Order $order): array
+    {
+        $payload = $order->toArray();
+
+        if ($order->relationLoaded('internalNotes')) {
+            $payload['internal_notes'] = $order->internalNotes
+                ->map(fn (OrderInternalNote $note): array => $this->serializeInternalNote($note))
+                ->values()
+                ->all();
+        }
+
+        return $this->normalizeResponseText($payload);
+    }
+
+    private function serializeInternalNote(OrderInternalNote $note): array
+    {
+        return $this->normalizeResponseText([
+            'uid' => $note->uid,
+            'body' => $note->body,
+            'created_at' => $note->created_at?->toJSON(),
+            'user' => $note->user ? [
+                'uid' => $note->user->uid,
+                'name' => $note->user->name,
+                'email' => $note->user->email,
+            ] : null,
+        ]);
     }
 
     private function shouldHideCostProfit($user): bool

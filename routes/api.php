@@ -102,6 +102,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::post('/{uid}/refund-request', 'createRefundRequest')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.refundRequest');
         Route::post('/{uid}/recreate', 'recreateCancelled')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.recreateCancelled');
         Route::get('/{uid}', 'show')->name('orders.show');
+        Route::post('/{uid}/internal-notes', 'storeInternalNote')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.internalNotes.create');
         Route::patch('/{uid}', 'update')->middleware(['role:admin,sales,accounts', 'throttle:sensitive-write'])->name('orders.update');
         Route::delete('/{uid}', 'destroy')->middleware(['role:admin', 'throttle:sensitive-write'])->name('orders.destroy');
         Route::post('/parse-gds', 'parseGds')->middleware(['role:admin,sales', 'throttle:sensitive-write'])->name('orders.parseGds');
