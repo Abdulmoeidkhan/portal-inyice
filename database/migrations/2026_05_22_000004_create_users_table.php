@@ -31,6 +31,7 @@ return new class extends Migration
             $table->index('tenant_id');
             $table->index('company_id');
             $table->index('role_id');
+            $table->index('email_verified_at');
             $table->unique(['tenant_id', 'uid']);
 
             // Constraints
