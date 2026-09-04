@@ -25,6 +25,10 @@ Route::get('/registration/currencies', [RegistrationController::class, 'getCurre
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:signin')->name('password.email');
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:signin')->name('password.update');
+Route::post('/auth/email/verification-notification', [AuthController::class, 'resendVerificationEmail'])->middleware('throttle:signin')->name('verification.send');
+Route::get('/auth/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->middleware(['signed', 'throttle:public-api'])->name('verification.verify');
 Route::get('/shared-invoices/{token}', [InvoiceController::class, 'shared'])
     ->middleware('throttle:public-api')
     ->name('sharedInvoices.show');

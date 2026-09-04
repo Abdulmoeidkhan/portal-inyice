@@ -12,8 +12,10 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Notifications\WelcomeVerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -132,6 +134,8 @@ class InternalPortalApiTest extends TestCase
 
     public function test_super_admin_can_create_internal_staff(): void
     {
+        Notification::fake();
+
         $ctx = $this->seedInternalContext('super-admin');
         Sanctum::actingAs($ctx['user']);
 
@@ -146,6 +150,9 @@ class InternalPortalApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('user.email', 'support-agent@inyice.local')
             ->assertJsonPath('user.role', 'support-executive');
+
+        $staff = User::where('email', 'support-agent@inyice.local')->firstOrFail();
+        Notification::assertSentTo($staff, WelcomeVerifyEmail::class);
     }
 
     public function test_system_user_login_identifies_internal_portal_access(): void
@@ -270,6 +277,7 @@ class InternalPortalApiTest extends TestCase
             'name' => 'Internal User',
             'email' => 'internal-' . fake()->unique()->safeEmail(),
             'password' => 'password123',
+            'email_verified_at' => now(),
             'is_active' => true,
         ]);
 

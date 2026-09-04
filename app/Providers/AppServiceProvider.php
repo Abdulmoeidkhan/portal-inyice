@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -29,6 +31,13 @@ class AppServiceProvider extends ServiceProvider
         if ((bool) env('FORCE_HTTPS', false)) {
             URL::forceScheme('https');
         }
+
+        ResetPassword::createUrlUsing(function (User $user, string $token): string {
+            return URL::to('/reset-password?'.http_build_query([
+                'token' => $token,
+                'email' => $user->getEmailForPasswordReset(),
+            ]));
+        });
 
         RateLimiter::for('api', function (Request $request) {
             $userKey = $request->user()?->getAuthIdentifier();

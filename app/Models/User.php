@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\WelcomeVerifyEmail;
+use App\Traits\TenantAware;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,14 +13,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Traits\TenantAware;
+use Throwable;
 
-#[Fillable(['tenant_id', 'company_id', 'role_id', 'uid', 'name', 'email', 'password', 'auth_provider', 'auth_provider_id', 'is_active'])]
+#[Fillable(['tenant_id', 'company_id', 'role_id', 'uid', 'name', 'email', 'password', 'auth_provider', 'auth_provider_id', 'email_verified_at', 'is_active'])]
 #[Hidden(['password'])]
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmailContract
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, HasApiTokens, TenantAware;
+
+    protected static function booted(): void
+    {
+        static::created(function (User $user): void {
+            if ($user->hasVerifiedEmail() || !$user->email) {
+                return;
+            }
+
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -105,5 +122,10 @@ class User extends Authenticatable
     public function isSystemUser(): bool
     {
         return $this->role?->is_system === true;
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new WelcomeVerifyEmail);
     }
 }

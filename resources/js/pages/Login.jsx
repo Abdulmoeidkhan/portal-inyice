@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { App as AntdApp, Form, Input, Button, Card, Checkbox, Divider, Typography, Space } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useNavigate, Link } from 'react-router-dom';
+import { KeyOutlined, LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const { Title, Paragraph } = Typography;
 
@@ -9,7 +9,35 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const { message, modal } = AntdApp.useApp();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('verified') === '1') {
+      message.success('Email verified. You can sign in now.');
+    }
+  }, [location.search, message]);
+
+  const resendVerificationEmail = async (email) => {
+    const response = await fetch('/api/v1/auth/email/verification-notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Unable to send verification email');
+    }
+
+    message.success(data.message || 'Verification email sent');
+  };
 
   const submitLogin = async (values, forceLogout = false) => {
     setLoading(true);
@@ -38,6 +66,18 @@ export default function Login({ onLoginSuccess }) {
             cancelText: 'Cancel',
             cancelButtonProps: { danger: true },
             onOk: () => submitLogin(values, true),
+          });
+          return;
+        }
+
+        if (response.status === 403 && error.email_unverified) {
+          setLoading(false);
+          modal.confirm({
+            title: 'Verify your email',
+            content: error.error || 'Please verify your email address before signing in.',
+            okText: 'Resend email',
+            cancelText: 'Close',
+            onOk: () => resendVerificationEmail(values.email),
           });
           return;
         }
@@ -121,7 +161,12 @@ export default function Login({ onLoginSuccess }) {
               </Form.Item>
 
               <Form.Item name="remember" valuePropName="checked">
-                <Checkbox>Remember me</Checkbox>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                  <Checkbox>Remember me</Checkbox>
+                  <Button type="link" size="small" icon={<KeyOutlined />} onClick={() => navigate('/forgot-password')}>
+                    Forgot password
+                  </Button>
+                </div>
               </Form.Item>
 
               <Button
@@ -144,6 +189,7 @@ export default function Login({ onLoginSuccess }) {
                 type="default"
                 size="large"
                 block
+                icon={<MailOutlined />}
                 onClick={() => navigate('/register')}
               >
                 Register Your Agency

@@ -111,12 +111,13 @@ class RegistrationController extends Controller
                     'is_active' => true,
                 ]);
 
-                // Create API token
+                // Create API token for first-time agency owner onboarding.
                 $token = $user->createToken('web')->plainTextToken;
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Agency registered successfully',
+                    'message' => 'Agency registered successfully. A welcome verification email has been sent.',
+                    'email_verification_required' => true,
                     'token' => $token,
                     'user' => [
                         'id' => $user->id,

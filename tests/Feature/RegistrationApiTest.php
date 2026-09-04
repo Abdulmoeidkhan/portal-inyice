@@ -6,7 +6,9 @@ use App\Models\Company;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\WelcomeVerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -48,6 +50,8 @@ class RegistrationApiTest extends TestCase
 
     public function test_it_registers_new_agency_with_admin_and_default_cash_account(): void
     {
+        Notification::fake();
+
         $payload = [
             'agency_code' => 'herd001',
             'agency_name' => 'HERD Travel',
@@ -67,7 +71,9 @@ class RegistrationApiTest extends TestCase
 
         $response->assertCreated();
         $response->assertJsonPath('success', true);
+        $response->assertJsonPath('email_verification_required', true);
         $response->assertJsonPath('user.email', 'owner@herd.test');
+        $this->assertNotEmpty($response->json('token'));
 
         $this->assertDatabaseHas('tenants', [
             'code' => 'HERD001',
@@ -97,6 +103,7 @@ class RegistrationApiTest extends TestCase
             'company_id' => $company->id,
             'email' => 'owner@herd.test',
             'name' => 'Agency Owner',
+            'email_verified_at' => null,
         ]);
 
         $this->assertDatabaseHas('cash_accounts', [
@@ -107,6 +114,9 @@ class RegistrationApiTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('personal_access_tokens', 1);
+
+        $owner = User::where('email', 'owner@herd.test')->firstOrFail();
+        Notification::assertSentTo($owner, WelcomeVerifyEmail::class);
     }
 
     public function test_registration_validates_required_payload(): void
@@ -170,6 +180,7 @@ class RegistrationApiTest extends TestCase
             'name' => 'Auth User',
             'email' => 'auth-user@test.local',
             'password' => 'password123',
+            'email_verified_at' => now(),
             'is_active' => true,
         ]);
 

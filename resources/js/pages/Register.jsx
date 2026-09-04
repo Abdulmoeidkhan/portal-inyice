@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Steps, Form, Input, Select, Button, Card, Alert, Typography, Space, theme } from 'antd';
 import { message } from '../services/feedback';
-import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Paragraph, Text } = Typography;
+
+async function readJsonResponse(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text().catch(() => '');
+  const returnedHtml = text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html');
+
+  if (returnedHtml) {
+    throw new Error('Server returned an HTML page instead of JSON. Make sure the Laravel app is serving /api or the Vite API proxy is running.');
+  }
+
+  throw new Error(fallbackMessage);
+}
 
 const steps = [
   {
@@ -117,29 +134,63 @@ export default function Register({ onRegistered }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify(data),
       });
 
+      const result = await readJsonResponse(response, 'Registration failed');
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Registration failed');
+        const validationError = result?.errors ? Object.values(result.errors).flat().join(' ') : null;
+        throw new Error(validationError || result.error || result.message || 'Registration failed');
       }
 
-      const result = await response.json();
       setRegistered(result);
       setCurrent(3);
 
-      // Auto-redirect after 3 seconds
       setTimeout(() => {
-        localStorage.setItem('auth_token', result.token);
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('user', JSON.stringify(result.user));
-        onRegistered?.();
-        navigate('/');
+        finishRegistration(result);
       }, 3000);
     } catch (error) {
       message.error('Registration failed: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const finishRegistration = (result = registered) => {
+    if (!result?.token) return;
+
+    localStorage.setItem('auth_token', result.token);
+    localStorage.setItem('token', result.token);
+    localStorage.setItem('user', JSON.stringify(result.user));
+    onRegistered?.(result.user);
+    navigate('/');
+  };
+
+  const resendVerificationEmail = async () => {
+    if (!registered?.user?.email) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/v1/auth/email/verification-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ email: registered.user.email }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Unable to resend verification email');
+      }
+
+      message.success(data.message || 'Verification email sent');
+    } catch (error) {
+      message.error(error.message || 'Unable to resend verification email');
     } finally {
       setLoading(false);
     }
@@ -318,7 +369,7 @@ export default function Register({ onRegistered }) {
               Welcome to <strong>{registered.user.company_name}</strong>
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 30 }}>
-              Redirecting to dashboard in 3 seconds...
+              We sent a welcome email with a verification link. Redirecting to your workspace in 3 seconds.
             </Paragraph>
 
             <div className="elevated-card" style={{ textAlign: 'left', marginBottom: 20 }}>
@@ -329,9 +380,14 @@ export default function Register({ onRegistered }) {
               </Space>
             </div>
 
-            <Button type="primary" size="large" onClick={() => navigate('/')}>
-              Go to Dashboard Now
-            </Button>
+            <Space wrap style={{ justifyContent: 'center' }}>
+              <Button type="primary" size="large" icon={<UserOutlined />} onClick={() => finishRegistration()}>
+                Go to Dashboard Now
+              </Button>
+              <Button size="large" icon={<MailOutlined />} loading={loading} onClick={resendVerificationEmail}>
+                Resend Email
+              </Button>
+            </Space>
           </div>
         )}
 

@@ -11,7 +11,12 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Notifications\WelcomeVerifyEmail;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -67,6 +72,71 @@ class AuthSecurityApiTest extends TestCase
         $this->withHeader('Authorization', 'Bearer ' . $forcedLogin->json('token'))
             ->getJson('/api/v1/user')
             ->assertOk();
+    }
+
+    public function test_signin_requires_verified_email_and_can_resend_verification_email(): void
+    {
+        Notification::fake();
+
+        $ctx = $this->seedContext('admin', false);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $ctx['user']->email,
+            'password' => 'password123',
+        ])->assertStatus(403)
+            ->assertJsonPath('email_unverified', true);
+
+        $this->postJson('/api/v1/auth/email/verification-notification', [
+            'email' => $ctx['user']->email,
+        ])->assertOk()
+            ->assertJsonPath('success', true);
+
+        Notification::assertSentTo($ctx['user'], WelcomeVerifyEmail::class);
+    }
+
+    public function test_signed_email_verification_link_marks_user_verified(): void
+    {
+        Notification::fake();
+
+        $ctx = $this->seedContext('admin', false);
+
+        $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(30), [
+            'id' => $ctx['user']->id,
+            'hash' => sha1($ctx['user']->email),
+        ]);
+
+        $this->get($url)->assertRedirect('/login?verified=1');
+
+        $this->assertNotNull($ctx['user']->fresh()->email_verified_at);
+    }
+
+    public function test_active_user_can_request_and_complete_password_reset(): void
+    {
+        Notification::fake();
+
+        $ctx = $this->seedContext('admin');
+        $token = null;
+
+        $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => $ctx['user']->email,
+        ])->assertOk()
+            ->assertJsonPath('success', true);
+
+        Notification::assertSentTo($ctx['user'], ResetPassword::class, function (ResetPassword $notification) use (&$token) {
+            $token = $notification->token;
+
+            return is_string($token) && $token !== '';
+        });
+
+        $this->postJson('/api/v1/auth/reset-password', [
+            'token' => $token,
+            'email' => $ctx['user']->email,
+            'password' => 'new-password123',
+            'password_confirmation' => 'new-password123',
+        ])->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertTrue(Hash::check('new-password123', $ctx['user']->fresh()->password));
     }
 
     public function test_authenticated_user_can_update_profile_name(): void
@@ -185,6 +255,7 @@ class AuthSecurityApiTest extends TestCase
                 'passengers' => [],
                 'pricing' => [[
                     'pax_name' => 'Cost Tester',
+                    'vendor_id' => $ctx['vendor']->id,
                     'flight_cost' => 500,
                     'flight_profit' => 250,
                     'flight_sales' => 750,
@@ -299,7 +370,7 @@ class AuthSecurityApiTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function seedContext(string $roleCode): array
+    private function seedContext(string $roleCode, bool $verified = true): array
     {
         $tenant = Tenant::create([
             'uid' => (string) Str::ulid(),
@@ -337,6 +408,7 @@ class AuthSecurityApiTest extends TestCase
             'name' => 'Security User',
             'email' => 'user-' . fake()->unique()->safeEmail(),
             'password' => 'password123',
+            'email_verified_at' => $verified ? now() : null,
             'is_active' => true,
         ]);
 

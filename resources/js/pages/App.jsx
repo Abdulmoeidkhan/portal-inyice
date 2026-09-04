@@ -55,6 +55,8 @@ import QuotationDetail from './QuotationDetail';
 import CounterpartyTransaction from './CounterpartyTransaction';
 import Login from './Login';
 import Register from './Register';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 import Dashboard from './Dashboard';
 import CompanyProfile from './CompanyProfile';
 import CompanyUsers from './CompanyUsers';
@@ -144,6 +146,9 @@ function isProtectedApiRequest(input) {
   return path.startsWith('/api/v1/')
     && !path.startsWith('/api/v1/auth/login')
     && !path.startsWith('/api/v1/auth/logout')
+    && !path.startsWith('/api/v1/auth/forgot-password')
+    && !path.startsWith('/api/v1/auth/reset-password')
+    && !path.startsWith('/api/v1/auth/email/')
     && !path.startsWith('/api/v1/shared-');
 }
 
@@ -1303,6 +1308,8 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -1326,6 +1333,8 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
         <Route path="/login" element={<Navigate to="/internal" replace />} />
         <Route path="/register" element={<Navigate to="/internal" replace />} />
+        <Route path="/forgot-password" element={<Navigate to="/internal" replace />} />
+        <Route path="/reset-password" element={<Navigate to="/internal" replace />} />
         <Route path="/" element={<Navigate to="/internal" replace />} />
         <Route path="/internal/*" element={internalPortal} />
         <Route path="*" element={<Navigate to="/internal" replace />} />
@@ -1340,6 +1349,8 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
+      <Route path="/forgot-password" element={<Navigate to="/" replace />} />
+      <Route path="/reset-password" element={<Navigate to="/" replace />} />
       <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} offline={offline} />} />
     </Routes>
   );

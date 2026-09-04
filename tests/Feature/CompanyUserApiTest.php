@@ -6,7 +6,9 @@ use App\Models\Company;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\WelcomeVerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -17,6 +19,8 @@ class CompanyUserApiTest extends TestCase
 
     public function test_owner_can_create_company_users_until_one_extra_seat_is_used(): void
     {
+        Notification::fake();
+
         $ctx = $this->seedCompanyContext('owner');
         Sanctum::actingAs($ctx['user']);
 
@@ -33,6 +37,9 @@ class CompanyUserApiTest extends TestCase
             ->assertJsonPath('user.role', 'sales')
             ->assertJsonPath('limits.max', 2)
             ->assertJsonPath('limits.remaining', 0);
+
+        $salesAgent = User::where('email', 'sales-agent@test.local')->firstOrFail();
+        Notification::assertSentTo($salesAgent, WelcomeVerifyEmail::class);
 
         $blocked = $this->postJson('/api/v1/company-users', [
             'name' => 'Extra User',
@@ -149,6 +156,7 @@ class CompanyUserApiTest extends TestCase
             'name' => 'Company User Manager',
             'email' => 'manager-' . fake()->unique()->safeEmail(),
             'password' => 'password123',
+            'email_verified_at' => now(),
             'is_active' => true,
         ]);
 
