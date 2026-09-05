@@ -53,7 +53,6 @@ class RegistrationApiTest extends TestCase
         Notification::fake();
 
         $payload = [
-            'agency_code' => 'herd001',
             'agency_name' => 'HERD Travel',
             'company_legal_name' => 'HERD Travel Private Limited',
             'company_email' => 'info@herd.test',
@@ -75,12 +74,8 @@ class RegistrationApiTest extends TestCase
         $response->assertJsonPath('user.email', 'owner@herd.test');
         $this->assertNotEmpty($response->json('token'));
 
-        $this->assertDatabaseHas('tenants', [
-            'code' => 'HERD001',
-            'name' => 'HERD Travel',
-        ]);
-
-        $tenant = Tenant::where('code', 'HERD001')->firstOrFail();
+        $tenant = Tenant::where('name', 'HERD Travel')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^AG[0-9A-Z]{26}$/', $tenant->code);
 
         $this->assertDatabaseHas('companies', [
             'tenant_id' => $tenant->id,
@@ -125,7 +120,6 @@ class RegistrationApiTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors([
-            'agency_code',
             'agency_name',
             'company_legal_name',
             'company_email',

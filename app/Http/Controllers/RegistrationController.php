@@ -18,15 +18,8 @@ class RegistrationController extends Controller
      */
     public function register(Request $request)
     {
-        if ($request->has('agency_code')) {
-            $request->merge([
-                'agency_code' => Str::upper(trim((string) $request->input('agency_code'))),
-            ]);
-        }
-
         $validated = $request->validate([
             // Tenant info
-            'agency_code' => 'required|string|max:50|regex:/^[A-Z0-9]+$/|unique:tenants,code',
             'agency_name' => 'required|string|max:200',
             
             // Company info
@@ -48,7 +41,7 @@ class RegistrationController extends Controller
                 // Create tenant
                 $tenant = Tenant::create([
                     'uid' => (string) Str::ulid(),
-                    'code' => $validated['agency_code'],
+                    'code' => 'AG' . Str::ulid(),
                     'name' => $validated['agency_name'],
                     'is_active' => true,
                 ]);

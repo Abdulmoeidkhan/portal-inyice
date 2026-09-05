@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Steps, Form, Input, Select, Button, Card, Alert, Typography, Space, theme } from 'antd';
+import { Steps, Form, Input, Select, Button, Card, Typography, Space, theme } from 'antd';
 import { message } from '../services/feedback';
 import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -48,13 +48,10 @@ export default function Register({ onRegistered }) {
   const [currencies, setCurrencies] = useState([]);
   const [timezones, setTimezones] = useState([]);
   const [formData, setFormData] = useState({});
-  const [agencyCodeAvailable, setAgencyCodeAvailable] = useState(null);
   const [registered, setRegistered] = useState(null);
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const { token: themeToken } = theme.useToken();
-
-  const normalizeAgencyCode = (value = '') => value.toUpperCase();
 
   useEffect(() => {
     fetchCurrenciesAndTimezones();
@@ -79,37 +76,6 @@ export default function Register({ onRegistered }) {
     } catch {
       message.warning('Could not load registration options. Please refresh and try again.');
     }
-  };
-
-  const checkAgencyCode = async (value) => {
-    const code = normalizeAgencyCode(value).trim();
-
-    if (!/^[A-Z0-9]{3,}$/.test(code)) {
-      setAgencyCodeAvailable(null);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/v1/registration/check-code?code=${encodeURIComponent(code)}`);
-      const data = await response.json();
-
-      if (normalizeAgencyCode(form.getFieldValue('agency_code')).trim() === code) {
-        setAgencyCodeAvailable(data.available);
-      }
-    } catch {
-      setAgencyCodeAvailable(null);
-    }
-  };
-
-  const handleAgencyCodeChange = (event) => {
-    const value = normalizeAgencyCode(event.target.value);
-
-    if (value !== event.target.value) {
-      form.setFieldsValue({ agency_code: value });
-    }
-
-    setAgencyCodeAvailable(null);
-    checkAgencyCode(value);
   };
 
   const handleNext = async () => {
@@ -214,25 +180,6 @@ export default function Register({ onRegistered }) {
         {current === 0 && (
           <Form layout="vertical" form={form} className="stagger-1">
             <Title level={4}>Agency Information</Title>
-            <Form.Item
-              label="Agency Code"
-              name="agency_code"
-              rules={[
-                { required: true, message: 'Please enter agency code' },
-                { pattern: /^[A-Z0-9]+$/, message: 'Code must be uppercase alphanumeric' },
-                { min: 3, message: 'Code must be at least 3 characters' },
-              ]}
-            >
-              <Input placeholder="e.g., MYAGENCY, TRAVEL123" onChange={handleAgencyCodeChange} />
-            </Form.Item>
-            {agencyCodeAvailable !== null && (
-              <Alert
-                type={agencyCodeAvailable ? 'success' : 'error'}
-                message={agencyCodeAvailable ? 'Code available!' : 'Code already taken'}
-                style={{ marginBottom: 15 }}
-              />
-            )}
-
             <Form.Item
               label="Agency Name"
               name="agency_name"
@@ -401,7 +348,6 @@ export default function Register({ onRegistered }) {
               type="primary"
               loading={loading}
               onClick={handleNext}
-              disabled={current === 0 && agencyCodeAvailable === false}
             >
               {current === 2 ? 'Register' : 'Next'}
             </Button>

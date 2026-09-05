@@ -25,7 +25,7 @@ class InternalPortalController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = Company::withoutGlobalScopes()
-            ->with('tenant:id,name,code')
+            ->with(['tenant:id,name,code,created_at', 'users.role:id,code'])
             ->withCount([
                 'users',
                 'customers',
@@ -58,7 +58,7 @@ class InternalPortalController extends Controller
     {
         $company = Company::withoutGlobalScopes()
             ->with([
-                'tenant:id,name,code,is_active',
+                'tenant:id,name,code,is_active,created_at',
                 'users.role:id,code,name,is_system',
             ])
             ->whereHas('tenant', fn ($tenant) => $tenant->where('code', '!=', 'INYICE'))
@@ -339,6 +339,11 @@ class InternalPortalController extends Controller
 
     private function serializeCompanySummary(Company $company): array
     {
+        $company->loadMissing(['tenant', 'users.role']);
+        // Older agencies have an owner role; new registrations use admin.
+        $admins = $company->users->sortBy('id');
+        $owner = $admins->first(fn (User $user) => $user->role?->code === 'owner')
+            ?? $admins->first(fn (User $user) => $user->role?->code === 'admin');
         $today = now();
         $monthStart = $today->copy()->startOfMonth()->toDateString();
         $monthEnd = $today->copy()->endOfMonth()->toDateString();
@@ -355,6 +360,9 @@ class InternalPortalController extends Controller
             'tenant' => $company->tenant?->only(['id', 'name', 'code']),
             'legal_name' => $company->legal_name,
             'display_name' => $company->display_name,
+            'registered_at' => $company->tenant?->created_at?->toISOString(),
+            'owner_email' => $owner?->email,
+            'owner_email_verified' => $owner ? $owner->hasVerifiedEmail() : null,
             'email' => $company->email,
             'phone' => $company->phone,
             'base_currency_code' => $company->base_currency_code,

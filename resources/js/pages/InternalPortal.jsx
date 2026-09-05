@@ -453,6 +453,12 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
         <Space className="internal-company-name-cell" orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           <Text type="secondary">{company.tenant?.name || '-'}</Text>
+          <Text type="secondary">Registered: {company.registered_at ? dateOnly(company.registered_at) : '-'}</Text>
+          <Tooltip title={company.owner_email || 'No owner account found'}>
+            <Tag color={company.owner_email_verified === null ? 'default' : company.owner_email_verified ? 'success' : 'warning'}>
+              {company.owner_email_verified === null ? 'No owner' : company.owner_email_verified ? 'Owner email verified' : 'Owner email unverified'}
+            </Tag>
+          </Tooltip>
         </Space>
       ),
     },
@@ -684,6 +690,8 @@ export default function InternalPortal({ onLogout, themeMode, themeStyle, onChan
                           items={[
                             { key: 'tenant', label: 'Tenant', children: `${detail.tenant?.name || '-'} (${detail.tenant?.code || '-'})` },
                             { key: 'email', label: 'Email', children: detail.email || '-' },
+                            { key: 'registered', label: 'Registration date', children: detail.registered_at ? dateOnly(detail.registered_at) : '-' },
+                            { key: 'owner-email', label: 'Owner email', children: <Space wrap><Text>{detail.owner_email || '-'}</Text><Tag color={detail.owner_email_verified === null ? 'default' : detail.owner_email_verified ? 'success' : 'warning'}>{detail.owner_email_verified === null ? 'No owner' : detail.owner_email_verified ? 'Verified' : 'Unverified'}</Tag></Space> },
                             { key: 'phone', label: 'Phone', children: detail.phone || '-' },
                             { key: 'currency', label: 'Currency', children: detail.base_currency_code },
                             { key: 'status', label: 'Status', children: <Tag color={detail.is_active ? 'success' : 'default'}>{detail.is_active ? 'Active' : 'Inactive'}</Tag> },

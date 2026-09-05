@@ -24,6 +24,34 @@ class InternalPortalApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_agency_registration_date_and_owner_verification_are_visible(): void
+    {
+        Notification::fake();
+        $ctx = $this->seedInternalContext('support-executive');
+        $company = $this->seedCustomerCompany();
+        $role = Role::create([
+            'uid' => (string) Str::ulid(), 'tenant_id' => $company->tenant_id,
+            'code' => 'admin', 'name' => 'Admin', 'is_system' => false,
+        ]);
+        $owner = User::create([
+            'uid' => (string) Str::ulid(), 'tenant_id' => $company->tenant_id,
+            'company_id' => $company->id, 'role_id' => $role->id,
+            'name' => 'Agency Owner', 'email' => 'agency-owner@test.local',
+            'password' => 'password123', 'email_verified_at' => null,
+        ]);
+        Sanctum::actingAs($ctx['user']);
+
+        $this->getJson('/api/v1/internal/companies')->assertOk()
+            ->assertJsonPath('companies.0.registered_at', $company->tenant->created_at->toISOString())
+            ->assertJsonPath('companies.0.owner_email', $owner->email)
+            ->assertJsonPath('companies.0.owner_email_verified', false);
+
+        $owner->markEmailAsVerified();
+        $this->getJson('/api/v1/internal/companies/' . $company->uid)->assertOk()
+            ->assertJsonPath('company.owner_email', $owner->email)
+            ->assertJsonPath('company.owner_email_verified', true);
+    }
+
     public function test_support_executive_can_view_companies_and_update_limits_without_creating_staff(): void
     {
         $ctx = $this->seedInternalContext('support-executive');
