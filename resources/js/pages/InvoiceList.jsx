@@ -600,10 +600,6 @@ export default function InvoiceList() {
   };
 
   const renderInvoiceActions = (invoice, { showLabels = !compactActions } = {}) => {
-    if (!canEditInvoices) {
-      return <Text type="secondary">-</Text>;
-    }
-
     return (
       <Space className={showLabels ? 'mobile-detail-actions' : undefined} size={compactActions ? 6 : 8} wrap={showLabels}>
         <Button size="small" type="primary" icon={<FileTextOutlined />} loading={actionLoadingKey === `${invoice.uid}:invoice`} onClick={(event) => openInvoiceDocument(invoice, false, event)}>
@@ -613,15 +609,20 @@ export default function InvoiceList() {
           {showLabels ? 'Detailed' : null}
         </Button>
         {!invoice.is_refund_order && invoice.order?.uid && (
+          <Button size="small" icon={<FileSearchOutlined />} onClick={(event) => openRoute(navigate, `/orders/${invoice.order.uid}/quotation`, event)}>
+            {showLabels ? 'Quotation' : null}
+          </Button>
+        )}
+        {!invoice.is_refund_order && invoice.order?.uid && (
           <Button size="small" icon={<FileSearchOutlined />} onClick={(event) => openRoute(navigate, `/orders/${invoice.order.uid}/voucher`, event)}>
             {showLabels ? 'Voucher' : null}
           </Button>
         )}
-        <Dropdown menu={{ items: invoiceActionItems(invoice) }} trigger={['click']}>
+        {canEditInvoices && <Dropdown menu={{ items: invoiceActionItems(invoice) }} trigger={['click']}>
           <Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>
             {showLabels ? 'Actions' : null}
           </Button>
-        </Dropdown>
+        </Dropdown>}
       </Space>
     );
   };
