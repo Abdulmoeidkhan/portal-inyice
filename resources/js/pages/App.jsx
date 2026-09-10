@@ -47,6 +47,7 @@ import RevenueReport from './RevenueReport';
 import PerformanceReport from './PerformanceReport';
 import ProfitReport from './ProfitReport';
 import DiscountReport from './DiscountReport';
+import VatCalculator from './VatCalculator';
 import ProfitShares from './ProfitShares';
 import PaymentReport from './PaymentReport';
 import InvoiceDetail from './InvoiceDetail';
@@ -879,6 +880,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<InvoiceList />} />
+              <Route path="/vat-calculator" element={<VatCalculator />} />
               <Route path="/invoices/:uid" element={<InvoiceDetail />} />
               <Route path="/orders" element={<OrderList />} />
               <Route path="/orders/:uid/voucher" element={<VoucherDetail />} />
@@ -1162,6 +1164,11 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       label: 'Finance',
       icon: <DollarOutlined />,
       children: [
+        {
+          key: '/vat-calculator',
+          label: <Link to="/vat-calculator">VAT Calculator</Link>,
+          icon: <CalculatorOutlined />,
+        },
         {
           key: '/sales-flow',
           label: <Link to="/sales-flow">Create Order</Link>,
