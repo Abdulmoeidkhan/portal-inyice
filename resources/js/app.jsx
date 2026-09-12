@@ -6,6 +6,7 @@ import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd';
 import enUS from 'antd/locale/en_US';
 import '../css/app.css';
 import MainApp from './pages/App';
+import PageHelp from './components/PageHelp';
 import { setFeedbackMessage, setFeedbackModal } from './services/feedback';
 import { THEME_STYLE_TOKENS } from './themeOptions';
 
@@ -93,6 +94,7 @@ function RootApp() {
       <AntdApp>
         <FeedbackBridge />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <PageHelp standalone />
           <MainApp
             themeMode={themeMode}
             themeStyle={themeStyle}

@@ -1,0 +1,123 @@
+INYICE HELP CENTER — MAIN PROJECT INTEGRATION
+
+Add a help icon beside each page title using the matching URL below.
+Match route patterns through your router (for example React Router matchPath), not substring matching.
+Use pathname only; ignore query strings and hashes. :uid and :token match one path segment.
+Match specific routes before dynamic routes; use * only as the final fallback.
+Never put actual IDs, tokens, emails, or other private values into help URLs.
+For an unmapped screen, use https://help.inyice.com/pages.
+Use an accessible label such as "Help with Orders" and a visible tooltip.
+Example: <a href="https://help.inyice.com/articles/orders-page" target="_blank" rel="noopener noreferrer" aria-label="Help with Orders">Help icon</a>
+Scope: all agency/public routes tracked by this help project; provider/internal pages are excluded.
+Confirm these patterns against the current main-project router before integrating.
+
+PORTAL PAGE MAPPINGS (39)
+Route pattern | Page name | Help URL
+/ | Dashboard | https://help.inyice.com/articles/dashboard
+/login | Sign In | https://help.inyice.com/articles/sign-in
+/register | Register Your Agency | https://help.inyice.com/articles/register-your-agency
+/forgot-password | Forgot Password | https://help.inyice.com/articles/forgot-password
+/reset-password | Reset Password | https://help.inyice.com/articles/reset-password
+/sales-flow | Create Order | https://help.inyice.com/articles/create-order
+/orders | Orders | https://help.inyice.com/articles/orders-page
+/orders/:uid/edit | Edit Order | https://help.inyice.com/articles/edit-order
+/orders/:uid/voucher | Voucher Details | https://help.inyice.com/articles/voucher-detail
+/orders/:uid/quotation | Quotation Details | https://help.inyice.com/articles/quotation-detail
+/invoices | Invoices | https://help.inyice.com/articles/invoices-page
+/invoices/:uid | Invoice Details | https://help.inyice.com/articles/invoice-detail
+/reference-search | Reference Search | https://help.inyice.com/articles/reference-search
+/receivings | Receivings | https://help.inyice.com/articles/receivings
+/profit-shares | Profit Shares | https://help.inyice.com/articles/profit-shares
+/payments | Customer Receipts | https://help.inyice.com/articles/customer-receipts
+/customer-payments | Customer Payments | https://help.inyice.com/articles/customer-payments
+/vendor-payments | Vendor Payments | https://help.inyice.com/articles/vendor-payments
+/vendor-receipts | Vendor Receipts | https://help.inyice.com/articles/vendor-receipts
+/refund-allocations | Refund Allocation | https://help.inyice.com/articles/refund-allocation
+/customers | Customers | https://help.inyice.com/articles/customers-page
+/vendors | Vendors | https://help.inyice.com/articles/vendors-page
+/profile/company | Company Profile | https://help.inyice.com/articles/company-profile
+/profile/company-users | Company Users | https://help.inyice.com/articles/team-permissions
+/profile/user | User Profile | https://help.inyice.com/articles/user-profile
+/reports/aging | Aging Report | https://help.inyice.com/articles/aging-report
+/reports/revenue | Revenue Report | https://help.inyice.com/articles/revenue-report
+/reports/performance | Performance Report | https://help.inyice.com/articles/performance-report
+/reports/profit | Profit Report | https://help.inyice.com/articles/profit-report
+/reports/discounts | Discount Report | https://help.inyice.com/articles/discount-report
+/reports/receipts | Receipt Report | https://help.inyice.com/articles/receipt-report
+/reports/payments | Payment Report | https://help.inyice.com/articles/payment-report
+/reports/cancelled | Cancelled Report | https://help.inyice.com/articles/cancelled-report
+/statements/customers | Customer Statement | https://help.inyice.com/articles/customer-statement
+/statements/vendors | Vendor Statement | https://help.inyice.com/articles/vendor-statement
+/shared/invoices/:token | Shared Invoice | https://help.inyice.com/articles/shared-invoice
+/shared/vouchers/:token | Shared Voucher | https://help.inyice.com/articles/shared-voucher
+/shared/quotations/:token | Shared Quotation | https://help.inyice.com/articles/shared-quotation
+* | Page Not Found | https://help.inyice.com/articles/page-not-found
+
+ALL HELP GUIDES (54) — additional contextual links for tabs and actions
+Guide title | Portal navigation | Help URL
+Dashboard: review your workday | Dashboard | https://help.inyice.com/articles/dashboard
+Forgot Password: request a reset link | Login → Forgot password | https://help.inyice.com/articles/forgot-password
+Reset Password: choose a new password | Password reset email → Choose New Password | https://help.inyice.com/articles/reset-password
+Orders: find and manage bookings | Finance → Orders | https://help.inyice.com/articles/orders-page
+Voucher details: review, print, and download | Finance → Orders → Voucher | https://help.inyice.com/articles/voucher-detail
+Quotation details: review and share a quote | Finance → Orders → Quotation | https://help.inyice.com/articles/quotation-detail
+Invoices: find and manage invoices | Finance → Invoices | https://help.inyice.com/articles/invoices-page
+Invoice details: read the customer document | Finance → Invoices → Invoice | https://help.inyice.com/articles/invoice-detail
+Shared invoice: view an invoice sent to you | Shared invoice link | https://help.inyice.com/articles/shared-invoice
+Shared voucher: view your travel details | Shared voucher link | https://help.inyice.com/articles/shared-voucher
+Shared quotation: review an agency proposal | Shared quotation link | https://help.inyice.com/articles/shared-quotation
+Receivings: record and track received amounts | Finance → Receivings | https://help.inyice.com/articles/receivings
+Customer Payments: record money paid back | Finance → Customer Payments | https://help.inyice.com/articles/customer-payments
+Vendor Receipts: record money from suppliers | Finance → Vendor Receipts | https://help.inyice.com/articles/vendor-receipts
+Refund Allocation: settle refund orders | Finance → Refund Allocation | https://help.inyice.com/articles/refund-allocation
+Profit Shares: transfer profit between team members | Finance → Profit Shares | https://help.inyice.com/articles/profit-shares
+Aging Report: review overdue balances | Reports → Aging Report | https://help.inyice.com/articles/aging-report
+Revenue Report: review sales over time | Reports → Revenue Report | https://help.inyice.com/articles/revenue-report
+Performance Report: compare sales and purchases | Reports → Performance Report | https://help.inyice.com/articles/performance-report
+Discount Report: review invoice discounts | Reports → Discount Report | https://help.inyice.com/articles/discount-report
+Receipt Report: review money received | Reports → Receipt Report | https://help.inyice.com/articles/receipt-report
+Payment Report: review money paid | Reports → Payment Report | https://help.inyice.com/articles/payment-report
+Cancelled Report: review cancelled records | Reports → Cancelled Report | https://help.inyice.com/articles/cancelled-report
+Customer Statement: review receivables | Reports → Customer Statement | https://help.inyice.com/articles/customer-statement
+Vendor Statement: review supplier balances | Reports → Vendor Statement | https://help.inyice.com/articles/vendor-statement
+Customers: maintain customer records | Master Data → Customers | https://help.inyice.com/articles/customers-page
+Vendors: maintain supplier records | Master Data → Vendors | https://help.inyice.com/articles/vendors-page
+User Profile: update your name | Profile menu → User Profile | https://help.inyice.com/articles/user-profile
+Page not found: return to your workspace | Page Not Found | https://help.inyice.com/articles/page-not-found
+Set up your agency | Registration | https://help.inyice.com/articles/register-your-agency
+Sign in and manage your session | Login → Profile menu | https://help.inyice.com/articles/sign-in
+Find your way around inYice | Workspace sidebar | https://help.inyice.com/articles/navigate-workspace
+Your first booking, step by step | Finance | https://help.inyice.com/articles/first-booking
+Import a booking with the GDS Parser | Finance → Create Order → GDS Parser | https://help.inyice.com/articles/gds-parser
+Complete your voucher details | Finance → Create Order → Order | https://help.inyice.com/articles/voucher-fields
+Add flights and passenger pricing | Finance → Create Order → Order → Flights | https://help.inyice.com/articles/flight-pricing
+Add hotels, visas, and other services | Finance → Create Order → Order | https://help.inyice.com/articles/optional-services
+Create a quotation or order | Finance → Create Order → Order | https://help.inyice.com/articles/create-order
+Review or edit an existing order | Finance → Orders | https://help.inyice.com/articles/edit-order
+Share a voucher with a traveler | Finance → Orders → Voucher | https://help.inyice.com/articles/share-voucher
+Convert an order into an invoice | Finance → Orders → Invoice | https://help.inyice.com/articles/convert-invoice
+Understand invoice statuses and actions | Finance → Invoices | https://help.inyice.com/articles/invoice-statuses
+Share an invoice with a customer | Finance → Invoices → Invoice details | https://help.inyice.com/articles/share-invoice
+Record a customer receipt | Finance → Customer Receipts | https://help.inyice.com/articles/customer-receipts
+Record a vendor payment | Finance → Vendor Payments | https://help.inyice.com/articles/vendor-payments
+Choose the right receipt or payment | Finance → Receipts and payments | https://help.inyice.com/articles/money-directions
+Handle refunds and returned money | Finance → Orders / Invoices / Customer Payments | https://help.inyice.com/articles/refunds
+Find the report you need | Reports | https://help.inyice.com/articles/reports-overview
+Review your agency’s gross profit | Reports → Profit Report | https://help.inyice.com/articles/profit-report
+Review customer and vendor statements | Reports → Customer Statement / Vendor Statement | https://help.inyice.com/articles/statements
+Find a booking with Reference Search | Finance → Reference Search | https://help.inyice.com/articles/reference-search
+Add customers and vendors | Master Data → Customers / Vendors | https://help.inyice.com/articles/customers-vendors
+Manage your company profile | Profiles → Company Profile | https://help.inyice.com/articles/company-profile
+Invite your team and understand roles | Profiles → Company Users | https://help.inyice.com/articles/team-permissions
+
+HELP DIRECTORY AND TOPICS
+Help Center | https://help.inyice.com/
+All portal pages | https://help.inyice.com/pages
+Getting started | https://help.inyice.com/topics/getting-started
+Orders & vouchers | https://help.inyice.com/topics/orders-vouchers
+Invoices & sharing | https://help.inyice.com/topics/invoices
+Receipts & payments | https://help.inyice.com/topics/payments
+Reports & statements | https://help.inyice.com/topics/reports
+Company & team | https://help.inyice.com/topics/company
+
+Regenerate in the help project with: npm run export:help-links

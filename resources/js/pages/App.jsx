@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import PageHelp from '../components/PageHelp';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Modal, Alert } from 'antd';
 import {
@@ -849,6 +850,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             onClick={() => setMobileNavOpen(true)}
           />
           <Space className="header-actions" size="small">
+            <PageHelp />
             <ThemeMenuButton
               themeMode={themeMode}
               themeStyle={themeStyle}

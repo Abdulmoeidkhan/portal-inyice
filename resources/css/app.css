@@ -4,6 +4,65 @@
   box-sizing: border-box;
 }
 
+.page-help-button.ant-btn {
+  color: var(--app-primary);
+  background: var(--app-surface);
+  border-color: var(--app-primary);
+  font-weight: 600;
+  animation: page-help-pulse 4.5s ease-in-out 2;
+}
+
+@keyframes page-help-pulse {
+  0%, 65%, 100% { box-shadow: 0 0 0 0 transparent; }
+  35% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--app-primary) 14%, transparent); }
+}
+
+.page-help-button.ant-btn:focus-visible {
+  animation: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .page-help-button.ant-btn:hover { animation: none; }
+}
+
+.page-help-button.ant-btn:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 3px;
+}
+
+.page-help-standalone {
+  position: fixed;
+  inset-inline-start: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 99;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-help-button.ant-btn { animation: none; }
+}
+
+@media (max-width: 767px) {
+  .page-help-button.ant-btn .page-help-label { display: none; }
+
+  .page-help-button.ant-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding-inline: 0;
+    gap: 0;
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+  .page-help-button.ant-btn {
+    animation-iteration-count: infinite;
+  }
+}
+
+@media print {
+  .page-help-inline, .page-help-standalone { display: none !important; }
+}
+
 @property --beam-angle {
   syntax: '<angle>';
   inherits: false;
