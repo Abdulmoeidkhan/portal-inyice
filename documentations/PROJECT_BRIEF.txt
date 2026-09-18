@@ -287,3 +287,15 @@ Audit goals:
   product shape. Detailed developer and schema guidance lives in README.md,
   DEVELOPER_GUIDE.md, USER_GUIDE.md, and DATABASE_RELATIONS.md.
 ================================================================================
+
+
+OPTIONAL COMPANY INVOICE TAX (September 2026)
+Owners can enable a fixed inclusive/exclusive rate for selected service categories
+in Company Profile. Default off. Invoice settings and amounts are saved; discounts
+and linked refunds retain original treatment. Payments/statements use gross saved
+balances and profit calculations exclude tax. The VAT Calculator stays independent.
+
+Tax Report is available under Reports for owners, admins and accounts, with date,
+currency, pricing, invoice/refund and text filters, source-document links and the
+standard table exports. Saved invoice tax and confirmed refund reversals are
+summarized separately per currency; payments never create duplicate tax entries.

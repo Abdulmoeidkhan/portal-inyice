@@ -122,6 +122,22 @@ class ReportController extends Controller
         return response()->json($report);
     }
 
+    public function taxReport(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+            'currency_code' => 'nullable|string|size:3|exists:currencies,code',
+            'type' => 'nullable|in:invoice,refund',
+            'pricing' => 'nullable|in:inclusive,exclusive',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        return response()->json(app(\App\Services\InvoiceTaxReportService::class)->report(
+            (int) $request->user()->tenant_id, (int) $request->user()->company_id, $filters,
+        ));
+    }
+
     public function performanceReport(Request $request): JsonResponse
     {
         $validated = $request->validate([

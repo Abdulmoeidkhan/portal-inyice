@@ -66,6 +66,7 @@ class InvoiceService
             $previousInvoice->update([
                 'subtotal' => 0,
                 'tax_amount' => 0,
+                'tax_settings' => $previousInvoice->tax_settings ? [...$previousInvoice->tax_settings, 'taxable_amount' => 0] : null,
                 'total_amount' => 0,
                 'outstanding_amount' => 0,
                 'advance_balance' => 0,
@@ -100,6 +101,8 @@ class InvoiceService
             ? $lineTotal
             : (float) $order->items->sum(fn ($item) => max(0, (float) $item->total_price));
         $total = $isRefundOrder ? $lineTotal : max(0, $lineTotal);
+        $taxService = app(InvoiceTaxService::class);
+        $invoice->tax_settings = $taxService->snapshot($order);
         $invoice->subtotal = $subtotal;
         $invoice->tax_amount = 0;
         $invoice->total_amount = $total;
@@ -109,6 +112,9 @@ class InvoiceService
         $invoice->save();
 
         foreach ($order->items as $item) {
+            if ($isRefundOrder && !empty($order->meta['refund_of_invoice_id']) && ($item->gds_data['type'] ?? null) === 'discount') {
+                continue;
+            }
             InvoiceLine::create([
                 'uid' => (string) Str::ulid(),
                 'tenant_id' => $order->tenant_id,
@@ -117,7 +123,32 @@ class InvoiceService
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
                 'total_price' => $item->total_price,
+                'tax_category' => $taxService->category($item->gds_data ?? []),
             ]);
+        }
+
+        $refundTotals = $isRefundOrder ? $taxService->refundTotals($order) : null;
+        if ($invoice->tax_settings || $refundTotals) {
+            $totals = $refundTotals ?? $taxService->totals($invoice->lines()->get(), $invoice->tax_settings, $isRefundOrder);
+            $taxableAmount = $totals['taxable_amount'];
+            unset($totals['taxable_amount']);
+            $invoice->fill($totals);
+            if ($invoice->tax_settings) {
+                $invoice->tax_settings = [...$invoice->tax_settings, 'taxable_amount' => $taxableAmount];
+            }
+            $invoice->outstanding_amount = $isRefundOrder ? 0 : $invoice->total_amount;
+            $invoice->save();
+        }
+
+        if ($refundTotals) {
+            $discount = round(abs((float) $invoice->subtotal) * (float) ($order->meta['refund_discount_ratio'] ?? 0), 4);
+            if ($discount > 0) {
+                InvoiceLine::create([
+                    'uid' => (string) Str::ulid(), 'tenant_id' => $order->tenant_id, 'invoice_id' => $invoice->id,
+                    'description' => 'Discount reversal (original invoice)', 'quantity' => 1,
+                    'unit_price' => $discount, 'total_price' => $discount,
+                ]);
+            }
         }
 
         return $invoice;
@@ -270,8 +301,18 @@ class InvoiceService
             ->filter(fn (InvoiceLine $line) => (float) $line->total_price < 0)
             ->sum(fn (InvoiceLine $line) => (float) $line->total_price));
         $total = max(0, $subtotal + (float) $invoice->tax_amount - $discount);
+        if ($invoice->tax_settings) {
+            $totals = app(InvoiceTaxService::class)->totals($invoice->lines, $invoice->tax_settings);
+            $subtotal = $totals['subtotal'];
+            $total = $totals['total_amount'];
+            $invoice->tax_amount = $totals['tax_amount'];
+            $invoice->tax_settings = [...$invoice->tax_settings, 'taxable_amount' => $totals['taxable_amount']];
+        }
         $received = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_received');
         $refunded = (float) $invoice->settlements()->where('status', 'confirmed')->sum('amount_refunded');
+        if ($invoice->tax_settings && $total + 0.00005 < max(0, $received - $refunded)) {
+            throw ValidationException::withMessages(['amount' => 'Discount including its tax adjustment cannot exceed the unpaid balance.']);
+        }
         $outstanding = min($total, max(0, $total - $received + $refunded));
         $status = $outstanding <= 0 ? 'paid' : (($received - $refunded) > 0 ? 'partial_paid' : 'issued');
 
@@ -300,6 +341,10 @@ class InvoiceService
 
     private function ensureDiscountable(Invoice $invoice): void
     {
+        if ((float) $invoice->total_amount < 0 || Order::where('company_id', $invoice->company_id)
+            ->where('meta->refund_of_invoice_id', $invoice->id)->exists()) {
+            throw ValidationException::withMessages(['invoice' => 'Discounts cannot be changed after a refund request. Adjust the refund services instead.']);
+        }
         if (in_array($invoice->status, ['void', 'cancel'], true)) {
             throw ValidationException::withMessages(['invoice' => 'Discounts can only be changed on active invoices.']);
         }
@@ -315,6 +360,10 @@ class InvoiceService
             ->when($replacing, fn ($query) => $query->whereKeyNot($replacing->id))
             ->sum('amount');
 
+        if ($invoice->tax_settings) {
+            return $this->percentageDiscountBase($invoice, $replacing);
+        }
+
         return max(0, $positiveLines + (float) $invoice->tax_amount - $paidNet - $otherDiscounts);
     }
 
@@ -324,6 +373,12 @@ class InvoiceService
         $otherDiscounts = (float) $invoice->discounts()
             ->when($replacing, fn ($query) => $query->whereKeyNot($replacing->id))
             ->sum('amount');
+
+        if ($invoice->tax_settings) {
+            $otherDiscounts = abs((float) $invoice->lines()->where('total_price', '<', 0)
+                ->when($replacing, fn ($query) => $query->whereKeyNot($replacing->invoice_line_id))->sum('total_price'));
+            return max(0, $positiveLines - $otherDiscounts);
+        }
 
         return max(0, $positiveLines + (float) $invoice->tax_amount - $otherDiscounts);
     }

@@ -25,6 +25,7 @@ class Invoice extends Model
         'currency_code',
         'subtotal',
         'tax_amount',
+        'tax_settings',
         'total_amount',
         'outstanding_amount',
         'advance_balance',
@@ -34,6 +35,7 @@ class Invoice extends Model
     ];
 
     protected $casts = [
+        'tax_settings' => 'array',
         'invoice_date' => 'date',
         'due_date' => 'date',
         'subtotal' => 'decimal:4',

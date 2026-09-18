@@ -33,6 +33,7 @@ class Company extends Model
         'user_limit',
         'is_paid',
         'sales_can_edit_cost',
+        'tax_settings',
         'logo_path',
         'footer_logo_path',
         'is_active',
@@ -44,6 +45,7 @@ class Company extends Model
     ];
 
     protected $casts = [
+        'tax_settings' => 'array',
         'is_active' => 'boolean',
         'is_paid' => 'boolean',
         'sales_can_edit_cost' => 'boolean',

@@ -323,3 +323,31 @@ If an action is unavailable, confirm the user is active, has the correct role, h
 - Confirm customer and currency before creating an order.
 - Use active sections to keep the voucher UI focused.
 - Use public share links only for records intended to be visible outside the signed-in workspace.
+
+
+## Optional Company Invoice Tax
+
+The company owner can configure **Company Profile > Invoice tax**. Calculation is off by default. Leave it off when tax is handled outside inYice; the standalone VAT Calculator remains available independently.
+
+When enabled, enter a tax label, optional registration number, fixed percentage (0-100, up to four decimal places), and select Flights, Hotels, Transfers, City Tours/Ziarat, Visa, and/or Other Services. At least one category is required. The rate applies only to selected services, in every currency. Invoice users cannot change the rate.
+
+- **Exclude tax:** tax is added to selected service prices. A taxable 1,000 service at 10% produces a 1,100 invoice.
+- **Include tax:** entered service prices already contain tax. A taxable 1,100 service at 10% contains 100 tax and keeps a 1,100 invoice total.
+- Unselected services do not contribute tax. Invoice-wide discounts reduce taxable and non-taxable services proportionally before calculating tax.
+
+Invoices save their settings, tax amount, taxable amount and totals when issued. Updating Company Profile affects new invoices only. Existing invoices and their later discounts retain their original treatment, including invoices issued with tax disabled. Invoice details, shared links and printed/PDF invoices show the saved label, rate, registration number and included/added tax.
+
+Receipts, advances and payments settle the invoice's final balance without calculating tax again. Customer statements use saved totals. Profit, performance and profit-sharing calculations exclude invoice tax from revenue.
+
+Refund requests retain the original invoice's treatment and discount proportion. Enter partial refund services as negative amounts before the original proportional discount; inYice calculates the discount reversal and tax reversal. For example, refunding 500 of a service originally discounted by 10%, with exclusive tax of 10%, produces a 495 refund balance. Refunds keep the original customer/currency, cannot exceed original category amounts, and cannot be reduced below already allocated customer refunds. Original invoice discounts cannot be changed while its refund request exists. A full refund reverses the discounted total, including tax; tax is not charged again on the refund payment.
+
+
+## Tax Report
+
+Open **Reports > Tax Report** (owner, admin or accounts). Choose a date range and optionally filter by currency, invoice/refund type, inclusive/exclusive pricing, or search invoice/order references, customer names, tax labels and registration numbers. Select **Run report** to apply the filters.
+
+The table shows saved tax labels, registration numbers, fixed rates, net taxable amounts after discounts, tax amounts, sales excluding tax and totals including tax. **View** opens the source invoice or confirmed refund. The standard table download menu supports CSV/PDF under the existing company-plan export rules.
+
+Each currency has its own tax charged, tax reversed and net tax summary; different currencies are never added together. Refund amounts are negative. Records come from saved invoice snapshots, so changing company tax settings does not recalculate this report. Enabled zero-rate/zero-tax invoices remain visible. Invoices without saved tax settings and draft/cancelled/void invoices are excluded.
+
+This is an invoice-based report, not tax calculated from cash received. Invoice dates determine the period. Confirmed refund orders without an active invoice use their creation date and saved refund tax amounts; unconfirmed refund requests are excluded. Once a refund has an invoice, only that invoice is counted, using its invoice date. Payments do not add tax entries. Discounts reflect the invoice's current saved discounted totals in its invoice-date period.

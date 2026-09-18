@@ -20,6 +20,7 @@ class InvoiceLine extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'tax_category',
     ];
 
     protected $casts = [

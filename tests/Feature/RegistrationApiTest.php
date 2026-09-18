@@ -53,7 +53,6 @@ class RegistrationApiTest extends TestCase
         Notification::fake();
 
         $payload = [
-            'agency_name' => 'HERD Travel',
             'company_legal_name' => 'HERD Travel Private Limited',
             'company_email' => 'info@herd.test',
             'company_phone' => '+92-300-0000000',
@@ -66,7 +65,8 @@ class RegistrationApiTest extends TestCase
             'admin_password_confirmation' => 'password123',
         ];
 
-        $response = $this->postJson('/api/v1/registration/register', $payload);
+        $csrfToken = $this->getJson('/registration/session')->assertOk()->json('csrf_token');
+        $response = $this->postJson('/registration/register', $payload, ['X-CSRF-TOKEN' => $csrfToken]);
 
         $response->assertCreated();
         $response->assertJsonPath('success', true);
@@ -74,13 +74,13 @@ class RegistrationApiTest extends TestCase
         $response->assertJsonPath('user.email', 'owner@herd.test');
         $this->assertNotEmpty($response->json('token'));
 
-        $tenant = Tenant::where('name', 'HERD Travel')->firstOrFail();
+        $tenant = Tenant::where('name', 'HERD Travel Private Limited')->firstOrFail();
         $this->assertMatchesRegularExpression('/^AG[0-9A-Z]{26}$/', $tenant->code);
 
         $this->assertDatabaseHas('companies', [
             'tenant_id' => $tenant->id,
             'legal_name' => 'HERD Travel Private Limited',
-            'display_name' => 'HERD Travel',
+            'display_name' => 'HERD Travel Private Limited',
             'base_currency_code' => 'PKR',
             'default_timezone' => 'Asia/Karachi',
         ]);
@@ -112,15 +112,19 @@ class RegistrationApiTest extends TestCase
 
         $owner = User::where('email', 'owner@herd.test')->firstOrFail();
         Notification::assertSentTo($owner, WelcomeVerifyEmail::class);
+
+        $this->postJson('/registration/register', $payload, ['X-CSRF-TOKEN' => $csrfToken])
+            ->assertStatus(419);
+        $this->assertDatabaseCount('tenants', 1);
     }
 
     public function test_registration_validates_required_payload(): void
     {
-        $response = $this->postJson('/api/v1/registration/register', []);
+        $csrfToken = $this->getJson('/registration/session')->assertOk()->json('csrf_token');
+        $response = $this->postJson('/registration/register', [], ['X-CSRF-TOKEN' => $csrfToken]);
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors([
-            'agency_name',
             'company_legal_name',
             'company_email',
             'company_phone',

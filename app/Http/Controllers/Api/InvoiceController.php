@@ -166,8 +166,9 @@ class InvoiceController extends Controller
                     'invoice_date' => optional($order->updated_at)->toDateString(),
                     'due_date' => null,
                     'currency_code' => $order->currency_code,
-                    'subtotal' => $order->total_amount,
-                    'tax_amount' => 0,
+                    'subtotal' => $order->meta['invoice_tax_totals']['subtotal'] ?? $order->total_amount,
+                    'tax_settings' => $order->meta['invoice_tax_settings'] ?? null,
+                    'tax_amount' => $order->meta['invoice_tax_amount'] ?? 0,
                     'total_amount' => $order->total_amount,
                     'outstanding_amount' => 0,
                     'status' => $order->status,
@@ -485,8 +486,9 @@ class InvoiceController extends Controller
             'invoice_date' => optional($order->updated_at)->toDateString(),
             'due_date' => null,
             'currency_code' => $order->currency_code,
-            'subtotal' => $total,
-            'tax_amount' => 0,
+            'subtotal' => $order->meta['invoice_tax_totals']['subtotal'] ?? $total,
+            'tax_settings' => $order->meta['invoice_tax_settings'] ?? null,
+            'tax_amount' => $order->meta['invoice_tax_amount'] ?? 0,
             'total_amount' => $total,
             'outstanding_amount' => 0,
             'advance_balance' => 0,
@@ -644,7 +646,7 @@ class InvoiceController extends Controller
         $money = fn (mixed $value): string => trim($currency . ' ' . number_format((float) $value, 2, '.', ''));
         $costRows = $order ? $this->costBreakupRows($order, $money) : [];
         $costTotal = $order ? $this->orderCostTotal($order) : 0.0;
-        $profit = (float) $invoice->total_amount - $costTotal;
+        $profit = (float) $invoice->total_amount - (float) $invoice->tax_amount - $costTotal;
         $lines = [
             "Voided on {$timestamp}. Invoice values were converted to zero.",
             'Previous totals:',
@@ -876,6 +878,7 @@ class InvoiceController extends Controller
             $invoice->update([
                 'subtotal' => 0,
                 'tax_amount' => 0,
+                'tax_settings' => $invoice->tax_settings ? [...$invoice->tax_settings, 'taxable_amount' => 0] : null,
                 'total_amount' => 0,
                 'outstanding_amount' => 0,
                 'advance_balance' => 0,

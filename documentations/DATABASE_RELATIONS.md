@@ -726,3 +726,21 @@ Tenant
 - API detail routes should resolve records by `uid` where controllers currently expect it.
 - Public registration/auth and shared token reads are the deliberate unauthenticated exceptions.
 - Internal portal cross-tenant queries must use system-role middleware and narrow `withoutGlobalScopes()` usage.
+
+
+## Optional Invoice Tax Fields
+
+Migration: `2026_09_12_000001_add_company_invoice_tax_settings.php`.
+
+| Table | Field | Meaning |
+| --- | --- | --- |
+| companies | tax_settings (nullable JSON) | Owner-controlled enabled flag, name, registration_number, rate, pricing and selected categories. Null defaults to calculation off. |
+| invoices | tax_settings (nullable JSON) | Immutable company-setting snapshot for subsequent calculations, plus currency precision and saved taxable_amount. Refund snapshots also retain the original proportional discount. |
+| invoices | tax_amount, subtotal, total_amount | Existing decimal fields retain the saved tax and financial totals; no new amount columns are needed. |
+| invoice_lines | tax_category (nullable string, 32) | Structured service category copied from the originating order item. Historical and unclassified lines remain null. |
+| orders | meta (existing JSON) | New linked refunds save refund_of_invoice_id, invoice_tax_settings, refund_discount_ratio, refund_category_limits, invoice_tax_amount and invoice_tax_totals. The order total includes the refund's tax reversal. |
+
+No historical backfill and no new tables or foreign-key relationships. Existing invoice settlement, refund allocation and statement relationships remain unchanged.
+
+
+Tax Report (`/api/v1/reports/tax`) reads the existing invoice tax snapshots and confirmed refund order metadata. It adds no tables or columns. Physical invoices supersede virtual refund rows; totals are grouped by currency. Current company tax configuration and payment records are not used to calculate report amounts.

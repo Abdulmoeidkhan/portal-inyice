@@ -48,6 +48,7 @@ import RevenueReport from './RevenueReport';
 import PerformanceReport from './PerformanceReport';
 import ProfitReport from './ProfitReport';
 import DiscountReport from './DiscountReport';
+import TaxReport from './TaxReport';
 import VatCalculator from './VatCalculator';
 import ProfitShares from './ProfitShares';
 import PaymentReport from './PaymentReport';
@@ -906,6 +907,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/reports/revenue" element={canAccessReports ? <RevenueReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/performance" element={canAccessReports ? <PerformanceReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/profit" element={canAccessReports ? <ProfitReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/tax" element={canAccessReports ? <TaxReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/discounts" element={canAccessReports ? <DiscountReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/payments" element={canAccessReports ? <PaymentReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/receipts" element={canAccessReports ? <PaymentReport direction="receipt" /> : <Navigate to="/" replace />} />
@@ -1280,6 +1282,10 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         {
           key: '/reports/profit',
           label: <Link to="/reports/profit">Profit Report</Link>,
+        },
+        {
+          key: '/reports/tax',
+          label: <Link to="/reports/tax">Tax Report</Link>,
         },
         {
           key: '/reports/discounts',

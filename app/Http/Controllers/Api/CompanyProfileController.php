@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Services\InvoiceTaxService;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +24,7 @@ class CompanyProfileController extends Controller
 
         return response()->json([
             'company' => $this->serializeCompany($company),
+            'tax_categories' => InvoiceTaxService::CATEGORIES,
             'can_update' => $request->user()->hasRole('owner'),
         ]);
     }
@@ -32,6 +35,11 @@ class CompanyProfileController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($request->user()->company_id);
 
+        // Multipart uploads carry the nested settings as JSON, including an empty category list.
+        if (is_string($request->input('tax_settings'))) {
+            $request->merge(['tax_settings' => json_decode($request->input('tax_settings'), true)]);
+        }
+
         $validated = $request->validate([
             'legal_name' => ['required', 'string', 'max:200'],
             'display_name' => ['required', 'string', 'max:200'],
@@ -41,6 +49,14 @@ class CompanyProfileController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'],
             'default_timezone' => ['required', 'timezone'],
             'sales_can_edit_cost' => ['sometimes', 'boolean'],
+            'tax_settings' => ['sometimes', 'required', 'array:enabled,name,registration_number,rate,pricing,categories'],
+            'tax_settings.enabled' => ['required_with:tax_settings', 'boolean'],
+            'tax_settings.name' => ['required_with:tax_settings', 'string', 'max:30'],
+            'tax_settings.registration_number' => ['nullable', 'string', 'max:100'],
+            'tax_settings.rate' => ['required_with:tax_settings', 'numeric', 'min:0', 'max:100', 'decimal:0,4'],
+            'tax_settings.pricing' => ['required_with:tax_settings', Rule::in(['inclusive', 'exclusive'])],
+            'tax_settings.categories' => ['present_with:tax_settings', 'array', 'max:6'],
+            'tax_settings.categories.*' => ['string', 'distinct', Rule::in(array_keys(InvoiceTaxService::CATEGORIES))],
             'logo' => $this->imageUploadRules(),
             'footer_logo' => $this->imageUploadRules(),
         ]);
@@ -57,6 +73,20 @@ class CompanyProfileController extends Controller
 
         if (array_key_exists('sales_can_edit_cost', $validated)) {
             $company->sales_can_edit_cost = (bool) $validated['sales_can_edit_cost'];
+        }
+
+        if (array_key_exists('tax_settings', $validated)) {
+            $settings = $validated['tax_settings'];
+            if ($settings['enabled'] && empty($settings['categories'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'tax_settings.categories' => 'Choose at least one taxable service category.',
+                ]);
+            }
+            $company->tax_settings = [
+                ...InvoiceTaxService::defaults(), ...$settings,
+                'enabled' => (bool) $settings['enabled'],
+                'rate' => (string) $settings['rate'],
+            ];
         }
 
         if ($request->hasFile('logo')) {
@@ -119,6 +149,7 @@ class CompanyProfileController extends Controller
             'user_limit' => $company->user_limit,
             'is_paid' => (bool) $company->is_paid,
             'sales_can_edit_cost' => (bool) $company->sales_can_edit_cost,
+            'tax_settings' => $company->tax_settings ?? InvoiceTaxService::defaults(),
             'logo_url' => $company->logo_url,
             'footer_logo_url' => $company->footer_logo_url,
             'is_active' => (bool) $company->is_active,

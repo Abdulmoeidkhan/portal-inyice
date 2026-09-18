@@ -776,6 +776,9 @@ export default function InvoiceList() {
               <Descriptions.Item label="Total">
                 <Text>{selectedInvoice.currency_code || ''} {money(selectedInvoice.total_amount)}</Text>
               </Descriptions.Item>
+              {selectedInvoice.tax_settings && <Descriptions.Item label={`${selectedInvoice.tax_settings.name} (${Number(selectedInvoice.tax_settings.rate)}%)`}>
+                {selectedInvoice.currency_code} {money(selectedInvoice.tax_amount)}{selectedInvoice.tax_settings.pricing === 'inclusive' ? ' (included)' : ''}
+              </Descriptions.Item>}
               <Descriptions.Item label="Outstanding">
                 <Text>{selectedInvoice.currency_code || ''} {money(selectedInvoice.outstanding_amount)}</Text>
               </Descriptions.Item>
@@ -837,6 +840,9 @@ export default function InvoiceList() {
         />
         <Divider style={{ margin: '16px 0 12px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          {discountInvoice?.tax_settings && <Typography.Paragraph type="secondary">
+            Discounts reduce service prices and their tax proportionally, using this invoice's saved rate. The final reduction cannot exceed the unpaid balance.
+          </Typography.Paragraph>}
           <Typography.Text strong>{editingDiscount ? 'Edit discount' : 'New discount'}</Typography.Text>
           {editingDiscount && <Button size="small" icon={<PlusOutlined />} onClick={resetDiscountForm}>New discount</Button>}
         </div>

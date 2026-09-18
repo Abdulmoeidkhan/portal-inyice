@@ -771,6 +771,7 @@ class ReportService
             ->whereDate('invoice_date', '<=', $to)
             ->whereNotIn('status', ['void', 'cancel'])
             ->selectRaw('COALESCE(SUM(total_amount), 0) as invoiced')
+            ->selectRaw('COALESCE(SUM(tax_amount), 0) as tax')
             ->selectRaw('COALESCE(SUM(total_amount - outstanding_amount), 0) as collected')
             ->selectRaw('COALESCE(SUM(outstanding_amount), 0) as outstanding')
             ->first();
@@ -865,7 +866,8 @@ class ReportService
         );
 
         $revenue = (float) $invoice->invoiced;
-        $profit = $revenue - (float) $cost;
+        $netRevenue = $revenue - (float) $invoice->tax;
+        $profit = $netRevenue - (float) $cost;
         $outstanding = $this->dashboardOutstandingBalances($tenantId, $companyId);
 
         return [
@@ -884,7 +886,7 @@ class ReportService
                 'cash_in' => round((float) $cashIn, 2),
                 'cash_out' => round((float) $cashOut, 2),
                 'profit' => round($profit, 2),
-                'margin' => $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0,
+                'margin' => $netRevenue > 0 ? round(($profit / $netRevenue) * 100, 2) : 0,
             ],
             'mix' => [
                 ['type' => 'Collected', 'value' => round((float) $cashIn, 2)],
@@ -919,7 +921,7 @@ class ReportService
                 ->whereDate('invoice_date', '>=', $from)
                 ->whereDate('invoice_date', '<=', $to)
                 ->whereNotIn('status', ['void', 'cancel']))
-            ->with(['invoice:id,order_id,invoice_date,currency_code,total_amount,status', 'vendorCosts'])
+            ->with(['invoice:id,order_id,invoice_date,currency_code,total_amount,tax_amount,status', 'vendorCosts'])
             ->get();
     }
 
@@ -933,7 +935,7 @@ class ReportService
         while ($cursor->lessThanOrEqualTo($lastMonth)) {
             $period = $cursor->format('Y-m');
             $monthOrders = $grouped->get($period, collect());
-            $sales = (float) $monthOrders->sum(fn (Order $order): float => (float) ($order->invoice?->total_amount ?? $order->total_amount));
+            $sales = (float) $monthOrders->sum(fn (Order $order): float => app(InvoiceTaxService::class)->revenueForOrder($order));
             $purchase = (float) $monthOrders->sum(fn (Order $order): float => $this->performancePurchaseForOrder($order));
 
             $rows[] = [
@@ -953,7 +955,7 @@ class ReportService
     private function performanceRow(string $key, Collection $orders): array
     {
         [$period, $currency] = explode('|', $key, 2);
-        $sales = (float) $orders->sum(fn (Order $order): float => (float) ($order->invoice?->total_amount ?? $order->total_amount));
+        $sales = (float) $orders->sum(fn (Order $order): float => app(InvoiceTaxService::class)->revenueForOrder($order));
         $purchase = (float) $orders->sum(fn (Order $order): float => $this->performancePurchaseForOrder($order));
 
         return [
@@ -1204,7 +1206,7 @@ class ReportService
                 'createdBy:id,name',
                 'vendorCosts.vendor:id,name',
                 'items:id,order_id,total_price',
-                'invoice:id,order_id,invoice_number,invoice_date,status,currency_code,total_amount',
+                'invoice:id,order_id,invoice_number,invoice_date,status,currency_code,total_amount,tax_amount',
                 'invoice.lines:id,invoice_id,total_price',
             ])
             ->orderByDesc(
@@ -1232,7 +1234,7 @@ class ReportService
         $detailRows = collect();
 
         foreach ($orders as $order) {
-            $revenue = (float) ($order->invoice?->total_amount ?? $order->total_amount);
+            $revenue = app(InvoiceTaxService::class)->revenueForOrder($order);
             $discount = $this->discountTotalForReport($order);
             $cost = (float) $order->vendorCosts->sum('amount');
             if ($cost == 0.0) {

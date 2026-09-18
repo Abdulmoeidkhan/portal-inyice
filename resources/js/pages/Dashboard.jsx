@@ -18,6 +18,7 @@ import { openRoute } from '../services/navigation';
 const { Text, Title } = Typography;
 
 const DEMO_MODE = false;
+const SERVICE_COLORS = ['#ffc233', '#ff7a1a', '#8a4df6', '#d899f9', '#5cc8ff', '#c4c9d4'];
 
 const demoReport = {
   finance: {
@@ -385,7 +386,12 @@ export default function Dashboard() {
     height: 230,
     legend: false,
     label: false,
-    color: ['#ffc233', '#ff7a1a', '#8a4df6', '#d899f9', '#5cc8ff', '#c4c9d4'],
+    scale: {
+      color: {
+        domain: expenses.map((item) => item.type),
+        range: SERVICE_COLORS,
+      },
+    },
     tooltip: {
       title: (item) => item.type,
       items: [{ field: 'value', name: 'Amount', valueFormatter: (value) => money(value) }],
@@ -547,7 +553,7 @@ export default function Dashboard() {
                       <div className="dashboard-expense-legend">
                         {expenses.map((item, index) => (
                           <button key={item.type} type="button" className="dashboard-expense-row" onClick={() => navigate('/reports/profit')}>
-                            <span className={`dashboard-expense-dot dot-${index % 6}`} />
+                            <span className="dashboard-expense-dot" style={{ backgroundColor: SERVICE_COLORS[index % SERVICE_COLORS.length] }} />
                             <span>{percent(item.value, expenseTotal)}% {item.type}</span>
                           </button>
                         ))}

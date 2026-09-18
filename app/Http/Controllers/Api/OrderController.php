@@ -13,6 +13,7 @@ use App\Models\OrderVendorCost;
 use App\Models\User;
 use App\Services\GdsParserService;
 use App\Services\InvoiceService;
+use App\Services\InvoiceTaxService;
 use App\Services\OrderNumberService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -896,6 +897,7 @@ class OrderController extends Controller
                     'total_amount' => OrderItem::where('order_id', $createdOrder->id)->sum('total_price') ?: $totalAmount,
                 ]);
 
+                app(InvoiceTaxService::class)->syncRefund($createdOrder);
                 $voidedInvoice = $this->voidInvoiceForEditedOrder($activeInvoice, $createdOrder);
                 $order->update([
                     'status' => 'cancel',
@@ -926,6 +928,7 @@ class OrderController extends Controller
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
+            app(InvoiceTaxService::class)->syncRefund($order);
         });
 
         $responseOrder = $createdOrder
@@ -1017,6 +1020,8 @@ class OrderController extends Controller
                 'updated_by_user_id' => (int) $user->id,
             ]);
 
+            app(InvoiceTaxService::class)->syncRefund($newOrder);
+
             return $newOrder;
         });
 
@@ -1084,6 +1089,8 @@ class OrderController extends Controller
             $newOrder->update([
                 'total_amount' => OrderItem::where('order_id', $newOrder->id)->sum('total_price') ?: (float) $sourceOrder->total_amount,
             ]);
+
+            app(InvoiceTaxService::class)->syncRefund($newOrder);
 
             return $newOrder;
         });
@@ -1188,12 +1195,25 @@ class OrderController extends Controller
 
         $company = Company::where('tenant_id', $tenantId)->findOrFail($companyId);
 
-        $refundOrder = DB::transaction(function () use ($sourceOrder, $user, $tenantId, $companyId): Order {
+        $refundOrder = DB::transaction(function () use ($sourceOrder, $activeInvoice, $user, $tenantId, $companyId): Order {
             $sourceMeta = is_array($sourceOrder->meta) ? $sourceOrder->meta : [];
             $refundMeta = $this->negativeRefundVoucher($sourceMeta);
             $refundMeta['refund_of_order_id'] = $sourceOrder->id;
             $refundMeta['refund_of_order_uid'] = $sourceOrder->uid;
             $refundMeta['refund_of_order_number'] = $sourceOrder->order_number;
+            $refundMeta['invoice_tax_settings'] = $activeInvoice ? app(InvoiceTaxService::class)->refundSnapshot($activeInvoice) : null;
+            if ($activeInvoice) {
+                $activeInvoice->loadMissing('lines');
+                $gross = (float) $activeInvoice->lines->sum(fn ($line) => max(0, (float) $line->total_price));
+                $discount = abs((float) $activeInvoice->lines->sum(fn ($line) => min(0, (float) $line->total_price)));
+                $refundMeta['refund_discount_ratio'] = $gross > 0 ? min(1, $discount / $gross) : 0;
+                $refundMeta['refund_of_invoice_id'] = $activeInvoice->id;
+                $refundMeta['refund_category_limits'] = $activeInvoice->lines
+                    ->filter(fn ($line) => (float) $line->total_price >= 0)
+                    ->groupBy(fn ($line) => $line->tax_category ?? app(InvoiceTaxService::class)->category($sourceOrder->items->firstWhere('description', $line->description)?->gds_data ?? []) ?? 'uncategorized')
+                    ->map(fn ($lines) => (float) $lines->sum('total_price'))->all();
+                $refundMeta['discounts'] = [];
+            }
             $refundMeta['refund_request_created_at'] = now()->toIso8601String();
 
             $refundOrder = Order::create([
@@ -1230,6 +1250,8 @@ class OrderController extends Controller
             $refundOrder->update([
                 'total_amount' => OrderItem::where('order_id', $refundOrder->id)->sum('total_price') ?: -abs((float) $sourceOrder->total_amount),
             ]);
+
+            app(InvoiceTaxService::class)->syncRefund($refundOrder);
 
             return $refundOrder;
         });
@@ -1319,7 +1341,7 @@ class OrderController extends Controller
     {
         $sourceOrder->loadMissing('items');
 
-        $items = $sourceOrder->items->map(fn (OrderItem $item) => [
+        $items = $sourceOrder->items->filter(fn ($item) => empty($targetOrder->meta['refund_of_invoice_id']) || ($item->gds_data['type'] ?? null) !== 'discount')->map(fn (OrderItem $item) => [
             'uid' => (string) Str::ulid(),
             'tenant_id' => $targetOrder->tenant_id,
             'order_id' => $targetOrder->id,
@@ -1438,6 +1460,7 @@ class OrderController extends Controller
         $invoice->update([
             'subtotal' => 0,
             'tax_amount' => 0,
+            'tax_settings' => $invoice->tax_settings ? [...$invoice->tax_settings, 'taxable_amount' => 0] : null,
             'total_amount' => 0,
             'outstanding_amount' => 0,
             'advance_balance' => 0,
@@ -1464,6 +1487,7 @@ class OrderController extends Controller
         $invoice->update([
             'subtotal' => 0,
             'tax_amount' => 0,
+            'tax_settings' => $invoice->tax_settings ? [...$invoice->tax_settings, 'taxable_amount' => 0] : null,
             'total_amount' => 0,
             'outstanding_amount' => 0,
             'advance_balance' => 0,

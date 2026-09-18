@@ -2,6 +2,7 @@ import { matchPath } from 'react-router-dom';
 
 // Source: documentations/main-project-help-links.txt. Keep private route values out of URLs.
 export const PAGE_HELP = [
+  ['/reports/tax', 'Tax Report', 'https://help.inyice.com/pages'],
   ["/", "Dashboard", "https://help.inyice.com/articles/dashboard"],
   ["/login", "Sign In", "https://help.inyice.com/articles/sign-in"],
   ["/register", "Register Your Agency", "https://help.inyice.com/articles/register-your-agency"],

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Steps, Form, Input, Select, Button, Card, Typography, Space, theme } from 'antd';
+import { Alert, Steps, Form, Input, Select, Button, Card, Typography, Space, theme } from 'antd';
 import { message } from '../services/feedback';
-import { UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined, MailOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, UserOutlined, BuildOutlined, LockOutlined, CheckCircleOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Paragraph, Text } = Typography;
@@ -17,7 +17,7 @@ async function readJsonResponse(response, fallbackMessage) {
   const returnedHtml = text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html');
 
   if (returnedHtml) {
-    throw new Error('Server returned an HTML page instead of JSON. Make sure the Laravel app is serving /api or the Vite API proxy is running.');
+    throw new Error('Registration is temporarily unavailable. Please refresh the page and try again.');
   }
 
   throw new Error(fallbackMessage);
@@ -25,20 +25,12 @@ async function readJsonResponse(response, fallbackMessage) {
 
 const steps = [
   {
-    title: 'Agency Info',
-    icon: <BuildOutlined />,
-  },
-  {
     title: 'Company Details',
     icon: <BuildOutlined />,
   },
   {
     title: 'Admin Account',
     icon: <UserOutlined />,
-  },
-  {
-    title: 'Complete',
-    icon: <CheckCircleOutlined />,
   },
 ];
 
@@ -49,13 +41,36 @@ export default function Register({ onRegistered }) {
   const [timezones, setTimezones] = useState([]);
   const [formData, setFormData] = useState({});
   const [registered, setRegistered] = useState(null);
+  const [csrfToken, setCsrfToken] = useState('');
+  const [sessionError, setSessionError] = useState('');
+  const [website, setWebsite] = useState('');
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const { token: themeToken } = theme.useToken();
 
   useEffect(() => {
     fetchCurrenciesAndTimezones();
+    initializeSession();
   }, []);
+
+  const initializeSession = async () => {
+    setCsrfToken('');
+    setSessionError('');
+    try {
+      const response = await fetch('/registration/session', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const result = await readJsonResponse(response, 'Could not start registration.');
+      if (!response.ok || !result.csrf_token) {
+        throw new Error(result.message || 'Could not start registration.');
+      }
+      setCsrfToken(result.csrf_token);
+    } catch (error) {
+      setSessionError(error.message);
+    }
+  };
 
   const fetchCurrenciesAndTimezones = async () => {
     try {
@@ -79,11 +94,13 @@ export default function Register({ onRegistered }) {
   };
 
   const handleNext = async () => {
+    if (loading) return;
+    if (current === 1 && !csrfToken) return;
     try {
       const values = await form.validateFields();
       setFormData({ ...formData, ...values });
 
-      if (current === 2) {
+      if (current === 1) {
         await submitRegistration({ ...formData, ...values });
       } else {
         setCurrent(current + 1);
@@ -96,24 +113,30 @@ export default function Register({ onRegistered }) {
   const submitRegistration = async (data) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/registration/register', {
+      const response = await fetch('/registration/register', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, website }),
       });
 
       const result = await readJsonResponse(response, 'Registration failed');
 
       if (!response.ok) {
+        if (response.status === 419) {
+          setCsrfToken('');
+          setSessionError('Your registration session has expired. Retry to continue with your entered details.');
+        }
         const validationError = result?.errors ? Object.values(result.errors).flat().join(' ') : null;
         throw new Error(validationError || result.error || result.message || 'Registration failed');
       }
 
       setRegistered(result);
-      setCurrent(3);
+      setCurrent(2);
 
       setTimeout(() => {
         finishRegistration(result);
@@ -163,6 +186,11 @@ export default function Register({ onRegistered }) {
   };
 
   const handlePrev = () => {
+    if (current === 0) {
+      navigate('/login');
+      return;
+    }
+    setFormData({ ...formData, ...form.getFieldsValue(true) });
     setCurrent(current - 1);
   };
 
@@ -172,26 +200,22 @@ export default function Register({ onRegistered }) {
         <div className="auth-form">
           <Title level={3} style={{ textAlign: 'center', marginBottom: 6 }}>Register Your Agency</Title>
           <Paragraph type="secondary" style={{ textAlign: 'center', marginBottom: 26 }}>
-            Create your workspace in a few guided steps.
+            Create your workspace in two simple steps.
           </Paragraph>
 
           <Steps current={current} items={steps} style={{ marginBottom: 30 }} />
 
-        {current === 0 && (
-          <Form layout="vertical" form={form} className="stagger-1">
-            <Title level={4}>Agency Information</Title>
-            <Form.Item
-              label="Agency Name"
-              name="agency_name"
-              rules={[{ required: true, message: 'Please enter agency name' }]}
-            >
-              <Input placeholder="Your Travel Agency Name" />
-            </Form.Item>
-          </Form>
+        {sessionError && !registered && (
+          <Alert
+            type="error"
+            title={sessionError}
+            action={<Button size="small" onClick={initializeSession}>Retry</Button>}
+            style={{ marginBottom: 20 }}
+          />
         )}
 
-        {current === 1 && (
-          <Form layout="vertical" form={form} className="stagger-1">
+        {current === 0 && (
+          <Form layout="vertical" form={form} initialValues={formData} onFinish={handleNext} className="stagger-1">
             <Title level={4}>Company Details</Title>
 
             <Form.Item
@@ -254,9 +278,12 @@ export default function Register({ onRegistered }) {
           </Form>
         )}
 
-        {current === 2 && (
-          <Form layout="vertical" form={form} className="stagger-1">
+        {current === 1 && (
+          <Form layout="vertical" form={form} initialValues={formData} onFinish={handleNext} className="stagger-1">
             <Title level={4}>Admin Account</Title>
+            <Paragraph type="secondary">
+              Please check your details before registering. Your network can submit two registration requests every 24 hours.
+            </Paragraph>
 
             <Form.Item
               label="Admin Name"
@@ -291,6 +318,7 @@ export default function Register({ onRegistered }) {
             <Form.Item
               label="Confirm Password"
               name="admin_password_confirmation"
+              dependencies={['admin_password']}
               rules={[
                 { required: true, message: 'Please confirm password' },
                 ({ getFieldValue }) => ({
@@ -305,10 +333,14 @@ export default function Register({ onRegistered }) {
             >
               <Input.Password placeholder="Confirm password" prefix={<LockOutlined />} />
             </Form.Item>
+            <div aria-hidden="true" style={{ position: 'absolute', left: -10000, width: 1, height: 1, overflow: 'hidden' }}>
+              <label htmlFor="registration-website">Website</label>
+              <input id="registration-website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} />
+            </div>
           </Form>
         )}
 
-        {current === 3 && registered && (
+        {current === 2 && registered && (
           <div style={{ textAlign: 'center', padding: '40px 0' }} className="stagger-2">
             <CheckCircleOutlined style={{ fontSize: 60, color: themeToken.colorSuccess, marginBottom: 20, display: 'block' }} />
             <Title level={3}>Registration Successful!</Title>
@@ -322,7 +354,6 @@ export default function Register({ onRegistered }) {
             <div className="elevated-card" style={{ textAlign: 'left', marginBottom: 20 }}>
               <Space orientation="vertical" size={4}>
                   <Text><strong>Admin Email:</strong> {registered.user.email}</Text>
-                <Text><strong>Agency:</strong> {registered.user.tenant_name}</Text>
                 <Text><strong>Company:</strong> {registered.user.company_name}</Text>
               </Space>
             </div>
@@ -338,21 +369,22 @@ export default function Register({ onRegistered }) {
           </div>
         )}
 
-        <div style={{ marginTop: 30, display: 'flex', justifyContent: 'space-between' }}>
-          <Button onClick={handlePrev} disabled={current === 0}>
-            Previous
-          </Button>
+        {current < 2 && (
+          <div style={{ marginTop: 30, display: 'flex', justifyContent: 'space-between' }}>
+            <Button icon={<ArrowLeftOutlined />} onClick={handlePrev} disabled={loading}>
+              {current === 0 ? 'Back to login' : 'Back'}
+            </Button>
 
-          {current < 3 && (
             <Button
               type="primary"
               loading={loading}
+              disabled={current === 1 && !csrfToken}
               onClick={handleNext}
             >
-              {current === 2 ? 'Register' : 'Next'}
+              {current === 1 ? 'Register' : 'Next'}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
         </div>
       </Card>
     </div>

@@ -16,7 +16,7 @@ const toNumber = (value) => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const isDiscountLine = (line) => toNumber(line?.total_price) < 0 || /^discount\b/i.test(String(line?.description || '').trim());
+const isDiscountLine = (line, invoice) => (toNumber(invoice?.total_amount) >= 0 && toNumber(line?.total_price) < 0) || /^discount\b/i.test(String(line?.description || '').trim());
 const formatDate = dateOnly;
 const documentForSettlement = (settlement) => settlement.reference_document || settlement.referenceDocument || null;
 const stripVendorDetails = (value) => String(value || '')
@@ -117,7 +117,7 @@ const breakupForLine = (line) => {
   return 'Service';
 };
 
-const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line) && toNumber(line.total_price) > 0).map((line, index) => ({
+const buildDetailedLineRows = (invoice) => toArray(invoice.lines).filter((line) => !isDiscountLine(line, invoice) && toNumber(line.total_price) !== 0).map((line, index) => ({
   ...line,
   id: line.id || `line-${index}`,
   public_description: stripVendorDetails(line.description),
@@ -142,14 +142,14 @@ const buildPassengerRows = (invoice) => {
 
 const buildServiceRows = (invoice) => {
   const meta = invoice.order?.meta || {};
-  const lines = toArray(invoice.lines).filter((line) => !isDiscountLine(line));
+  const lines = toArray(invoice.lines).filter((line) => !isDiscountLine(line, invoice));
 
   return serviceDefinitions
     .map((service) => {
       const serviceLines = lines.filter((line) => classifyLine(line) === service.key);
       const serviceTotal = serviceLines.reduce((sum, line) => sum + toNumber(line.total_price), 0);
       const metaRows = toArray(meta[service.metaKey]).filter((row) => hasRowValue(row, service.fields));
-      const pricedLines = serviceLines.filter((line) => toNumber(line.total_price) > 0);
+      const pricedLines = serviceLines.filter((line) => toNumber(line.total_price) !== 0);
 
       if (service.key === 'other_services') {
         const otherRows = metaRows.length ? metaRows : serviceLines;
@@ -198,6 +198,7 @@ export default function InvoiceDetail({ shared = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [invoice, setInvoice] = useState(null);
+  const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: invoice?.tax_settings?.precision ?? 2, maximumFractionDigits: Math.max(2, invoice?.tax_settings?.precision ?? 2) });
   const [loading, setLoading] = useState(true);
   const [lockConflict, setLockConflict] = useState(null);
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -293,7 +294,11 @@ export default function InvoiceDetail({ shared = false }) {
   const passengerRows = buildPassengerRows(invoice);
   const serviceRows = buildServiceRows(invoice);
   const detailedRows = buildDetailedLineRows(invoice);
-  const discountTotal = Math.abs(toArray(invoice.lines).filter(isDiscountLine).reduce((sum, line) => sum + toNumber(line.total_price), 0));
+  const legacyDiscountTotal = Math.abs(toArray(invoice.lines).filter((line) => isDiscountLine(line, invoice)).reduce((sum, line) => sum + toNumber(line.total_price), 0));
+  const savedTax = invoice.tax_settings;
+  const discountTotal = (savedTax || toNumber(invoice.total_amount) < 0)
+    ? Math.abs(toNumber(invoice.subtotal) + (savedTax?.pricing !== 'inclusive' ? toNumber(invoice.tax_amount) : 0) - toNumber(invoice.total_amount))
+    : legacyDiscountTotal;
   const settlementRows = toArray(invoice.settlements).filter((settlement) => (
     toNumber(settlement.amount_received) > 0 || toNumber(settlement.amount_refunded) > 0 || toNumber(settlement.amount_to_advance) > 0
   ));
@@ -395,8 +400,12 @@ export default function InvoiceDetail({ shared = false }) {
           <Row justify="end"><Col xs={24} md={11} lg={8}>
             <div className="invoice-totals">
               <div><Text>Sub Total</Text><Text>{money(invoice.subtotal)}</Text></div>
-              {discountTotal > 0 && <div><Text>Discount</Text><Text>(-) {money(discountTotal)}</Text></div>}
-              {toNumber(invoice.tax_amount) > 0 && <div><Text>Tax</Text><Text>{money(invoice.tax_amount)}</Text></div>}
+              {discountTotal > 0 && <div><Text>Discount</Text><Text>{toNumber(invoice.total_amount) < 0 ? '(+)' : '(-)'} {money(discountTotal)}</Text></div>}
+              {(savedTax || toNumber(invoice.tax_amount) !== 0) && <>
+                <div><Text>{savedTax?.name || 'Tax'}{savedTax ? ` (${Number(savedTax.rate)}%)` : ''}{savedTax?.pricing === 'inclusive' ? ' (included)' : ''}</Text><Text>{money(invoice.tax_amount)}</Text></div>
+                {savedTax && <div><Text>Taxable amount (net)</Text><Text>{money(savedTax.taxable_amount)}</Text></div>}
+                {savedTax?.registration_number && <div><Text>Tax registration</Text><Text>{savedTax.registration_number}</Text></div>}
+              </>}
               <div className="invoice-total-row"><Text strong>Total</Text><Text strong>{invoice.currency_code} {money(invoice.total_amount)}</Text></div>
               {paymentMade > 0 && <div className="invoice-paid-row"><Text>Payment Made</Text><Text>(-) {money(paymentMade)}</Text></div>}
               {refunded > 0 && <div><Text>Refunded</Text><Text>{money(refunded)}</Text></div>}

@@ -13,15 +13,20 @@ use Illuminate\Support\Str;
 
 class RegistrationController extends Controller
 {
+    public function session(Request $request)
+    {
+        $request->session()->put('registration_started_at', now()->timestamp);
+
+        return response()->json(['csrf_token' => $request->session()->token()])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
     /**
      * Register new agency (tenant + company + admin user)
      */
     public function register(Request $request)
     {
         $validated = $request->validate([
-            // Tenant info
-            'agency_name' => 'required|string|max:200',
-            
             // Company info
             'company_legal_name' => 'required|string|max:200',
             'company_email' => 'required|email|unique:companies,email',
@@ -37,12 +42,12 @@ class RegistrationController extends Controller
         ]);
 
         try {
-            return DB::transaction(function () use ($validated) {
+            $response = DB::transaction(function () use ($validated) {
                 // Create tenant
                 $tenant = Tenant::create([
                     'uid' => (string) Str::ulid(),
                     'code' => 'AG' . Str::ulid(),
-                    'name' => $validated['agency_name'],
+                    'name' => $validated['company_legal_name'],
                     'is_active' => true,
                 ]);
 
@@ -66,7 +71,7 @@ class RegistrationController extends Controller
                     'uid' => (string) Str::ulid(),
                     'tenant_id' => $tenant->id,
                     'legal_name' => $validated['company_legal_name'],
-                    'display_name' => $validated['agency_name'],
+                    'display_name' => $validated['company_legal_name'],
                     'email' => $validated['company_email'],
                     'phone' => $validated['company_phone'],
                     'address' => $validated['billing_address'],
@@ -124,6 +129,10 @@ class RegistrationController extends Controller
                     ],
                 ], 201);
             });
+
+            $request->session()->forget('registration_started_at');
+
+            return $response;
         } catch (\Exception $e) {
             report($e);
 

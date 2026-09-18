@@ -19,12 +19,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RegistrationController;
 
-// Public registration endpoints
-Route::post('/registration/register', [RegistrationController::class, 'register'])->middleware('throttle:signup');
+// Public registration lookup endpoints. Account creation is web-only.
 Route::get('/registration/currencies', [RegistrationController::class, 'getCurrencies'])->middleware('throttle:public-api');
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
-Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin');
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:signin-failures');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:signin')->name('password.email');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:signin')->name('password.update');
 Route::post('/auth/email/verification-notification', [AuthController::class, 'resendVerificationEmail'])->middleware('throttle:signin')->name('verification.send');
@@ -207,6 +206,7 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
         Route::get('/performance', 'performanceReport')->name('reports.performance');
         Route::get('/profit', 'profitReport')->name('reports.profit');
+        Route::get('/tax', 'taxReport')->name('reports.tax');
         Route::get('/discounts', 'discountReport')->name('reports.discounts');
         Route::get('/payments', 'paymentReport')->name('reports.payments');
         Route::get('/receipts', 'receiptReport')->name('reports.receipts');

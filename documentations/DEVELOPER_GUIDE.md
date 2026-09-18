@@ -103,13 +103,18 @@ Login flow:
 
 The React shell signs users out after four hours of inactivity. Logout posts to `/api/v1/auth/logout`, clears local storage, and redirects to `/login`.
 
+Sign-in permits five incorrect-credential attempts per public IPv4 address or IPv6 /64 in 24 hours. Further sign-in requests return HTTP 429 with `Retry-After` until the window expires, even if the email changes. Successful sign-ins and session-conflict confirmations do not consume this allowance. Password recovery and verification email endpoints retain their separate minute-based throttle and remain available during a sign-in lockout.
+
 Protected routes use `auth:sanctum`, `active.user`, role middleware, system-role middleware, and sensitive-write throttling where appropriate.
 
 ## Registration And Company Users
 
-Registration endpoint:
+Registration uses two form steps: Company Details and Admin Account. The legal company name is also used for the tenant and company display name; no separate agency name is collected.
 
-- `POST /api/v1/registration/register`
+- `GET /registration/session` initializes the web session and returns a CSRF token (never cached).
+- `POST /registration/register` requires that session and its `X-CSRF-TOKEN` header. The old API registration endpoint is removed.
+
+Submission attempts, including validation failures, are limited to two per public IPv4 address or IPv6 /64 in 24 hours, independent of email address or browser session. The limit resets 24 hours after the first attempt. Only configured trusted proxies may supply the client IP. Keep the production cache persistent and shared across application instances so the limit is shared. Registration also rejects a filled hidden `website` honeypot field. A website session does not prevent a determined bot from imitating a browser; CAPTCHA and requiring verified email before workspace access are additional options.
 
 Registration creates a tenant, company, `owner`, `admin`, `sales`, and `accounts` tenant roles, the owner user, a default `Main Cash Box`, and an owner Sanctum token.
 
@@ -363,3 +368,30 @@ Current root docs:
 - `AGENTS.md`
 
 `AGENTS.md` is workflow guidance for coding agents. Keep product behavior in README, user, developer, database, and project brief docs. Avoid root-level temporary planning or completion Markdown.
+
+
+## Company Invoice Tax
+
+Migration `2026_09_12_000001_add_company_invoice_tax_settings.php` adds nullable JSON `companies.tax_settings`, nullable JSON `invoices.tax_settings`, and nullable `invoice_lines.tax_category`. There is no backfill: null means external/no automatic tax and preserves historical invoice behavior. Apply the migration during the normal release before serving feature code. Do not run a production frontend build without approval.
+
+`InvoiceTaxService` owns category mapping, currency precision snapshots, proportional discount calculation and tax-aware refund totals. Categories come from structured `order_items.gds_data.type`, never free-text descriptions or currency. A company's fixed percentage is copied only during invoice creation; invoice request fields cannot override it. Inclusive tax is `discounted_taxable * rate / (100 + rate)`; exclusive tax is `discounted_taxable * rate / 100`. Round aggregate tax half-up to the saved currency precision (0-4), while retaining four-decimal financial storage. `subtotal` retains service prices before discounts, including embedded tax for inclusive pricing.
+
+Company Profile updates remain owner-only. Multipart profile submissions encode `tax_settings` as JSON so empty category arrays survive file uploads; JSON API objects are also supported. Allowed keys, values, categories and precision are validated server-side. Non-owner users have read-only profile access.
+
+New refund requests store the original invoice ID, tax settings (including no-tax), discount proportion and original category limits in server-owned order metadata. Refund service amounts are negative; discount reversals are positive. `syncRefund()` saves the final negative order balance, tax and totals for payment allocations and virtual refund invoice displays. Call it after changing refund items and before committing order changes. Company settings are never consulted for linked refunds. Invoice discounts are locked once a refund request references that invoice. Legacy refund records without these snapshots retain their prior calculation path.
+
+Invoice totals and outstanding balances include tax; `PaymentService` and `StatementService` consume them without recalculating tax. `revenueForOrder()` removes saved tax for profit/performance/profit-share reporting and handles refunds without a physical invoice. Dashboard profit also excludes tax. Shared invoices expose saved tax details, not current company tax configuration.
+
+Focused regression tests: `php artisan test --filter="CompanyInvoiceTaxTest|InvoiceTaxServiceTest"`. Run the complete backend suite for release; JSX parsing is a lightweight frontend check. No application database migration or production build is required to run the tests (SQLite in memory).
+
+
+## Tax Report Integration
+
+- UI: `resources/js/pages/TaxReport.jsx`, route `/reports/tax`, Reports navigation, and general help-directory fallback.
+- API: `GET /api/v1/reports/tax`, using the existing authenticated `role:admin,accounts` report middleware (owner access is inherited).
+- Required filters: `from_date`, `to_date`. Optional: `currency_code`, `type=invoice|refund`, `pricing=inclusive|exclusive`, `search` (up to 100 characters).
+- `InvoiceTaxReportService` reads persisted invoice `tax_settings`, `tax_amount`, and `total_amount`; it never consults current company settings or recalculates tax. Tenant and company are always taken from the authenticated user.
+- Confirmed refund orders (`partial_refund`, `refund`) use saved metadata only when no non-void/non-cancel invoice exists. This prevents double counting. Invoice dates filter physical invoices; creation dates filter virtual refunds, matching the statement convention.
+- Response: `period`, `data`, and `summary` with record counts and `by_currency` (tax_charged, positive tax_reversed, signed net_tax and signed taxable_amount). There is no combined monetary total across currencies. Tax-enabled zero-amount records remain visible.
+- Existing tax migration is sufficient; no extra schema migration or payment changes. Standard CsvTable export behavior and client pagination are reused.
+- Regression coverage in `CompanyInvoiceTaxTest`: saved settings and discounts, currency separation, confirmation and physical/virtual refund de-duplication, excluded records, date validation, tenant/company isolation and role permissions.

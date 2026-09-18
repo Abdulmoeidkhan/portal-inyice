@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Col, Descriptions, Form, Input, Row, Switch, Tag, Typography, Upload } from 'antd';
+import { Button, Card, Col, Descriptions, Form, Input, Row, Switch, Checkbox, InputNumber, Select, Tag, Typography, Upload } from 'antd';
 import { SaveOutlined, UploadOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
 
@@ -16,6 +16,8 @@ const authHeaders = () => {
 
 export default function CompanyProfile() {
   const [form] = Form.useForm();
+  const [taxCategories, setTaxCategories] = useState({});
+  const taxEnabled = Form.useWatch(['tax_settings', 'enabled'], form);
   const [company, setCompany] = useState(null);
   const [canUpdate, setCanUpdate] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,7 @@ export default function CompanyProfile() {
       }
 
       setCompany(data.company);
+      if (data.tax_categories) setTaxCategories(data.tax_categories);
       setCanUpdate(Boolean(data.can_update));
       form.setFieldsValue(data.company);
     } catch (error) {
@@ -54,6 +57,10 @@ export default function CompanyProfile() {
     try {
       const payload = new FormData();
       Object.entries(values).forEach(([key, value]) => {
+        if (key === 'tax_settings') {
+          payload.append(key, JSON.stringify(value));
+          return;
+        }
         payload.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : (value ?? ''));
       });
 
@@ -73,7 +80,7 @@ export default function CompanyProfile() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to update company profile');
+        throw new Error(Object.values(data.errors || {}).flat()[0] || data.error || 'Unable to update company profile');
       }
 
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -85,6 +92,7 @@ export default function CompanyProfile() {
       }));
 
       setCompany(data.company);
+      if (data.tax_categories) setTaxCategories(data.tax_categories);
       form.setFieldsValue(data.company);
       setLogoFile(null);
       setFooterLogoFile(null);
@@ -137,6 +145,11 @@ export default function CompanyProfile() {
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={company?.is_active ? 'success' : 'default'}>{company?.is_active ? 'Active' : 'Inactive'}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Invoice Tax">
+                {company?.tax_settings?.enabled
+                  ? `${company.tax_settings.name} ${company.tax_settings.rate}% (${company.tax_settings.pricing})`
+                  : 'Handled externally'}
               </Descriptions.Item>
               <Descriptions.Item label="Sales Cost Access">
                 <Tag color={company?.sales_can_edit_cost ? 'success' : 'default'}>{company?.sales_can_edit_cost ? 'Allowed' : 'Sales only'}</Tag>
@@ -216,6 +229,38 @@ export default function CompanyProfile() {
                     </Form.Item>
                   </Col>
                 </Row>
+                <Card size="small" title="Invoice tax" style={{ marginBottom: 16 }}>
+                  <Paragraph type="secondary">Choose whether inYice calculates tax or you handle it externally. Changes apply to new invoices; saved invoices keep their tax settings.</Paragraph>
+                  <Form.Item name={['tax_settings', 'enabled']} label="Calculate tax in inYice" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Row gutter={12}>
+                    <Col xs={24} sm={12}>
+                      <Form.Item name={['tax_settings', 'name']} label="Tax label" rules={[{ required: true, max: 30 }]}>
+                        <Input disabled={!taxEnabled} maxLength={30} placeholder="VAT" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12}>
+                      <Form.Item name={['tax_settings', 'registration_number']} label="Tax registration number">
+                        <Input disabled={!taxEnabled} maxLength={100} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12}>
+                      <Form.Item name={['tax_settings', 'rate']} label="Fixed rate (%)" rules={[{ required: true }]}>
+                        <InputNumber disabled={!taxEnabled} min={0} max={100} precision={4} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12}>
+                      <Form.Item name={['tax_settings', 'pricing']} label="Service prices" rules={[{ required: true }]}>
+                        <Select disabled={!taxEnabled} options={[{ value: 'exclusive', label: 'Exclude tax (add on top)' }, { value: 'inclusive', label: 'Include tax (extract tax)' }]} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item name={['tax_settings', 'categories']} label="Taxable categories" rules={[{ validator: (_, value) => taxEnabled && !value?.length ? Promise.reject(new Error('Choose at least one category')) : Promise.resolve() }]}>
+                    <Checkbox.Group disabled={!taxEnabled} options={Object.entries(taxCategories).map(([value, label]) => ({ value, label }))} />
+                  </Form.Item>
+                  <Text type="secondary">The fixed rate applies to selected services in every currency. Invoice users cannot override it.</Text>
+                </Card>
                 <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
                   Save Profile
                 </Button>

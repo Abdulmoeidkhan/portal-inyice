@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderVendorCost;
 use App\Models\ProfitShare;
 use App\Models\User;
+use App\Services\InvoiceTaxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -247,7 +248,7 @@ class ProfitShareController extends Controller
                 'customer:id,name',
                 'createdBy:id,name,email',
                 'vendorCosts',
-                'invoice:id,order_id,uid,invoice_number,invoice_date,status,currency_code,total_amount',
+                'invoice:id,order_id,uid,invoice_number,invoice_date,status,currency_code,total_amount,tax_amount',
             ])
             ->where('tenant_id', $user->tenant_id)
             ->where('company_id', $user->company_id)
@@ -293,7 +294,7 @@ class ProfitShareController extends Controller
 
         return $orders
             ->map(function (Order $order) use ($shareTotals): array {
-                $revenue = (float) ($order->invoice?->total_amount ?? $order->total_amount);
+                $revenue = app(InvoiceTaxService::class)->revenueForOrder($order);
                 $cost = (float) $order->vendorCosts->sum('amount');
 
                 if ($cost == 0.0) {

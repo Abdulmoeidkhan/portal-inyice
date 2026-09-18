@@ -160,9 +160,9 @@ class AuthSecurityApiTest extends TestCase
 
     public function test_signin_is_rate_limited_after_too_many_attempts(): void
     {
-        for ($i = 0; $i < 6; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $this->postJson('/api/v1/auth/login', [
-                'email' => 'unknown@test.local',
+                'email' => "unknown{$i}@test.local",
                 'password' => 'wrong-password',
             ])->assertStatus(422);
         }
@@ -172,17 +172,73 @@ class AuthSecurityApiTest extends TestCase
             'password' => 'wrong-password',
         ]);
 
-        $limited->assertStatus(429);
+        $limited->assertStatus(429)->assertHeader('Retry-After');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => 'unknown@test.local',
+        ])->assertOk();
+
+        $this->travel(24)->hours();
+        $this->travel(1)->seconds();
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'unknown@test.local',
+            'password' => 'wrong-password',
+        ])->assertStatus(422);
     }
 
-    public function test_signup_is_rate_limited_after_too_many_attempts(): void
+    public function test_correct_credentials_do_not_consume_failed_signin_allowance(): void
     {
+        $ctx = $this->seedContext('admin');
+        $credentials = ['email' => $ctx['user']->email, 'password' => 'password123'];
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->postJson('/api/v1/auth/login', $credentials + ['force_logout' => true])->assertOk();
+        }
+        for ($i = 0; $i < 6; $i++) {
+            $this->postJson('/api/v1/auth/login', $credentials)->assertStatus(409);
+        }
         for ($i = 0; $i < 5; $i++) {
-            $this->postJson('/api/v1/registration/register', [])->assertStatus(422);
+            $this->postJson('/api/v1/auth/login', [
+                'email' => $ctx['user']->email,
+                'password' => 'wrong-password',
+            ])->assertStatus(422);
+        }
+        $this->postJson('/api/v1/auth/login', $credentials)->assertStatus(429);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
+    public function test_signin_limit_is_shared_by_ipv6_network_but_not_other_networks(): void
+    {
+        for ($i = 1; $i <= 5; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "2001:db8:1:1::{$i}"])
+                ->postJson('/api/v1/auth/login', [
+                    'email' => "unknown{$i}@test.local",
+                    'password' => 'wrong-password',
+                ])->assertStatus(422);
+        }
+        $this->withServerVariables(['REMOTE_ADDR' => '2001:db8:1:1::6'])
+            ->postJson('/api/v1/auth/login', [
+                'email' => 'unknown@test.local', 'password' => 'wrong-password',
+            ])->assertStatus(429);
+        $this->withServerVariables(['REMOTE_ADDR' => '2001:db8:1:2::1'])
+            ->postJson('/api/v1/auth/login', [
+                'email' => 'unknown@test.local', 'password' => 'wrong-password',
+            ])->assertStatus(422);
+    }
+
+    public function test_signup_is_rate_limited_after_two_attempts_even_with_different_emails(): void
+    {
+        for ($i = 0; $i < 2; $i++) {
+            $csrfToken = $this->getJson('/registration/session')->assertOk()->json('csrf_token');
+            $this->postJson('/registration/register', ['admin_email' => "owner{$i}@example.test"], [
+                'X-CSRF-TOKEN' => $csrfToken,
+            ])->assertStatus(422);
         }
 
-        $limited = $this->postJson('/api/v1/registration/register', []);
-        $limited->assertStatus(429);
+        $this->postJson('/registration/register', ['admin_email' => 'another@example.test'], [
+            'X-CSRF-TOKEN' => $csrfToken,
+        ])->assertStatus(429)->assertHeader('Retry-After');
     }
 
     public function test_sales_role_cannot_record_payment(): void

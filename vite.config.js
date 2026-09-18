@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => {
         server: {
             port: Number(env.VITE_PORT || 5174),
             proxy: {
+                '/registration': {
+                    target: appUrl,
+                    changeOrigin: true,
+                    secure: false,
+                },
                 '/api': {
                     target: appUrl,
                     changeOrigin: true,
