@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'Connect your agency') · InYice</title>
+    @include('mcp.discovery-links')
     <style>
         *{box-sizing:border-box}body{margin:0;background:#f4f6fa;color:#17233b;font:16px/1.6 system-ui,sans-serif}
         main{max-width:560px;margin:7vh auto;padding:32px;background:white;border:1px solid #dce2eb;border-radius:16px}
@@ -27,6 +28,7 @@
         <p class="notice" role="status">{{ session('status') }}</p>
     @endif
     @yield('content')
+    <p class="muted"><a href="/connect/ai">How to connect an AI assistant via MCP</a></p>
 </main>
 </body>
 </html>

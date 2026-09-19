@@ -58,6 +58,12 @@ Adding a URL in an ordinary prompt cannot install or authenticate a connection. 
 
 Official setup and authentication references (verified September 2026): [Connect and test](https://developers.openai.com/plugins/deploy/connect-chatgpt), [OAuth authentication](https://developers.openai.com/plugins/build/auth).
 
+## Public discovery for AI assistants
+
+The portal HTML and OAuth pages link to `/llms.txt` (plain-text connection instructions) and `/connect/ai` (a public, server-rendered connection guide). These pages use `APP_URL` for the MCP and OAuth addresses and expose no agency data. Deploy the updated PHP routes and Blade views, then run `php artisan optimize:clear`; these discovery pages do not require a frontend build.
+
+Assistants that read these links can guide users to add the MCP server and complete OAuth in their browser. `/llms.txt` is guidance, not a universal auto-install mechanism. The AI host must support custom remote MCP connections and the user must authorize access. Currently only ChatGPT callback domains are allowed by `config/mcp.php`; other clients need explicitly configured callback support. Visiting the sign-in page alone does not connect a client.
+
 ## User control and connection lifetime
 
 Users manage and remove their own connections at `https://os.inyice.com/connect/chatgpt`. Disconnect revokes all access tokens, refresh tokens and outstanding authorization codes for that user's selected client. It does not disconnect other agencies or other users. Signing out of this management page closes its browser session; use **Disconnect** to revoke an AI connection.

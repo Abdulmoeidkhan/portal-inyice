@@ -14,6 +14,17 @@ class Metadata
         return self::issuer().'/mcp/agency';
     }
 
+    public function guide()
+    {
+        return view('mcp.discovery', ['issuer' => self::issuer(), 'resource' => self::resource()]);
+    }
+
+    public function instructions()
+    {
+        return response()->view('mcp.instructions', ['issuer' => self::issuer(), 'resource' => self::resource()])
+            ->header('Content-Type', 'text/plain; charset=UTF-8');
+    }
+
     public function resourceMetadata()
     {
         return response()->json([
