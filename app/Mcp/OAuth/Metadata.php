@@ -19,6 +19,15 @@ class Metadata
         return view('mcp.discovery', ['issuer' => self::issuer(), 'resource' => self::resource()]);
     }
 
+    public function verifyDomain()
+    {
+        $token = config('mcp.openai_verification_token');
+        abort_unless(is_string($token) && trim($token) !== '', 404);
+
+        return response($token)->header('Content-Type', 'text/plain; charset=UTF-8')
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function instructions()
     {
         return response()->view('mcp.instructions', ['issuer' => self::issuer(), 'resource' => self::resource()])
