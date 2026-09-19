@@ -83,7 +83,7 @@ const serviceSections = ['flights', 'hotels', 'transfers', 'city_tours', 'visa',
 const sectionValueKeys = {
   flights: ['gds_pnr', 'pnr', 'flight_no', 'from', 'to', 'date', 'departure', 'arrival'],
   hotels: ['vendor_id', 'vendor_name', 'hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes', 'cost', 'profit', 'sales', 'amount'],
-  transfers: ['vendor_id', 'vendor_name', 'tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'cost', 'profit', 'sales', 'amount'],
+  transfers: ['vendor_id', 'vendor_name', 'tn', 'date', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes', 'cost', 'profit', 'sales', 'amount'],
   city_tours: ['vendor_id', 'vendor_name', 'city', 'title', 'attractions', 'date', 'notes', 'cost', 'profit', 'sales', 'amount'],
   visa: ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost', 'profit', 'sales', 'amount'],
   other_services: ['vendor_id', 'vendor_name', 'description', 'quantity', 'cost', 'profit', 'sales', 'amount'],

@@ -699,6 +699,23 @@ class ReportService
                 ]));
             }
 
+            foreach (($meta['transfers'] ?? []) as $index => $transfer) {
+                if (!is_array($transfer)) {
+                    continue;
+                }
+
+                $date = $this->dashboardDate($transfer['date'] ?? null);
+                if (!$date || !$date->betweenIncluded($from, $to)) {
+                    continue;
+                }
+
+                $events->push($this->dashboardEvent($order, 'transfer', $date, [
+                    'title' => trim(collect([$transfer['service'] ?? null, $transfer['from_city'] ?? null, $transfer['to_city'] ?? null])->filter()->join(' - ')) ?: 'Transfer',
+                    'description' => trim(collect([$transfer['vehicle'] ?? null, $transfer['contact_person'] ?? null, $transfer['tn'] ?? null])->filter()->join(' - ')),
+                    'source_index' => $index,
+                ]));
+            }
+
             foreach (($meta['hotels'] ?? []) as $index => $hotel) {
                 if (!is_array($hotel)) {
                     continue;
@@ -739,11 +756,13 @@ class ReportService
             'company_id' => $companyId,
             'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'days' => $days],
             'summary' => [
+                'transfers' => $byType->get('transfer', collect())->count(),
                 'departures' => $byType->get('departure', collect())->count(),
                 'checkins' => $byType->get('checkin', collect())->count(),
                 'checkouts' => $byType->get('checkout', collect())->count(),
                 'notifications' => $notifications->count(),
             ],
+            'transfers' => $byType->get('transfer', collect())->values()->all(),
             'departures' => $byType->get('departure', collect())->values()->all(),
             'checkins' => $byType->get('checkin', collect())->values()->all(),
             'checkouts' => $byType->get('checkout', collect())->values()->all(),
@@ -1461,6 +1480,7 @@ class ReportService
     private function dashboardNotificationMessage(array $event): string
     {
         $label = match ($event['type']) {
+            'transfer' => 'Transfer',
             'departure' => 'Departure',
             'checkin' => 'Check-in',
             'checkout' => 'Check-out',

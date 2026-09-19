@@ -71,6 +71,11 @@ class Company extends Model
         return $this->belongsTo(Tenant::class);
     }
 
+    public function hasIntegrationAccess(): bool
+    {
+        return $this->is_paid === true;
+    }
+
     /**
      * Get all users for this company
      */

@@ -247,7 +247,7 @@ export default function VoucherPreview({ order }) {
   const passengerRows = buildPassengerRows(voucher.passengers, visaRows);
   const hotelRows = cleanRows(voucher.hotels, ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'notes'])
     .map((row) => ({ ...row, nights: calculateNights(row.check_in, row.check_out) }));
-  const transferRows = cleanRows(voucher.transfers, ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes']);
+  const transferRows = cleanRows(voucher.transfers, ['tn', 'date', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'notes']);
   const cityTourRows = cleanRows(voucher.city_tours, ['city', 'title', 'attractions', 'date', 'notes']);
   const serviceRows = cleanRows(voucher.other_services, ['description']);
   const packageDays = calculatePackageDays(voucher);
@@ -383,6 +383,7 @@ export default function VoucherPreview({ order }) {
           <PreviewTable
             data={transferRows}
             columns={[
+              { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
               { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '', alwaysVisible: true },
               { title: 'From', dataIndex: 'from_city', width: 95, render: formatPlace },
               { title: 'To', dataIndex: 'to_city', width: 95, render: formatPlace },

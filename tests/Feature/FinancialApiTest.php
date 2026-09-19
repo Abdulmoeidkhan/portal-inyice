@@ -31,6 +31,57 @@ class FinancialApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_transfer_dates_are_saved_updated_and_validated(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $payload = [
+            'customer_id' => $ctx['customer']->id, 'currency_code' => 'PKR', 'status' => 'order',
+            'voucher' => ['active_sections' => ['transfers'], 'transfers' => [[
+                'service' => 'Airport pickup', 'date' => '2026-09-20',
+                'vendor_id' => $ctx['vendor']->id, 'cost' => 100, 'sales' => 150,
+            ]]],
+        ];
+        $created = $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertCreated();
+        $order = Order::where('uid', $created->json('order.uid'))->firstOrFail();
+        $this->assertSame('2026-09-20', $order->meta['transfers'][0]['date']);
+        $payload['voucher']['transfers'][0]['date'] = '2026-09-22';
+        $this->patchJson('/api/v1/orders/'.$order->uid, $payload)->assertOk();
+        $this->assertSame('2026-09-22', $order->fresh()->meta['transfers'][0]['date']);
+        $payload['voucher']['transfers'][0]['date'] = '2026-02-30';
+        $this->patchJson('/api/v1/orders/'.$order->uid, $payload)->assertUnprocessable()->assertJsonValidationErrors('voucher.transfers.0.date');
+        $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertUnprocessable()->assertJsonValidationErrors('voucher.transfers.0.date');
+    }
+
+    public function test_dashboard_shows_only_upcoming_active_agency_transfers_in_date_order(): void
+    {
+        $this->travelTo(now()->setDate(2026, 9, 19)->startOfDay());
+        $ctx = $this->seedTenantContext();
+        $ctx['order']->update(['meta' => ['transfers' => [
+            ['date' => '2026-09-26', 'service' => 'Last day'],
+            ['date' => '2026-09-19', 'service' => 'Pickup', 'from_city' => 'Airport', 'to_city' => 'Hotel'],
+            ['date' => '2026-09-18', 'service' => 'Past'],
+            ['date' => '2026-09-27', 'service' => 'Outside window'],
+            ['service' => 'Undated'],
+            ['date' => 'invalid', 'service' => 'Bad legacy date'],
+        ]]]);
+        $this->getJson('/api/v1/reports/dashboard-upcoming?days=7')->assertOk()
+            ->assertJsonPath('summary.transfers', 2)->assertJsonCount(2, 'transfers')
+            ->assertJsonPath('transfers.0.date', '2026-09-19')
+            ->assertJsonPath('transfers.0.title', 'Pickup - Airport - Hotel')
+            ->assertJsonPath('transfers.0.order_uid', $ctx['order']->uid)
+            ->assertJsonPath('transfers.1.date', '2026-09-26')
+            ->assertJsonPath('notifications.0.type', 'transfer');
+        foreach (['cancel', 'void'] as $status) {
+            $ctx['order']->update(['status' => $status]);
+            $this->getJson('/api/v1/reports/dashboard-upcoming?days=7')->assertOk()->assertJsonCount(0, 'transfers');
+        }
+        $otherCompany = $ctx['company']->replicate();
+        $otherCompany->uid = (string) Str::ulid();
+        $otherCompany->save();
+        $ctx['order']->update(['status' => 'order', 'company_id' => $otherCompany->id]);
+        $this->getJson('/api/v1/reports/dashboard-upcoming?days=7')->assertOk()->assertJsonCount(0, 'transfers');
+    }
+
     public function test_invoice_endpoints_work_for_authenticated_user(): void
     {
         $ctx = $this->seedTenantContext();

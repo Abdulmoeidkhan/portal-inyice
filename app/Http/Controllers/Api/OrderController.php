@@ -251,6 +251,7 @@ class OrderController extends Controller
             'voucher.transfers' => 'nullable|array',
             'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.transfers.*.vendor_name' => 'nullable|string|max:255',
+            'voucher.transfers.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.transfers.*.tn' => 'nullable|string|max:100',
             'voucher.transfers.*.service' => 'nullable|string|max:255',
             'voucher.transfers.*.from_city' => 'nullable|string|max:255',
@@ -681,6 +682,7 @@ class OrderController extends Controller
             'voucher.transfers' => 'nullable|array',
             'voucher.transfers.*.vendor_id' => ['nullable', 'integer', $tenantVendor],
             'voucher.transfers.*.vendor_name' => 'nullable|string|max:255',
+            'voucher.transfers.*.date' => 'nullable|date_format:Y-m-d',
             'voucher.transfers.*.tn' => 'nullable|string|max:100',
             'voucher.transfers.*.service' => 'nullable|string|max:255',
             'voucher.transfers.*.from_city' => 'nullable|string|max:255',
@@ -1690,7 +1692,7 @@ class OrderController extends Controller
         if ($hasActiveSection('transfers')) {
             foreach (($voucher['transfers'] ?? []) as $transfer) {
                 $amount = $this->salesAmount($transfer);
-                if ($amount <= 0 && !$this->hasFilledValue($transfer, ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes'])) {
+                if ($amount <= 0 && !$this->hasFilledValue($transfer, ['tn', 'date', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes'])) {
                     continue;
                 }
 
@@ -2135,7 +2137,7 @@ class OrderController extends Controller
 
         $serviceRows = [
             'hotels' => ['hcn', 'city', 'hotel_name', 'room_type', 'check_in', 'check_out', 'lead_passenger', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
-            'transfers' => ['tn', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
+            'transfers' => ['tn', 'date', 'service', 'from_city', 'to_city', 'vehicle', 'contact_person', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
             'city_tours' => ['city', 'title', 'attractions', 'date', 'vendor_id', 'vendor_name', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
             'visa' => ['passenger_name', 'validity', 'visa_no', 'visa_publisher', 'vendor_id', 'visa_vendor', 'notes', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],
             'other_services' => ['description', 'quantity', 'vendor_id', 'vendor_name', 'cost_base', 'cost_roe', 'cost', 'profit', 'sales', 'amount'],

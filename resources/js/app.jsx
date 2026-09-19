@@ -7,6 +7,7 @@ import enUS from 'antd/locale/en_US';
 import '../css/app.css';
 import MainApp from './pages/App';
 import PageHelp from './components/PageHelp';
+import CookieConsent from './components/CookieConsent';
 import { setFeedbackMessage, setFeedbackModal } from './services/feedback';
 import { THEME_STYLE_TOKENS } from './themeOptions';
 
@@ -93,6 +94,7 @@ function RootApp() {
     >
       <AntdApp>
         <FeedbackBridge />
+        <CookieConsent />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <PageHelp standalone />
           <MainApp

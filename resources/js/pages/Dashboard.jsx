@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Badge, Button, Card, Col, Empty, Grid, Layout, Row, Skeleton, Space, Statistic, Tag, Typography, theme } from 'antd';
 import {
   ArrowRightOutlined,
+  CarOutlined,
   DollarOutlined,
   LoginOutlined,
   LogoutOutlined,
@@ -221,6 +222,12 @@ const authHeaders = () => {
 };
 
 const eventConfig = {
+  transfer: {
+    title: 'Upcoming Transfers',
+    empty: 'No upcoming transfers',
+    icon: <CarOutlined />,
+    color: 'purple',
+  },
   checkin: {
     title: 'Upcoming Check-ins',
     empty: 'No upcoming check-ins',
@@ -609,14 +616,17 @@ export default function Dashboard() {
         )}
 
         <Row gutter={[16, 16]} className="dashboard-travel-row">
-          <Col xs={24} lg={8}>
+          <Col xs={24} md={12} xl={6}>
             <EventListCard type="checkin" events={report?.checkins || []} loading={loading} onOpen={openVoucher} />
           </Col>
-          <Col xs={24} lg={8}>
+          <Col xs={24} md={12} xl={6}>
             <EventListCard type="checkout" events={report?.checkouts || []} loading={loading} onOpen={openVoucher} />
           </Col>
-          <Col xs={24} lg={8}>
+          <Col xs={24} md={12} xl={6}>
             <EventListCard type="departure" events={report?.departures || []} loading={loading} onOpen={openVoucher} />
+          </Col>
+          <Col xs={24} md={12} xl={6}>
+            <EventListCard type="transfer" events={report?.transfers || []} loading={loading} onOpen={openVoucher} />
           </Col>
         </Row>
       </Layout.Content>

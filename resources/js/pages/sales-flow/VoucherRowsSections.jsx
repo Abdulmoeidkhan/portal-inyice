@@ -560,6 +560,7 @@ export default function VoucherRowsSections({
         <RowGroupCard title="Transfers" rows={voucher.transfers} addLabel="+ Add Transfer" onAdd={() => addRow('transfers', blankTransfer)} onRemove={(idx) => removeRow('transfers', idx)}>
           {(row, idx) => (
             <Row gutter={8}>
+              <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Transfer Date</Text><Input aria-label="Transfer date" type="date" value={row.date || ''} onChange={(e) => setRowField('transfers', idx, 'date', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>TN</Text><Input value={row.tn} onChange={(e) => setRowField('transfers', idx, 'tn', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>Service</Text><Input value={row.service} onChange={(e) => setRowField('transfers', idx, 'service', e.target.value)} /></Col>
               <Col xs={24} sm={12} md={8} lg={4} xl={6}><Text>From</Text><Input value={row.from_city} onChange={(e) => setRowField('transfers', idx, 'from_city', e.target.value)} /></Col>

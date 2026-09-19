@@ -67,15 +67,16 @@ class AuthController extends Controller
 
         if ($validated['force_logout'] ?? false) {
             $user->tokens()->delete();
+            app(\App\Mcp\OAuth\RevokeConnections::class)->forUser($user->id);
         }
 
-        $token = $user->createToken('web')->plainTextToken;
+        $token = $user->createToken('web', ['portal:session'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'success' => true,
             'token' => $token,
             'user' => $this->serializeUser($user),
-        ]);
+        ])->withCookie(\App\Auth\PortalSession::cookie($token, $request));
     }
 
     /**
@@ -227,7 +228,7 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Logged out successfully',
-        ]);
+        ])->withCookie(\App\Auth\PortalSession::expiredCookie());
     }
 
     /**

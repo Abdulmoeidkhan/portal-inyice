@@ -978,7 +978,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
     setIsAuthenticated(false);
 
     if (notify) {
-      message.info('You were signed out because this account is active on another device.');
+      message.info('Your session could not be verified. Please sign in again.');
     }
 
     navigate('/login', { replace: true });

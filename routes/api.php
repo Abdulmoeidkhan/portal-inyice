@@ -36,7 +36,7 @@ Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
     ->name('sharedVouchers.show');
 
 
-Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
+Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::class, 'active.user', \App\Http\Middleware\EnsureApiAccess::class])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('throttle:sensitive-write');
     Route::post('/edit-locks', [EditLockController::class, 'acquire'])->middleware('throttle:sensitive-write')->name('editLocks.acquire');
     Route::patch('/edit-locks', [EditLockController::class, 'heartbeat'])->name('editLocks.heartbeat');

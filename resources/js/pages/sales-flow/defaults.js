@@ -128,6 +128,7 @@ export const blankTransfer = () => ({
   vendor_id: null,
   vendor_name: '',
   tn: '',
+  date: '',
   service: '',
   from_city: '',
   to_city: '',

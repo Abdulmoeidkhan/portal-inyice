@@ -38,6 +38,10 @@ return [
     */
 
     'guards' => [
+        'mcp_browser' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
         'web' => [
             'driver' => 'session',
             'provider' => 'users',

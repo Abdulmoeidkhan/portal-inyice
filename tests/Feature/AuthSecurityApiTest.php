@@ -25,6 +25,27 @@ class AuthSecurityApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_portal_cookie_uses_current_host_even_with_a_different_session_domain(): void
+    {
+        $ctx = $this->seedContext('admin');
+        config(['session.domain' => 'os.inyice.com']);
+        app('cookie')->setDefaultPathAndDomain('/', 'os.inyice.com', true, 'lax');
+        $login = $this->postJson('/api/v1/auth/login', [
+            'email' => $ctx['user']->email, 'password' => 'password123',
+        ])->assertOk();
+        $cookie = $login->getCookie(\App\Auth\PortalSession::COOKIE, false);
+        $this->assertNull($cookie->getDomain());
+        $this->assertSame('/api/v1', $cookie->getPath());
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->withCredentials()->withUnencryptedCookie($cookie->getName(), $cookie->getValue())
+            ->withToken($login->json('token'))->getJson('/api/v1/user')->assertOk();
+        $logout = $this->postJson('/api/v1/auth/logout')->assertOk();
+        $expired = $logout->getCookie(\App\Auth\PortalSession::COOKIE, false);
+        $this->assertNull($expired->getDomain());
+        $this->assertSame($cookie->getPath(), $expired->getPath());
+        $this->assertLessThan(time(), $expired->getExpiresTime());
+    }
+
     public function test_signin_returns_token_for_valid_credentials(): void
     {
         $ctx = $this->seedContext('admin');
@@ -69,7 +90,8 @@ class AuthSecurityApiTest extends TestCase
             ->getJson('/api/v1/user')
             ->assertUnauthorized();
 
-        $this->withHeader('Authorization', 'Bearer ' . $forcedLogin->json('token'))
+        $this->withCredentials()->withUnencryptedCookie(\App\Auth\PortalSession::COOKIE, $forcedLogin->getCookie(\App\Auth\PortalSession::COOKIE, false)->getValue())
+            ->withHeader('Authorization', 'Bearer ' . $forcedLogin->json('token'))
             ->getJson('/api/v1/user')
             ->assertOk();
     }
