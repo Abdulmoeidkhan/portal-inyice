@@ -453,6 +453,12 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+.app-connection-footer {
+  padding: 12px;
+  text-align: center;
+  font: 14px system-ui, sans-serif;
+}
+
 .page-shell {
   min-height: calc(100vh - 126px);
   width: 100%;
@@ -3389,6 +3395,7 @@ body {
   }
 
   .app-sider,
+  .app-connection-footer,
   .app-header,
   .invoice-screen-actions,
   .voucher-screen-actions,

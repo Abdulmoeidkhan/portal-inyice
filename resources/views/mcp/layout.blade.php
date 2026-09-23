@@ -16,6 +16,7 @@
         a{color:#244fba}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.error{background:#fff0f0;color:#992020;padding:12px;border-radius:7px}
         .notice{background:#eef4ff;padding:16px;border-radius:9px}.muted{color:#526078;font-size:14px}.connection{padding:18px 0;border-bottom:1px solid #dce2eb}
         code{overflow-wrap:anywhere;font-size:14px}ul{padding-left:22px}@media(max-width:600px){main{margin:20px 12px;padding:24px}}
+        select,textarea{box-sizing:border-box;width:100%;padding:12px;border:1px solid #8693a9;border-radius:7px;font:inherit;background:white;color:inherit}textarea{resize:vertical}select:focus-visible,textarea:focus-visible{outline:3px solid #d58b05;outline-offset:3px}
     </style>
 </head>
 <body>
@@ -29,6 +30,7 @@
     @endif
     @yield('content')
     <p class="muted"><a href="/connect/ai">How to connect an AI assistant via MCP</a></p>
+    <p class="muted"><a href="https://help.inyice.com">Help center</a> · <a href="{{ route('support.show') }}">Contact support</a></p>
 </main>
 </body>
 </html>

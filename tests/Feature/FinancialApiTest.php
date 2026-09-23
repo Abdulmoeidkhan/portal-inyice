@@ -31,6 +31,42 @@ class FinancialApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_invoice_due_date_defaults_to_next_calendar_month_without_overflow(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $response = $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id, 'invoice_date' => '2026-01-31',
+        ])->assertCreated();
+        $invoice = Invoice::where('uid', $response->json('invoice.uid'))->firstOrFail();
+        $this->assertSame('2026-01-31', $invoice->invoice_date->toDateString());
+        $this->assertSame('2026-02-28', $invoice->due_date->toDateString());
+    }
+
+    public function test_invoice_due_date_can_be_selected_and_repeat_creation_preserves_it(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $payload = ['order_id' => $ctx['order']->id, 'invoice_date' => '2026-09-23', 'due_date' => '2026-11-05'];
+        $response = $this->postJson('/api/v1/invoices/create-from-order', $payload)->assertCreated();
+        $invoice = Invoice::where('uid', $response->json('invoice.uid'))->firstOrFail();
+        $this->assertSame('2026-11-05', $invoice->due_date->toDateString());
+        $this->postJson('/api/v1/invoices/create-from-order', array_replace($payload, ['due_date' => '2026-12-01']))
+            ->assertCreated()->assertJsonPath('invoice.uid', $invoice->uid);
+        $this->assertSame('2026-11-05', $invoice->fresh()->due_date->toDateString());
+    }
+
+    public function test_invoice_due_date_rejects_invalid_or_earlier_dates_and_accepts_same_day(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $payload = ['order_id' => $ctx['order']->id, 'invoice_date' => '2026-09-23'];
+        foreach (['2026-09-22', '2026-02-30', 'not-a-date'] as $dueDate) {
+            $this->postJson('/api/v1/invoices/create-from-order', $payload + ['due_date' => $dueDate])
+                ->assertUnprocessable()->assertJsonValidationErrors('due_date');
+        }
+        $this->assertDatabaseMissing('invoices', ['order_id' => $ctx['order']->id]);
+        $response = $this->postJson('/api/v1/invoices/create-from-order', $payload + ['due_date' => '2026-09-23'])->assertCreated();
+        $this->assertSame('2026-09-23', Invoice::where('uid', $response->json('invoice.uid'))->firstOrFail()->due_date->toDateString());
+    }
+
     public function test_transfer_dates_are_saved_updated_and_validated(): void
     {
         $ctx = $this->seedTenantContext();

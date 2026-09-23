@@ -137,6 +137,8 @@ export default function OrderList() {
   const [cancelPassword, setCancelPassword] = useState('');
   const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [invoiceDate, setInvoiceDate] = useState(dayjs());
+  const [invoiceDueDate, setInvoiceDueDate] = useState(dayjs().add(1, 'month'));
+  const [dueDateEdited, setDueDateEdited] = useState(false);
   const [invoiceLoadingKey, setInvoiceLoadingKey] = useState('');
   const screens = Grid.useBreakpoint();
   const compactActions = !screens.sm;
@@ -453,6 +455,8 @@ export default function OrderList() {
   };
 
   const openInvoiceModal = (order) => {
+    setInvoiceDueDate(dayjs().add(1, 'month'));
+    setDueDateEdited(false);
     setInvoiceOrder(order);
     setInvoiceDate(dayjs());
   };
@@ -463,8 +467,8 @@ export default function OrderList() {
   };
 
   const createInvoice = async () => {
-    if (!invoiceOrder || !invoiceDate) {
-      message.error('Choose an invoice date');
+    if (!invoiceOrder || !invoiceDate || !invoiceDueDate || invoiceDueDate.isBefore(invoiceDate, 'day')) {
+      message.error('Choose an invoice date and a due date on or after it');
       return;
     }
 
@@ -476,6 +480,7 @@ export default function OrderList() {
         body: JSON.stringify({
           order_id: invoiceOrder.id,
           invoice_date: invoiceDate.format('YYYY-MM-DD'),
+          due_date: invoiceDueDate.format('YYYY-MM-DD'),
         }),
       });
       const data = await response.json();
@@ -826,7 +831,7 @@ export default function OrderList() {
         okText={invoiceOrder?.status === 'refund_request' ? 'Create Refund' : 'Create Invoice'}
         cancelButtonProps={{ danger: true }}
         confirmLoading={Boolean(invoiceLoadingKey)}
-        okButtonProps={{ disabled: !invoiceDate }}
+        okButtonProps={{ disabled: !invoiceDate || !invoiceDueDate || invoiceDueDate.isBefore(invoiceDate, 'day') }}
         onOk={createInvoice}
         onCancel={closeInvoiceModal}
         destroyOnHidden
@@ -838,7 +843,24 @@ export default function OrderList() {
             allowClear={false}
             value={invoiceDate}
             format="YYYY-MM-DD"
-            onChange={(value) => setInvoiceDate(value)}
+            onChange={(value) => {
+              setInvoiceDate(value);
+              if (!dueDateEdited) setInvoiceDueDate(value?.add(1, 'month'));
+            }}
+            aria-label="Invoice date"
+            style={{ width: '100%' }}
+          />
+          <Text>Due date</Text>
+          <DatePicker
+            allowClear={false}
+            value={invoiceDueDate}
+            minDate={invoiceDate}
+            format="YYYY-MM-DD"
+            aria-label="Due date"
+            onChange={(value) => {
+              setInvoiceDueDate(value);
+              setDueDateEdited(true);
+            }}
             style={{ width: '100%' }}
           />
         </Space>

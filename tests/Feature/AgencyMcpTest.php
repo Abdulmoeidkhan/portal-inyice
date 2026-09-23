@@ -53,6 +53,8 @@ class AgencyMcpTest extends TestCase
         ], array_column($tools, 'name'));
         foreach ($tools as $tool) {
             $this->assertTrue($tool['annotations']['readOnlyHint']);
+            $this->assertFalse($tool['annotations']['destructiveHint']);
+            $this->assertFalse($tool['annotations']['openWorldHint']);
         }
         $this->rpc($token, 'tools/call', ['name' => 'record_payment', 'arguments' => (object) []])
             ->assertJsonPath('error.code', -32602);

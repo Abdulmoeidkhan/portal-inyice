@@ -242,6 +242,8 @@ export default function OrderEdit() {
   const [lockConflict, setLockConflict] = useState(null);
   const [invoiceDateOpen, setInvoiceDateOpen] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(dayjs());
+  const [invoiceDueDate, setInvoiceDueDate] = useState(dayjs().add(1, 'month'));
+  const [dueDateEdited, setDueDateEdited] = useState(false);
   const [invoiceSaving, setInvoiceSaving] = useState(false);
   const canViewCostProfit = currentUserCanViewCostProfit();
   const canChangeStatus = !(currentUserIsSales() && invoiceSectionStatuses.includes(order?.status));
@@ -637,6 +639,8 @@ export default function OrderEdit() {
   const backToOrders = () => backToRoute(navigate, location, '/orders');
 
   const openInvoiceDateModal = () => {
+    setInvoiceDueDate(dayjs().add(1, 'month'));
+    setDueDateEdited(false);
     setInvoiceDate(dayjs());
     setInvoiceDateOpen(true);
   };
@@ -647,8 +651,8 @@ export default function OrderEdit() {
   };
 
   const createInvoice = async () => {
-    if (!order || !invoiceDate) {
-      message.error('Choose an invoice date');
+    if (!order || !invoiceDate || !invoiceDueDate || invoiceDueDate.isBefore(invoiceDate, 'day')) {
+      message.error('Choose an invoice date and a due date on or after it');
       return;
     }
 
@@ -660,6 +664,7 @@ export default function OrderEdit() {
         body: JSON.stringify({
           order_id: order.id,
           invoice_date: invoiceDate.format('YYYY-MM-DD'),
+          due_date: invoiceDueDate.format('YYYY-MM-DD'),
         }),
       });
       const data = await response.json();
@@ -894,7 +899,7 @@ export default function OrderEdit() {
         okText={isRefundRequestOrder ? 'Create Refund' : 'Create Invoice'}
         cancelButtonProps={{ danger: true }}
         confirmLoading={invoiceSaving}
-        okButtonProps={{ disabled: !invoiceDate }}
+        okButtonProps={{ disabled: !invoiceDate || !invoiceDueDate || invoiceDueDate.isBefore(invoiceDate, 'day') }}
         onOk={createInvoice}
         onCancel={closeInvoiceDateModal}
         destroyOnHidden
@@ -906,7 +911,24 @@ export default function OrderEdit() {
             allowClear={false}
             value={invoiceDate}
             format="YYYY-MM-DD"
-            onChange={(value) => setInvoiceDate(value)}
+            onChange={(value) => {
+              setInvoiceDate(value);
+              if (!dueDateEdited) setInvoiceDueDate(value?.add(1, 'month'));
+            }}
+            aria-label="Invoice date"
+            style={{ width: '100%' }}
+          />
+          <Text>Due date</Text>
+          <DatePicker
+            allowClear={false}
+            value={invoiceDueDate}
+            minDate={invoiceDate}
+            format="YYYY-MM-DD"
+            aria-label="Due date"
+            onChange={(value) => {
+              setInvoiceDueDate(value);
+              setDueDateEdited(true);
+            }}
             style={{ width: '100%' }}
           />
         </Space>

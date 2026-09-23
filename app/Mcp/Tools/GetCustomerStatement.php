@@ -5,9 +5,13 @@ namespace App\Mcp\Tools;
 use App\Models\User;
 use App\Services\StatementService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
+#[IsDestructive(false)]
+#[IsOpenWorld(false)]
 class GetCustomerStatement extends AgencyReadTool
 {
     protected string $name = 'get_customer_statement';

@@ -5,9 +5,13 @@ namespace App\Mcp\Tools;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
+#[IsDestructive(false)]
+#[IsOpenWorld(false)]
 class SearchCustomers extends AgencyReadTool
 {
     protected string $name = 'search_customers';

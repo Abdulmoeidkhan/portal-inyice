@@ -7,9 +7,13 @@ use App\Models\CashAccount;
 use App\Models\User;
 use App\Services\LedgerService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
+#[IsDestructive(false)]
+#[IsOpenWorld(false)]
 class GetAccountBalance extends AgencyReadTool
 {
     protected string $name = 'get_account_balance';

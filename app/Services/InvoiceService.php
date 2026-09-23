@@ -18,9 +18,9 @@ class InvoiceService
     /**
      * Create invoice from order
      */
-    public function createFromOrder(Order $order, ?string $invoiceDate = null): Invoice
+    public function createFromOrder(Order $order, ?string $invoiceDate = null, ?string $dueDate = null): Invoice
     {
-        return DB::transaction(function () use ($order, $invoiceDate): Invoice {
+        return DB::transaction(function () use ($order, $invoiceDate, $dueDate): Invoice {
             $existingInvoice = Invoice::where('tenant_id', $order->tenant_id)
                 ->where('company_id', $order->company_id)
                 ->where('order_id', $order->id)
@@ -34,7 +34,7 @@ class InvoiceService
 
             $order->loadMissing(['company', 'items']);
 
-            $invoice = $this->createFreshInvoice($order, $invoiceDate);
+            $invoice = $this->createFreshInvoice($order, $invoiceDate, $dueDate);
 
             $order->update(['status' => $this->isRefundOrder($order) ? 'refund' : 'invoice']);
 
@@ -80,7 +80,7 @@ class InvoiceService
         });
     }
 
-    private function createFreshInvoice(Order $order, ?string $invoiceDate = null): Invoice
+    private function createFreshInvoice(Order $order, ?string $invoiceDate = null, ?string $dueDate = null): Invoice
     {
         $order->loadMissing(['company', 'items']);
 
@@ -92,7 +92,7 @@ class InvoiceService
         $invoice->order_id = $order->id;
         $invoice->customer_id = $order->customer_id;
         $invoice->invoice_date = $invoiceDate->toDateString();
-        $invoice->due_date = $invoiceDate->copy()->addDays(30)->toDateString();
+        $invoice->due_date = $dueDate ?? $invoiceDate->copy()->addMonthNoOverflow()->toDateString();
         $invoice->currency_code = $order->currency_code ?: $order->company->base_currency_code;
         $invoice->invoice_number = $this->generateInvoiceNumber($order->company_id);
         $isRefundOrder = $this->isRefundOrder($order);

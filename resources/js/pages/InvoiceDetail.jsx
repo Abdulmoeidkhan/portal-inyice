@@ -362,7 +362,6 @@ export default function InvoiceDetail({ shared = false }) {
             <div className="invoice-dates">
               <div><Text>Invoice Date :</Text><Text>{formatDate(invoice.invoice_date)}</Text></div>
               <div><Text>Terms :</Text><Text>Due on Receipt</Text></div>
-              <div><Text>Due Date :</Text><Text>{formatDate(invoice.due_date)}</Text></div>
               {invoice.order?.order_number && <div><Text>Order :</Text><Text>{invoice.order.order_number}</Text></div>}
             </div>
           </div>

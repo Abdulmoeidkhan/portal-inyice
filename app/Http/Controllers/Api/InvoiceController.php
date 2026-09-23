@@ -50,13 +50,14 @@ class InvoiceController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
             'invoice_date' => 'nullable|date',
+            'due_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:'.($request->input('invoice_date') ?: now()->toDateString())],
         ]);
 
         $order = Order::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($validated['order_id']);
 
-        $invoice = $this->invoiceService->createFromOrder($order, $validated['invoice_date'] ?? null);
+        $invoice = $this->invoiceService->createFromOrder($order, $validated['invoice_date'] ?? null, $validated['due_date'] ?? null);
 
         return response()->json([
             'success' => true,

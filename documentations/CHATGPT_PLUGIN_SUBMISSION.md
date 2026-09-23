@@ -14,13 +14,15 @@ Website: https://os.inyice.com/connect/ai
 
 Existing logo candidate: public/images/icons/icon-512x512.png (confirm it is the desired listing artwork).
 
-Support URL: OWNER TO PROVIDE
+Support URL: https://help.inyice.com
 
-Privacy policy URL: OWNER TO PROVIDE
+Verified on 2026-09-23: help center returns HTTP 200 and links to https://inyice.com/contact, which returns HTTP 200 and displays a contact form and info@inyice.com. The owner reports no working support-request facility yet. A Laravel support form is now prepared at `/support`; deploy it, verify delivery, then point the help site's contact link to https://os.inyice.com/support. No test email was sent.
 
-Terms URL: OWNER TO PROVIDE
+Privacy policy URL: pending finalization and deployment. Proposed: https://os.inyice.com/privacy. Draft: [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md).
 
-Publisher identity and countries of availability: OWNER TO CONFIRM
+Terms URL: pending finalization and deployment. Proposed: https://os.inyice.com/terms. Draft: [PLUGIN_TERMS_DRAFT.md](PLUGIN_TERMS_DRAFT.md).
+
+Publisher: InYice is an unregistered business in Pakistan. Use the operator's verified individual identity; legal name/contact address and countries of availability remain to be confirmed. Contact: info@inyice.com. Hosting: Hostinger (location pending).
 
 ## Connection values
 
@@ -52,6 +54,8 @@ Prepare an isolated paid demonstration agency with synthetic customers, invoices
 Also verify disconnect/revocation, token refresh, empty results and expired-session reauthorization. Mark these scenarios as executed only after observing actual results.
 
 ## Domain verification and release
+
+Track remaining operational and publication prerequisites in [PLUGIN_READINESS.md](PLUGIN_READINESS.md). Policy drafts are not published pages and must not be entered as working URLs in the submission form yet.
 
 The submission portal supplies the domain challenge. Add its exact value to the hosting environment as `OPENAI_PLUGIN_VERIFICATION_TOKEN`, deploy this revision and clear Laravel's cached configuration. The public `/.well-known/openai-apps-challenge` endpoint returns only that value, or 404 when unset. Do not replace a challenge used by another plugin.
 

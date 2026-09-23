@@ -15,8 +15,5 @@
 </head>
 <body>
     <div id="root"></div>
-    <footer style="padding:12px;text-align:center;font:14px system-ui,sans-serif">
-        <a href="/connect/ai">Connect an AI assistant via MCP</a> · <a href="/llms.txt">AI connection instructions</a>
-    </footer>
 </body>
 </html>

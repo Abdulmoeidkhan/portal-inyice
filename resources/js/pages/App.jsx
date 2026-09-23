@@ -917,6 +917,9 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
+          <footer className="app-connection-footer">
+            <a href="/connect/ai">Connect an AI assistant via MCP</a> · <a href="/llms.txt">AI connection instructions</a>
+          </footer>
           <FloatButton.Group
             className={`app-utility-float${floatControlsVisible ? '' : ' is-idle-hidden'}`}
             trigger="click"
