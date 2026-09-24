@@ -41,6 +41,9 @@ import ThemeMenuButton from '../components/ThemeMenuButton';
 
 // Components
 import InvoiceList from './InvoiceList';
+import ApiDocumentation from './ApiDocumentation';
+import DeveloperData from './DeveloperData';
+import { clearDeveloperCache, readApiResponse } from '../services/developerApi';
 import OrderList from './OrderList';
 import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
@@ -128,6 +131,7 @@ function hasAuthIdleExpired() {
 }
 
 function clearAuthStorage() {
+  clearDeveloperCache();
   localStorage.removeItem('auth_token');
   localStorage.removeItem('token');
   localStorage.removeItem('user');
@@ -751,9 +755,10 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
     const token = getAuthToken();
     if (!token) return;
 
-    fetch('/api/v1/company-profile', {
+    const profileRequest = getStoredUser()?.role === 'dev' ? readApiResponse('/api/v1/company-profile') : fetch('/api/v1/company-profile', {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
+    });
+    profileRequest
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) return;
@@ -880,7 +885,12 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             />
           )}
           <div key={location.pathname} className="route-transition">
-            <Routes>
+            {user?.role === 'dev' ? <Routes>
+              <Route path="/" element={<DeveloperData />} />
+              <Route path="/api-documentation" element={<ApiDocumentation />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes> : <Routes>
+              <Route path="/api-documentation" element={<ApiDocumentation />} />
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<InvoiceList />} />
               <Route path="/vat-calculator" element={<VatCalculator />} />
@@ -915,7 +925,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/statements/customers" element={canAccessReports ? <CustomerStatement /> : <Navigate to="/" replace />} />
               <Route path="/statements/vendors" element={canAccessReports ? <VendorStatement /> : <Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />
-            </Routes>
+            </Routes>}
           </div>
           <footer className="app-connection-footer">
             <a href="/connect/ai">Connect an AI assistant via MCP</a> · <a href="/llms.txt">AI connection instructions</a>
@@ -1012,9 +1022,10 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       const [input, init = {}] = args;
       const method = requestMethod(input, init);
       const protectedRequest = isProtectedApiRequest(input);
+      const requiresLiveRequest = init.cache === 'no-store';
 
       if (protectedRequest && !navigator.onLine) {
-        if (method !== 'GET') {
+        if (method !== 'GET' || requiresLiveRequest) {
           return offlineBlockedResponse();
         }
 
@@ -1028,7 +1039,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       try {
         response = await originalFetch(...args);
       } catch (error) {
-        if (protectedRequest && method === 'GET') {
+        if (protectedRequest && method === 'GET' && !requiresLiveRequest) {
           const cached = await readCachedApiResponse(input, init);
 
           return cached ? cachedResponse(cached) : offlineBlockedResponse(offlineReadMessage());
@@ -1037,7 +1048,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         throw error;
       }
 
-      if (protectedRequest && method === 'GET') {
+      if (protectedRequest && method === 'GET' && !requiresLiveRequest) {
         writeCachedApiResponse(input, init, response);
       }
 
@@ -1161,6 +1172,11 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
   const canAccessCancelledReport = ['owner', 'admin'].includes(signedInUser.role);
 
   const menuItems = [
+    {
+      key: '/api-documentation',
+      icon: <FileTextOutlined />,
+      label: <Link to="/api-documentation">API Documentation</Link>,
+    },
     {
       key: '/',
       icon: <DashboardOutlined />,
@@ -1369,7 +1385,10 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Route path="/register" element={<Navigate to="/" replace />} />
       <Route path="/forgot-password" element={<Navigate to="/" replace />} />
       <Route path="/reset-password" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<AuthenticatedLayout menuItems={menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} offline={offline} />} />
+      <Route path="*" element={<AuthenticatedLayout menuItems={signedInUser.role === 'dev' ? [
+        { key: '/', icon: <DashboardOutlined />, label: <Link to="/">Company Data</Link> },
+        { key: '/api-documentation', icon: <FileTextOutlined />, label: <Link to="/api-documentation">API Documentation</Link> },
+      ] : menuItems} onLogout={handleLogout} themeMode={themeMode} themeStyle={themeStyle} compactTheme={compactTheme} onChangeThemeMode={onChangeThemeMode} onChangeThemeStyle={onChangeThemeStyle} onToggleCompactTheme={onToggleCompactTheme} offline={offline} />} />
     </Routes>
   );
 }

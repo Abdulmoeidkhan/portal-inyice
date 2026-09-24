@@ -36,7 +36,11 @@ Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
     ->name('sharedVouchers.show');
 
 
-Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::class, 'active.user', \App\Http\Middleware\EnsureApiAccess::class])->group(function () {
+Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::class, 'active.user', \App\Http\Middleware\EnsureApiAccess::class, \App\Http\Middleware\ReadOnlyDeveloper::class])->group(function () {
+    Route::get('/api-documentation', [\App\Http\Controllers\Api\ApiDocumentationController::class, 'index'])->name('apiDocumentation.index');
+    Route::get('/dev/data', [\App\Http\Controllers\Api\DeveloperDataController::class, 'index'])->name('developerData.index');
+    Route::get('/dev/data/{resource}', [\App\Http\Controllers\Api\DeveloperDataController::class, 'show'])->name('developerData.show');
+    Route::get('/dev/export', [\App\Http\Controllers\Api\DeveloperDataController::class, 'export'])->middleware('throttle:sensitive-write')->name('developerData.export');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('throttle:sensitive-write');
     Route::post('/edit-locks', [EditLockController::class, 'acquire'])->middleware('throttle:sensitive-write')->name('editLocks.acquire');
     Route::patch('/edit-locks', [EditLockController::class, 'heartbeat'])->name('editLocks.heartbeat');

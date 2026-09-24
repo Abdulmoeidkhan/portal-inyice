@@ -63,7 +63,7 @@ class ReportController extends Controller
     public function cancelledReport(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isAllowedAgencyUser = $user?->hasAnyRole(['owner', 'admin']) === true;
+        $isAllowedAgencyUser = $user?->hasAnyRole(['owner', 'admin', 'dev']) === true;
         $isAllowedSystemUser = $user?->isSystemUser() === true
             && $user->hasAnyRole(['super-admin', 'inyice-admin', 'support-executive']);
 

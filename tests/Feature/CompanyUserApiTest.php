@@ -17,6 +17,17 @@ class CompanyUserApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_owner_can_assign_the_developer_role(): void
+    {
+        Notification::fake();
+        $ctx = $this->seedCompanyContext('owner');
+        Sanctum::actingAs($ctx['user']);
+        $this->postJson('/api/v1/company-users', [
+            'name' => 'Developer', 'email' => 'dev@test.local', 'role' => 'dev',
+            'password' => 'password123', 'password_confirmation' => 'password123',
+        ])->assertCreated()->assertJsonPath('user.role', 'dev');
+    }
+
     public function test_owner_can_create_company_users_until_one_extra_seat_is_used(): void
     {
         Notification::fake();

@@ -89,7 +89,7 @@ export const readCachedApiResponse = async (input, init = {}) => {
 
 export const writeCachedApiResponse = async (input, init = {}, response) => {
   const contentType = response.headers.get('Content-Type') || '';
-  if (!response.ok || !contentType.includes('application/json')) {
+  if (!response.ok || !contentType.includes('application/json') || response.headers.get('Cache-Control')?.includes('no-store')) {
     return;
   }
 

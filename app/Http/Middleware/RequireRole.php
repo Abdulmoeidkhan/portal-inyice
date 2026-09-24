@@ -15,7 +15,11 @@ class RequireRole
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
-        if (!$user->hasAnyRole($roles)) {
+        $developerRead = $user->hasRole('dev') && $request->isMethodSafe()
+            && count(array_intersect($roles, ['owner', 'admin', 'accounts', 'sales', 'dev'])) > 0
+            && ! $request->is('api/v1/internal/*');
+
+        if (!$developerRead && !$user->hasAnyRole($roles)) {
             return response()->json([
                 'error' => 'Insufficient permissions for this action',
             ], 403);

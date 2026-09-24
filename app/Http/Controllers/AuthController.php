@@ -21,6 +21,7 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required|string',
             'force_logout' => 'nullable|boolean',
+            'access_mode' => 'nullable|in:portal,api',
         ]);
 
         $user = User::with(['role', 'company', 'tenant'])
@@ -52,6 +53,11 @@ class AuthController extends Controller
             ], 403);
         }
 
+        $apiMode = ($validated['access_mode'] ?? 'portal') === 'api';
+        if ($apiMode && (! $user->hasRole('dev') || ! $user->company?->hasIntegrationAccess())) {
+            return response()->json(['error' => 'API sign-in requires a developer role and a paid agency plan.'], 403);
+        }
+
         $activeTokens = $user->tokens()
             ->where(function ($query): void {
                 $query->whereNull('expires_at')
@@ -70,13 +76,15 @@ class AuthController extends Controller
             app(\App\Mcp\OAuth\RevokeConnections::class)->forUser($user->id);
         }
 
-        $token = $user->createToken('web', ['portal:session'], now()->addDays(30))->plainTextToken;
+        $token = $user->createToken($apiMode ? 'dev-api' : 'web', $apiMode ? ['data:read'] : ['portal:session'], now()->addDays(30))->plainTextToken;
 
-        return response()->json([
+        $response = response()->json([
             'success' => true,
             'token' => $token,
             'user' => $this->serializeUser($user),
-        ])->withCookie(\App\Auth\PortalSession::cookie($token, $request));
+        ])->header('Cache-Control', 'private, no-store');
+
+        return $apiMode ? $response : $response->withCookie(\App\Auth\PortalSession::cookie($token, $request));
     }
 
     /**

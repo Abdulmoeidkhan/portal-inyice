@@ -310,6 +310,9 @@ Open the profile dropdown and choose User Profile to review signed-in user detai
 - Owner/admin users manage company users and broad operational setup.
 - Sales users can create voucher orders and work operational sales flows.
 - Accounts users work with invoices, receipts, payments, accounts, reports, and statements.
+- Dev users have read-only API access and a **Company Data** browser. Select a dataset, page through its records, or expand a row to inspect all fields. Dev users cannot create, edit or delete business data or edit profiles.
+- **API Documentation** is available to owner, admin, accounts, dev and sales. Search or filter endpoints by role, expand an endpoint for its parameters and restrictions, and use **Execute GET** for permitted reads.
+- Only signed-in dev users can use **Download company JSON**. This generates the listed company business datasets on demand, without saving a server file. Other companies, deleted records, passwords, access tokens, share tokens and provider credentials are excluded. Tenant-wide integration/audit records are not part of the export.
 - Some read/list endpoints are available to any authenticated active user.
 
 If an action is unavailable, confirm the user is active, has the correct role, has a valid token, and is working with records from the same tenant/company.

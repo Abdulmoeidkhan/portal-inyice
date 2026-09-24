@@ -359,6 +359,35 @@ For sales-flow changes:
 
 ## Documentation Rules
 
+### Developer access and API reference
+
+#### Voucher and invoice share tokens
+
+The API Documentation page includes a sharing guide with portal sign-in, request/response examples and revocation instructions. Login tokens authenticate a user; share tokens grant public read access to one document and must not be confused with login credentials.
+
+| Document | Create/retrieve link | Revoke link | Allowed roles |
+| --- | --- | --- | --- |
+| Voucher | `POST /api/v1/orders/{uid}/share` | `DELETE /api/v1/orders/{uid}/share` | owner, admin, sales |
+| Invoice | `POST /api/v1/invoices/{uid}/share` | `DELETE /api/v1/invoices/{uid}/share` | owner, admin, sales, accounts |
+
+No body is required. Creation returns HTTP 200 with `share_url` and `share_token`; revocation returns `{"success":true}`. Use the record's `uid`, not its numeric ID. Creation reuses an existing token or generates a random 64-character token. Share links have no automatic expiry. Revoking a voucher token also disables its quotation link. After revocation, sharing creates a new token. Public JSON is available at `/api/v1/shared-vouchers/{token}` or `/api/v1/shared-invoices/{token}`; unknown/revoked tokens return 404.
+
+Dev remains read-only and cannot create or revoke these tokens. `access_mode: api` currently issues dev read-only credentials only; there is no self-service external write-token endpoint for the other roles. Authorized portal requests use their bearer token and matching portal cookie. Never give customers a login token; give them `share_url`.
+
+#### Read-only developer access
+
+The `dev` tenant role is read-only. Existing tenants receive it through migration `2026_09_24_000001_add_developer_role`; new tenants receive it from `Role::TENANT_DEFAULT_ROLES`. Owner/admin users can assign it through Company Users, subject to normal seat limits.
+
+`ReadOnlyDeveloper` denies every authenticated POST/PATCH/PUT/DELETE except logout. It also keeps tokens issued with `data:read` read-only if the user's role later changes. `RequireRole` permits dev reads on tenant endpoints; provider system-role checks remain separate. The dev UI routes to the paginated Company Data browser instead of operational editing screens.
+
+For external REST access, POST `/api/v1/auth/login` with `email`, `password`, and `access_mode: "api"`. This mode requires an active, verified dev user with a paid agency plan and issues a 30-day Sanctum token with `data:read`. Send it as `Authorization: Bearer TOKEN`. The default portal mode retains its browser-cookie binding. Existing session conflicts and forced-logout behavior still apply. MCP eligibility is unchanged.
+
+`GET /api/v1/api-documentation` derives endpoint paths and role middleware from registered API routes, plus literal controller validation and query fields. It excludes provider routes. Conditional/service rules still apply at execution. The `/api-documentation` UI groups expandable, method-colored endpoints and permits only GET testing.
+
+Dev-only endpoints: `/api/v1/dev/data` lists resources, `/api/v1/dev/data/{resource}` accepts `page` and `per_page` (1–100), and `/api/v1/dev/export` streams company business JSON on demand. `DeveloperDataService::FIELDS` is an explicit field allowlist. Child rows are scoped through company-owned parents; ledger rows through company-owned accounts. No export file is persisted, and responses use `private, no-store`. The UI bypasses its offline cache for these requests. Export format includes `schema_version`, `exported_at`, `company_uid`, and `data`; nested JSON database columns remain encoded strings. Deleted rows and tenant-wide integration/audit records are excluded.
+
+Regression checks: `php artisan test --filter="DeveloperAccessTest|CompanyUserApiTest|AuthSecurityApiTest"`. Use JSX parsing for the frontend; do not run a production build without task-specific approval.
+
 Current root docs:
 
 - `README.md`

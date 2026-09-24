@@ -174,7 +174,7 @@ class CompanyUserController extends Controller
     {
         return Role::query()
             ->where('tenant_id', $tenantId)
-            ->whereIn('code', ['admin', 'sales', 'accounts'])
+            ->whereIn('code', ['admin', 'sales', 'accounts', 'dev'])
             ->orderByRaw("case code when 'admin' then 1 when 'sales' then 2 when 'accounts' then 3 else 4 end")
             ->get(['code', 'name']);
     }
