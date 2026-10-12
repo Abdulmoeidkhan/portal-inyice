@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const statementTotals = (rows = []) => ({
   debit: rows.reduce((sum, row) => sum + Number(row.debit || 0), 0),
   credit: rows.reduce((sum, row) => sum + Number(row.credit || 0), 0),

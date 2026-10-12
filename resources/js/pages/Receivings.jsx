@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { DeleteOutlined, EditOutlined, PrinterOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Divider, Form, Grid, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Tag, Typography, Watermark } from 'antd';
 import { message } from '../services/feedback';
@@ -7,7 +8,6 @@ import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const statusOptions = [
   { value: 'received', label: 'Received' },
   { value: 'clear', label: 'Clear' },

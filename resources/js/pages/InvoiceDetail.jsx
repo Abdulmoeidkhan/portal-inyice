@@ -9,7 +9,7 @@ import { acquireEditLock, heartbeatEditLock, releaseEditLock } from '../services
 import { backToRoute } from '../services/navigation';
 
 const { Title, Text, Paragraph } = Typography;
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const firstFilled = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '') || '';
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toNumber = (value) => {

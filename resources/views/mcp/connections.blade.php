@@ -4,9 +4,9 @@
     <h1>Your AI connections</h1>
     <p>{{ $user->company->display_name }} · {{ $user->email }}</p>
     <div class="notice">
-        <p>Add InYice in ChatGPT using this server address, then sign in and allow read access:</p>
+        <p>Add InYice in ChatGPT, Claude or Gemini CLI using this server address, then sign in and allow read access:</p>
         <code>{{ $mcpUrl }}</code>
-        <p class="muted">Custom connections must be enabled in your ChatGPT account or workspace. After connecting, select InYice in a chat and ask about your agency.</p>
+        <p class="muted">Custom MCP connections must be enabled in your assistant or workspace. <a href="{{ url('/connect/ai') }}">View setup instructions for each assistant</a>.</p>
     </div>
     @forelse($connections as $connection)
         <div class="connection">

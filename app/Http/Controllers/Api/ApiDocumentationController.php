@@ -14,8 +14,9 @@ class ApiDocumentationController extends Controller
 
     public function index(Request $request)
     {
-        abort_unless($request->user()->hasAnyRole(self::ROLES) && ! $request->user()->isSystemUser(), 403);
+        abort_unless($request->user()->hasAnyRole(['owner', 'dev']) && ! $request->user()->isSystemUser(), 403);
         $endpoints = [];
+        $sourceFiles = [];
         foreach (Route::getRoutes() as $route) {
             if (! str_starts_with($route->uri(), 'api/v1/') || str_starts_with($route->uri(), 'api/v1/internal/')) {
                 continue;
@@ -36,6 +37,13 @@ class ApiDocumentationController extends Controller
                         $roles = array_values(array_intersect($roles, $allowed));
                     }
                 }
+                // Paid features use exact roles, including for read-only developers.
+                foreach ($middleware as $entry) {
+                    $prefix = \App\Http\Middleware\RequirePaidFeature::class.':';
+                    if (str_starts_with($entry, $prefix)) {
+                        $roles = array_values(array_intersect($roles, explode(',', substr($entry, strlen($prefix)))));
+                    }
+                }
                 if ($authenticated && $method !== 'GET' && $route->uri() !== 'api/v1/auth/logout') {
                     $roles = array_values(array_diff($roles, ['dev']));
                 }
@@ -46,7 +54,7 @@ class ApiDocumentationController extends Controller
                     $roles = ['owner', 'admin', 'dev'];
                 }
                 preg_match_all('/\{([^}]+)\}/', $route->uri(), $parameters);
-                $fields = $this->validationFields($route->getActionName(), $method);
+                $fields = $this->validationFields($route->getActionName(), $method, $sourceFiles);
                 $summary = Str::headline(Str::afterLast($route->getActionName(), '@'));
                 if ($route->getActionName() === 'Closure') {
                     $summary = 'Current authenticated user';
@@ -88,21 +96,29 @@ class ApiDocumentationController extends Controller
         };
     }
 
-    private function validationFields(string $action, string $httpMethod): array
+    private function methodSource(ReflectionMethod $method, array &$sourceFiles): string
+    {
+        // This cache belongs to a single documentation response, never another request.
+        $filename = $method->getFileName();
+        $sourceFiles[$filename] ??= file($filename);
+
+        return implode('', array_slice($sourceFiles[$filename], $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1));
+    }
+
+    private function validationFields(string $action, string $httpMethod, array &$sourceFiles): array
     {
         if (! str_contains($action, '@')) {
             return [];
         }
         [$class, $method] = explode('@', $action, 2);
         $reflection = new ReflectionMethod($class, $method);
-        $source = implode('', array_slice(file($reflection->getFileName()), $reflection->getStartLine() - 1,
-            $reflection->getEndLine() - $reflection->getStartLine() + 1));
+        $source = $this->methodSource($reflection, $sourceFiles);
         // Read literal validation declarations without evaluating controller code.
         // Conditional rules and service-level checks remain enforced by the endpoint.
         if (preg_match('/->validate\(\$this->(\w+)\(\)\)/', $source, $helper)) {
             $rulesMethod = new ReflectionMethod($class, $helper[1]);
-            $rulesSource = implode('', array_slice(file($rulesMethod->getFileName()), $rulesMethod->getStartLine() - 1,
-                $rulesMethod->getEndLine() - $rulesMethod->getStartLine() + 1));
+            $rulesSource = $this->methodSource($rulesMethod, $sourceFiles);
             if (preg_match('/return\s*\[(.*?)\];/s', $rulesSource, $helperRules)) {
                 $source .= '->validate(['.$helperRules[1].']);';
             }

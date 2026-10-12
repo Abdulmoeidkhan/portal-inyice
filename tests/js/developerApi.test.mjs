@@ -6,6 +6,14 @@ let calls;
 let clock;
 const realNow = Date.now;
 const user = { uid: 'dev-one', role: 'dev', company_id: 1, tenant_id: 1 };
+
+test('plan checks and paid documentation always use live responses', async () => {
+  for (const path of ['/api/v1/company-profile', '/api/v1/api-documentation']) {
+    const first = await readApi(path);
+    const second = await readApi(path);
+    assert.notEqual(first.version, second.version);
+  }
+});
 beforeEach(() => {
   globalThis.localStorage = {};
   Object.defineProperties(localStorage, {

@@ -376,7 +376,7 @@ Dev remains read-only and cannot create or revoke these tokens. `access_mode: ap
 
 #### Read-only developer access
 
-The `dev` tenant role is read-only. Existing tenants receive it through migration `2026_09_24_000001_add_developer_role`; new tenants receive it from `Role::TENANT_DEFAULT_ROLES`. Owner/admin users can assign it through Company Users, subject to normal seat limits.
+The `dev` tenant role is read-only. Its migration setup is consolidated into `2026_05_22_000003_create_roles_table`; new tenants receive it from `Role::TENANT_DEFAULT_ROLES`. Existing installations must already have the dev role provisioned: changing the original migration does not rerun it. Owner/admin users can assign it through Company Users, subject to normal seat limits.
 
 `ReadOnlyDeveloper` denies every authenticated POST/PATCH/PUT/DELETE except logout. It also keeps tokens issued with `data:read` read-only if the user's role later changes. `RequireRole` permits dev reads on tenant endpoints; provider system-role checks remain separate. The dev UI routes to the paginated Company Data browser instead of operational editing screens.
 
@@ -387,6 +387,8 @@ For external REST access, POST `/api/v1/auth/login` with `email`, `password`, an
 Dev-only endpoints: `/api/v1/dev/data` lists resources, `/api/v1/dev/data/{resource}` accepts `page` and `per_page` (1–100), and `/api/v1/dev/export` streams company business JSON on demand. `DeveloperDataService::FIELDS` is an explicit field allowlist. Child rows are scoped through company-owned parents; ledger rows through company-owned accounts. No export file is persisted, and responses use `private, no-store`. The UI bypasses its offline cache for these requests. Export format includes `schema_version`, `exported_at`, `company_uid`, and `data`; nested JSON database columns remain encoded strings. Deleted rows and tenant-wide integration/audit records are excluded.
 
 Regression checks: `php artisan test --filter="DeveloperAccessTest|CompanyUserApiTest|AuthSecurityApiTest"`. Use JSX parsing for the frontend; do not run a production build without task-specific approval.
+
+Developer panel GET responses use a dedicated 24-hour localStorage cache, scoped by tenant, company, user, role, URL and query parameters. The next online read after expiry renews the entry; offline reads can reuse older saved data. Repeated concurrent requests are combined, errors are not cached, and logout clears the dev cache. This explicit application cache bypasses the generic offline cache described above. JSON exports remain live and on demand. Cache checks: `node --test tests/js/developerApi.test.mjs`.
 
 Current root docs:
 

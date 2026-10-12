@@ -49,6 +49,7 @@ class Metadata
     {
         return response()->json([
             'issuer' => self::issuer(),
+            'authorization_response_iss_parameter_supported' => true,
             'authorization_endpoint' => self::issuer().'/oauth/authorize',
             'token_endpoint' => self::issuer().'/oauth/token',
             'registration_endpoint' => self::issuer().'/oauth/register',

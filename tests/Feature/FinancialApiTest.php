@@ -31,6 +31,50 @@ class FinancialApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_account_lists_batch_balances_without_exposing_other_companies(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $ledger = app(\App\Services\LedgerService::class);
+        foreach (['cash' => \App\Models\CashAccount::class, 'bank' => \App\Models\BankAccount::class] as $type => $model) {
+            $expected = [];
+            foreach (range(1, 5) as $index) {
+                $account = $model::create([
+                    'uid' => (string) Str::ulid(), 'tenant_id' => $ctx['tenant']->id,
+                    'company_id' => $ctx['company']->id, 'currency_code' => 'PKR',
+                    ...($type === 'cash' ? ['account_code' => 'C'.$index, 'account_name' => 'Cash '.$index]
+                        : ['bank_name' => 'Bank', 'account_number' => 'B'.$index, 'account_holder' => 'Holder']),
+                    'opening_balance' => '123.4567', 'current_balance' => 999, 'is_active' => true,
+                ]);
+                if ($index > 1) {
+                    \App\Models\LedgerEntry::create([
+                        'uid' => (string) Str::ulid(), 'tenant_id' => $ctx['tenant']->id,
+                        'account_type' => $type, 'account_id' => $account->id,
+                        'debit' => '10.1234', 'credit' => '3.5678', 'entry_date' => '2026-01-01', 'created_at' => now(),
+                    ]);
+                }
+                $expected[$account->id] = $type === 'cash'
+                    ? $ledger->getCashBalance($account->id) : $ledger->getBankBalance($account->id);
+            }
+            DB::enableQueryLog();
+            DB::flushQueryLog();
+            $rows = $this->getJson('/api/v1/accounts/'.$type)->assertOk()->json();
+            $queries = collect(DB::getQueryLog());
+            DB::disableQueryLog();
+            $this->assertCount(5, $rows);
+            foreach ($rows as $row) {
+                $this->assertEqualsWithDelta($expected[$row['id']], $row['current_balance'], 0.0000001);
+                $this->assertArrayNotHasKey('ledger_debits', $row);
+                $this->assertArrayNotHasKey('ledger_credits', $row);
+            }
+            $this->assertCount(1, $queries->filter(fn ($query) => str_contains($query['query'], 'ledger_entries')));
+        }
+
+        $other = $this->seedTenantContext();
+        $this->assertNotSame($ctx['company']->id, $other['company']->id);
+        $this->getJson('/api/v1/accounts/cash')->assertOk()->assertExactJson([]);
+        $this->getJson('/api/v1/accounts/bank')->assertOk()->assertExactJson([]);
+    }
+
     public function test_invoice_due_date_defaults_to_next_calendar_month_without_overflow(): void
     {
         $ctx = $this->seedTenantContext();

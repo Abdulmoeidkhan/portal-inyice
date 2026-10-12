@@ -18,7 +18,7 @@ import { openRoute } from '../services/navigation';
 
 const { Text, Title } = Typography;
 
-const DEMO_MODE = false;
+const DEMO_MODE = true;
 const SERVICE_COLORS = ['#ffc233', '#ff7a1a', '#8a4df6', '#d899f9', '#5cc8ff', '#c4c9d4'];
 
 const demoReport = {

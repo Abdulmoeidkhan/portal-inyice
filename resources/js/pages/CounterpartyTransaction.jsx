@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { DeleteOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Input, InputNumber, Popconfirm, Row, Select, Space, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
@@ -7,7 +8,6 @@ import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CounterpartyTransaction({ direction, partyType }) {
   const isReceipt = direction === 'receipt';

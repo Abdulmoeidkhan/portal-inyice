@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import {
   BankOutlined,
   CheckCircleOutlined,
@@ -22,7 +23,7 @@ import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const formatMethod = (value) => String(value || '—').replaceAll('_', ' ').toUpperCase();
 const isAllocatableInvoice = (invoice) => Number(invoice.outstanding_amount) > 0 && !['void', 'cancel'].includes(invoice.status);
 

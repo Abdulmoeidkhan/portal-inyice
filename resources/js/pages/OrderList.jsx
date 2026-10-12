@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { Button, Card, DatePicker, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -43,8 +44,6 @@ const getStatusColor = (status) => {
 
   return colors[status] || 'default';
 };
-
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const orderFormDefaults = (order) => ({
   customer_id: order?.customer?.id || order?.customer_id,

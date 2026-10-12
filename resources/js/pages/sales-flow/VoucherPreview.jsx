@@ -128,8 +128,6 @@ const uniqueJoined = (...values) => {
     .join(' / ');
 };
 
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const voucherFromOrder = (order = {}) => {
   const meta = order.meta || {};
 

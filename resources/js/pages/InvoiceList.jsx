@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { Button, Card, Col, Descriptions, Divider, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Popconfirm, Row, Segmented, Select, Space, Spin, Tag, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined, StopOutlined } from '@ant-design/icons';
 import { dialog, message } from '../services/feedback';
@@ -9,7 +10,7 @@ import { createDeferredRouteOpener, openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const canUseInvoiceActions = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');

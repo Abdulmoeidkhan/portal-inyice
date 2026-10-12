@@ -37,7 +37,26 @@ Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
 
 
 Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::class, 'active.user', \App\Http\Middleware\EnsureApiAccess::class, \App\Http\Middleware\ReadOnlyDeveloper::class])->group(function () {
-    Route::get('/api-documentation', [\App\Http\Controllers\Api\ApiDocumentationController::class, 'index'])->name('apiDocumentation.index');
+    Route::prefix('accounting')->controller(\App\Http\Controllers\Api\AccountingController::class)->middleware([\App\Http\Middleware\RequirePaidFeature::class.':owner,admin,accounts', 'role:admin,accounts'])->group(function () {
+        Route::get('/', 'overview')->name('accounting.overview');
+        Route::get('/journals', 'index')->name('accounting.journals.index');
+        Route::get('/journals/{uid}', 'show')->name('accounting.journals.show');
+        Route::get('/reports', 'reports')->name('accounting.reports');
+        Route::get('/accounts/{uid}/ledger', 'ledger')->name('accounting.ledger');
+        Route::get('/audit', 'audit')->name('accounting.audit');
+        Route::middleware('throttle:sensitive-write')->group(function () {
+            Route::post('/setup', 'setup')->middleware('role:owner')->name('accounting.setup');
+            Route::post('/accounts', 'storeAccount')->middleware('role:admin')->name('accounting.accounts.store');
+            Route::patch('/accounts/{uid}', 'updateAccount')->middleware('role:admin')->name('accounting.accounts.update');
+            Route::post('/journals', 'storeJournal')->name('accounting.journals.store');
+            Route::patch('/journals/{uid}', 'updateJournal')->name('accounting.journals.update');
+            Route::post('/journals/{uid}/post', 'post')->middleware('role:admin')->name('accounting.journals.post');
+            Route::post('/journals/{uid}/reverse', 'reverse')->middleware('role:admin')->name('accounting.journals.reverse');
+            Route::post('/journals/{uid}/discard', 'discard')->name('accounting.journals.discard');
+            Route::post('/period-lock', 'lockPeriod')->middleware('role:owner')->name('accounting.periodLock');
+        });
+    });
+    Route::get('/api-documentation', [\App\Http\Controllers\Api\ApiDocumentationController::class, 'index'])->middleware(\App\Http\Middleware\RequirePaidFeature::class.':owner,dev')->name('apiDocumentation.index');
     Route::get('/dev/data', [\App\Http\Controllers\Api\DeveloperDataController::class, 'index'])->name('developerData.index');
     Route::get('/dev/data/{resource}', [\App\Http\Controllers\Api\DeveloperDataController::class, 'show'])->name('developerData.show');
     Route::get('/dev/export', [\App\Http\Controllers\Api\DeveloperDataController::class, 'export'])->middleware('throttle:sensitive-write')->name('developerData.export');

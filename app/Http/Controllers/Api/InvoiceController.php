@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StripsVoucherCostProfit;
 use App\Models\InvoiceDiscount;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -19,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
+    use StripsVoucherCostProfit;
+
     private const MAX_PAGE_SIZE = 10000;
 
     private const PRICING_COST_PROFIT_FIELDS = [
@@ -338,36 +341,6 @@ class InvoiceController extends Controller
         $order->setAttribute('meta', $this->stripVoucherCostProfit($order->meta ?? []));
     }
 
-    private function stripVoucherCostProfit(array $voucher): array
-    {
-        foreach (($voucher['pricing'] ?? []) as $index => $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            foreach (self::PRICING_COST_PROFIT_FIELDS as $field) {
-                unset($row[$field]);
-            }
-
-            $voucher['pricing'][$index] = $row;
-        }
-
-        foreach (['hotels', 'transfers', 'city_tours', 'visa', 'other_services'] as $section) {
-            foreach (($voucher[$section] ?? []) as $index => $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-
-                foreach (self::SERVICE_COST_PROFIT_FIELDS as $field) {
-                    unset($row[$field]);
-                }
-
-                $voucher[$section][$index] = $row;
-            }
-        }
-
-        return $voucher;
-    }
 
     private function publicInvoiceLineDescription(?string $description): string
     {

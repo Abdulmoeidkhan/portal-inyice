@@ -1,0 +1,39 @@
+.accounting-page > * + * {
+  margin-top: 16px;
+}
+
+.accounting-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.accounting-toolbar > *,
+.accounting-workspace .ant-tabs-content-holder {
+  min-width: 0;
+}
+
+.accounting-filter-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.accounting-filter-form .ant-form-item {
+  flex: 1 1 180px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 575px) {
+  .accounting-filter-form > .ant-btn {
+    width: 100%;
+  }
+
+  .accounting-toolbar > .ant-space {
+    width: 100%;
+  }
+}

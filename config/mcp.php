@@ -2,7 +2,7 @@
 
 return [
     'openai_verification_token' => env('OPENAI_PLUGIN_VERIFICATION_TOKEN'),
-    // Only ChatGPT web callbacks can register clients for this connection.
-    'redirect_domains' => ['https://chatgpt.com', 'https://chat.openai.com'],
+    // Hosted assistants and local OAuth callbacks used by Gemini CLI.
+    'redirect_domains' => ['https://chatgpt.com', 'https://chat.openai.com', 'https://claude.ai', 'http://localhost'],
     'custom_schemes' => [],
 ];

@@ -47,6 +47,22 @@ class AgencyOAuthTest extends TestCase
         }
     }
 
+    public function test_claude_and_gemini_callbacks_complete_user_authorization(): void
+    {
+        foreach (['https://claude.ai/api/mcp/auth_callback', 'http://localhost:54321/oauth/callback', 'http://127.0.0.1:54322/oauth/callback'] as $callback) {
+            $grant = $this->grant($this->agency(), true, $callback);
+            $tokens = $this->exchange($grant)->assertOk()->json();
+            $this->rpc($tokens['access_token'], 'tools/list')->assertOk();
+        }
+    }
+
+    public function test_registration_rejects_unsafe_provider_callback_variants(): void
+    {
+        foreach (['https://claude.ai.evil.example/api/mcp/auth_callback', 'https://claude.ai@evil.example/callback', 'http://localhost.evil.example:54321/oauth/callback', 'http://localhost:54321/wrong-path', 'http://192.168.1.1:54321/oauth/callback', 'https://claude.ai/api/mcp/auth_callback#fragment'] as $callback) {
+            $this->postJson('/oauth/register', ['client_name' => 'Invalid', 'redirect_uris' => [$callback]])->assertStatus(400);
+        }
+    }
+
     public function test_real_login_consent_exchange_and_tools_only_return_the_users_agency(): void
     {
         $user = $this->agency();
@@ -256,11 +272,11 @@ class AgencyOAuthTest extends TestCase
         $this->get('/oauth/authorize?'.http_build_query($this->params($grant['client_id'], Str::random(64))))->assertForbidden();
     }
 
-    private function grant(User $user, bool $approve = true): array
+    private function grant(User $user, bool $approve = true, string $callback = self::CALLBACK): array
     {
-        $clientId = $this->registerClient();
+        $clientId = $this->registerClient($callback);
         $verifier = Str::random(64);
-        $params = $this->params($clientId, $verifier);
+        $params = array_replace($this->params($clientId, $verifier), ['redirect_uri' => $callback]);
         $this->resetAuth();
         $this->get('/oauth/authorize?'.http_build_query($params));
         $this->signIn($user);
@@ -271,7 +287,9 @@ class AgencyOAuthTest extends TestCase
         $response->assertRedirect();
         parse_str(parse_url($response->headers->get('Location'), PHP_URL_QUERY), $query);
 
-        return $query + ['client_id' => $clientId, 'verifier' => $verifier];
+        $this->assertSame(Metadata::issuer(), $query['iss']);
+
+        return $query + ['client_id' => $clientId, 'verifier' => $verifier, 'redirect_uri' => $callback];
     }
 
     private function exchange(array $grant)
@@ -280,7 +298,7 @@ class AgencyOAuthTest extends TestCase
 
         return $this->postJson('/oauth/token', [
             'grant_type' => 'authorization_code', 'client_id' => $grant['client_id'],
-            'redirect_uri' => self::CALLBACK, 'code' => $grant['code'],
+            'redirect_uri' => $grant['redirect_uri'] ?? self::CALLBACK, 'code' => $grant['code'],
             'code_verifier' => $grant['verifier'], 'resource' => Metadata::resource(),
         ]);
     }
@@ -292,9 +310,9 @@ class AgencyOAuthTest extends TestCase
             'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='), 'code_challenge_method' => 'S256'];
     }
 
-    private function registerClient(): string
+    private function registerClient(string $callback = self::CALLBACK): string
     {
-        return $this->postJson('/oauth/register', ['client_name' => 'ChatGPT Test', 'redirect_uris' => [self::CALLBACK], 'token_endpoint_auth_method' => 'none'])
+        return $this->postJson('/oauth/register', ['client_name' => 'ChatGPT Test', 'redirect_uris' => [$callback], 'token_endpoint_auth_method' => 'none'])
             ->assertCreated()->assertJsonPath('token_endpoint_auth_method', 'none')->json('client_id');
     }
 

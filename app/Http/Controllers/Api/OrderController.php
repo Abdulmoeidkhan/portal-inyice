@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StripsVoucherCostProfit;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Invoice;
@@ -25,6 +26,8 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
+    use StripsVoucherCostProfit;
+
     private const MAX_PAGE_SIZE = 10000;
 
     private const PACKAGE_TYPES = [
@@ -1872,36 +1875,6 @@ class OrderController extends Controller
         return $this->preserveExistingCostProfit($voucher, $existingMeta);
     }
 
-    private function stripVoucherCostProfit(array $voucher): array
-    {
-        foreach (($voucher['pricing'] ?? []) as $index => $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            foreach (self::PRICING_COST_PROFIT_FIELDS as $field) {
-                unset($row[$field]);
-            }
-
-            $voucher['pricing'][$index] = $row;
-        }
-
-        foreach (['hotels', 'transfers', 'city_tours', 'visa', 'other_services'] as $section) {
-            foreach (($voucher[$section] ?? []) as $index => $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-
-                foreach (self::SERVICE_COST_PROFIT_FIELDS as $field) {
-                    unset($row[$field]);
-                }
-
-                $voucher[$section][$index] = $row;
-            }
-        }
-
-        return $voucher;
-    }
 
     private function preserveExistingCostProfit(array $voucher, array $existingMeta): array
     {

@@ -27,9 +27,12 @@ class AgencyDiscoveryTest extends TestCase
         $this->get('/connect/ai')->assertOk()
             ->assertSee('https://agency.example/mcp/agency', false)
             ->assertSee('OAuth authentication')
+            ->assertSee('Claude')
+            ->assertSee('Gemini CLI')
+            ->assertSee('/mcp auth inyice')
             ->assertSee('Signing in here alone does not connect it either.');
         $this->withoutVite()->get('/')->assertOk()
-            ->assertSee('href="/connect/ai"', false)
+            ->assertSee('href="https://agency.example/connect/ai"', false)
             ->assertSee('https://agency.example/llms.txt', false);
         $this->get('/connect/chatgpt/login')->assertOk()->assertSee('How to connect an AI assistant via MCP');
     }

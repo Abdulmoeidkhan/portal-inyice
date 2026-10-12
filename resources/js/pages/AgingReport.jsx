@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { Card, Row, Col, Statistic, Skeleton, Empty, Button, Grid, theme } from 'antd';
 import { message } from '../services/feedback';
 import { DollarOutlined, AlertOutlined } from '@ant-design/icons';
 import { Column } from '@ant-design/plots';
 import Table from '../components/CsvTable';
 
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const wholeNumber = (value) => Math.round(Number(value || 0));
 const bucketAmount = (report, key) => Number(report?.buckets?.[key]?.total_outstanding || 0);
 

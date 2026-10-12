@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { BankOutlined, CheckCircleOutlined, CheckSquareOutlined, ClearOutlined, CreditCardOutlined, DeleteOutlined, DollarOutlined, EditOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Tabs, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
@@ -7,7 +8,6 @@ import Table from '../components/CsvTable';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function VendorPayments() {
   const [vendors, setVendors] = useState([]);
@@ -214,9 +214,9 @@ export default function VendorPayments() {
 
   const payableColumns = [
     { title: 'Order no.', dataIndex: 'order_number', width: 150 },
-    { title: 'Order date', dataIndex: 'date', width: 120, render: dateOnly },
-    { title: 'Booking / folder', dataIndex: 'booking_reference', width: 150, render: (value) => value || '—' },
-    { title: 'Net payable', dataIndex: 'net_amount', width: 130, align: 'right', render: money },
+    { title: 'Order date', dataIndex: 'date', width: 150, render: dateOnly },
+    { title: 'Booking / folder', dataIndex: 'booking_reference', width: 180, render: (value) => value || '—' },
+    { title: 'Net payable', dataIndex: 'net_amount', width: 160, align: 'right', render: money },
     { title: 'Paid', dataIndex: 'paid_amount', width: 120, align: 'right', render: money },
     { title: 'Balance', dataIndex: 'outstanding_amount', width: 130, align: 'right', render: (value) => <Text strong>{money(value)}</Text> },
     {
@@ -228,18 +228,18 @@ export default function VendorPayments() {
 
   const historyColumns = [
     { title: 'Payment #', dataIndex: 'payment_number', width: 160 },
-    { title: 'Date', dataIndex: 'payment_date', width: 120, render: dateOnly },
-    { title: 'Vendor', dataIndex: ['vendor', 'name'] },
-    { title: 'Method', dataIndex: 'payment_method', render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
-    { title: 'Reference', dataIndex: 'reference_number', render: (value) => value || '—' },
-    { title: 'Orders', dataIndex: 'allocations', render: (items = []) => items.map((item) => item.order?.order_number).filter(Boolean).join(', ') || 'Unallocated' },
-    { title: 'Amount', dataIndex: 'amount', align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
-    { title: 'Unallocated', key: 'remaining_amount', align: 'right', render: (_, row) => money(paymentRemaining(row)) },
+    { title: 'Date', dataIndex: 'payment_date', width: 150, render: dateOnly },
+    { title: 'Vendor', dataIndex: ['vendor', 'name'], width: 220 },
+    { title: 'Method', dataIndex: 'payment_method', width: 170, render: (value) => <Tag>{String(value).replaceAll('_', ' ').toUpperCase()}</Tag> },
+    { title: 'Reference', dataIndex: 'reference_number', width: 190, render: (value) => value || '—' },
+    { title: 'Orders', dataIndex: 'allocations', width: 200, render: (items = []) => items.map((item) => item.order?.order_number).filter(Boolean).join(', ') || 'Unallocated' },
+    { title: 'Amount', dataIndex: 'amount', width: 170, align: 'right', render: (value, row) => <Text strong>{row.currency_code} {money(value)}</Text> },
+    { title: 'Unallocated', key: 'remaining_amount', width: 180, align: 'right', render: (_, row) => money(paymentRemaining(row)) },
     { title: 'Actions', key: 'actions', fixed: 'right', width: 220, render: (_, row) => <Space><Button size="small" icon={<EditOutlined />} disabled={paymentRemaining(row) > 0} onClick={() => openEdit(row)} /><Button size="small" icon={<CheckSquareOutlined />} disabled={paymentRemaining(row) <= 0} onClick={() => openAdvanceAllocation(row)}>Allocate</Button><Popconfirm title="Delete this vendor payment?" description="Its allocations and ledger entry will be reversed." okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => deletePayment(row)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
 
   return (
-    <div className="page-shell page-fade-up financial-entry-page">
+    <div className="page-shell page-fade-up financial-entry-page vendor-payments-page">
       <div className="elevated-card financial-entry-hero">
         <div><Title level={2}>Vendor Payments</Title><Paragraph>Record supplier disbursements and allocate one payment across several payable orders.</Paragraph></div>
         <Space size="large" wrap><Statistic title="Open payables" value={payables.length} prefix={<DollarOutlined />} /><Statistic title="Outstanding" value={outstandingTotal} precision={2} prefix={vendor?.currency_code} /></Space>
@@ -264,12 +264,12 @@ export default function VendorPayments() {
         </div>
         {form.mode === 'allocate' && <Row justify="center" align="middle" className="financial-table-row">
           <Col span={24} className="financial-table-column">
-            <Table rowKey="id" loading={loading} columns={payableColumns} dataSource={payables} pagination={false} tableLayout="fixed" scroll={{ x: 1320, y: 410 }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: vendorId ? 'No open payables for this vendor' : 'Select a vendor to load payable orders' }} />
+            <Table rowKey="id" loading={loading} columns={payableColumns} dataSource={payables} pagination={false} tableLayout="fixed" scroll={{ x: 1380, y: 410 }} rowSelection={{ selectedRowKeys: selectedKeys, onChange: updateSelection }} locale={{ emptyText: vendorId ? 'No open payables for this vendor' : 'Select a vendor to load payable orders' }} />
           </Col>
         </Row>}
       </Card>
 
-      <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={vendorId ? payments : []} scroll={{ x: 900 }} locale={{ emptyText: vendorId ? 'No payment history for this vendor' : 'Select a vendor to view payment history' }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={() => { loadBaseData(); if (vendorId) selectVendor(vendorId); }}>Refresh</Button>} /></Card>
+      <Card className="financial-history-card"><Tabs items={[{ key: 'history', label: 'Payment history', children: <Table rowKey="id" loading={loading} columns={historyColumns} dataSource={vendorId ? payments : []} scroll={{ x: 1660 }} locale={{ emptyText: vendorId ? 'No payment history for this vendor' : 'Select a vendor to view payment history' }} /> }]} tabBarExtraContent={<Button icon={<ReloadOutlined />} onClick={() => { loadBaseData(); if (vendorId) selectVendor(vendorId); }}>Refresh</Button>} /></Card>
       <Modal width={980} title={`Edit and reallocate ${editing?.payment_number || ''}`} open={!!editing} onCancel={() => setEditing(null)} cancelButtonProps={{ danger: true }} onOk={saveEdit} confirmLoading={saving} okText="Save changes">
         {editing && <><Row gutter={[12, 12]} align="bottom" style={{ marginBottom: 16 }}>
           <Col xs={24} sm={12} md={6}><Text strong>Date</Text><Input type="date" value={editing.date} onChange={(event) => setEditing((current) => ({ ...current, date: event.target.value }))} style={{ width: '100%', marginTop: 4 }} /></Col>

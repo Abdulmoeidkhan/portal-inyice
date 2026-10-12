@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -10,7 +11,6 @@ import Table from '../components/CsvTable';
 
 const { Title, Text, Paragraph } = Typography;
 
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toNumber = (value) => {
   const parsed = Number(value || 0);

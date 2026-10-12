@@ -12,7 +12,17 @@
         <li>Return to your AI application and ask: “Using InYice, show my outstanding invoices.”</li>
     </ol>
     <p class="notice">A paid agency plan and a verified owner, admin or accounts login are required. Starter plans cannot connect. Enter your password only on InYice, never in a chat.</p>
-    <p>Custom MCP support depends on your AI application. The current server accepts ChatGPT callback URLs; other clients require configuration by the operator. Giving an assistant this website address does not automatically install a connection. Signing in here alone does not connect it either.</p>
+    <h2>ChatGPT</h2>
+    <p>Add a custom remote MCP connection in your ChatGPT account or workspace, using the server URL above and OAuth authentication. Availability depends on your account and workspace settings. Choose dynamic client registration when configuring the OAuth client.</p>
+    <h2>Claude</h2>
+    <p>Open Settings → Connectors → Add custom connector, enter the server URL above, and complete the InYice sign-in and consent screen. Your workspace may require an administrator to enable custom connectors.</p>
+    <h2>Gemini CLI</h2>
+    <p>Add the following server to the <code>mcpServers</code> section in your Gemini CLI <code>settings.json</code>, then run <code>/mcp auth inyice</code>:</p>
+    <pre>{{ json_encode(['mcpServers' => ['inyice' => ['httpUrl' => $resource, 'oauth' => ['enabled' => true, 'scopes' => ['mcp:use']]]]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+    <p>Gemini CLI opens a browser and receives the OAuth callback on localhost. This configuration is for Gemini CLI; support in the Gemini consumer chat app is not verified.</p>
+    <p>Giving an assistant this website address does not automatically install a connection. Signing in here alone does not connect it either.</p>
+    <p>After connecting, try “Find my customers”, “Show outstanding invoices”, or “Show this month's profit report”. These tools read operational accounting data; they do not post entries to the separate Accounting module or change business records.</p>
+    <p><a href="https://developers.openai.com/plugins/build/auth">ChatGPT authentication documentation</a> · <a href="https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp">Claude connector documentation</a> · <a href="https://geminicli.com/docs/tools/mcp-server/">Gemini CLI documentation</a></p>
     <p><a href="{{ $issuer }}/connect/chatgpt">Manage existing connections</a></p>
     <p><a href="{{ $issuer }}/llms.txt">Connection instructions for AI assistants</a></p>
     <p><a href="{{ $issuer }}/.well-known/oauth-protected-resource/mcp/agency">MCP resource metadata</a> · <a href="{{ $issuer }}/.well-known/oauth-authorization-server">OAuth metadata</a></p>

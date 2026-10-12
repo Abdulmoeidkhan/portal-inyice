@@ -235,28 +235,35 @@ const columnSortValue = (column, record, rowIndex) => {
   return normalizeSortValue(renderedValue);
 };
 
-const sortableColumn = (column, rows) => {
+const sortableColumn = (column, rowIndices) => {
   if (column.hidden || column.sorter !== undefined) return column;
   if (isActionColumn(column)) return column;
 
   if (Array.isArray(column.children)) {
     return {
       ...column,
-      children: column.children.map((child) => sortableColumn(child, rows)),
+      children: column.children.map((child) => sortableColumn(child, rowIndices)),
     };
   }
 
   return {
     ...column,
     sorter: (left, right) => compareSortValues(
-      columnSortValue(column, left, rows.indexOf(left)),
-      columnSortValue(column, right, rows.indexOf(right)),
+      columnSortValue(column, left, rowIndices.get(left) ?? -1),
+      columnSortValue(column, right, rowIndices.get(right) ?? -1),
     ),
     sortDirections: column.sortDirections || ['ascend', 'descend'],
   };
 };
 
-const sortableColumns = (columns = [], rows = []) => columns.map((column) => sortableColumn(column, rows));
+const sortableColumns = (columns = [], rows = []) => {
+  // Preserve indexOf's first occurrence semantics without scanning rows on every comparison.
+  const rowIndices = new Map();
+  rows.forEach((row, index) => {
+    if (!Number.isNaN(row) && !rowIndices.has(row)) rowIndices.set(row, index);
+  });
+  return columns.map((column) => sortableColumn(column, rowIndices));
+};
 const filterableColumns = (columns = []) => columns.map(filterableColumn);
 
 const downloadCsv = ({ columns, dataSource, fileName }) => {

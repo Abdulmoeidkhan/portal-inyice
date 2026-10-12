@@ -1,20 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Empty, Input, Row, Segmented, Select, Space, Statistic, Tag, Typography, theme } from 'antd';
 import { message } from '../services/feedback';
-import { dateOnly } from '../services/dateFormat';
+import { dateOnly, localDateString as dateString } from '../services/dateFormat';
 import Table from '../components/CsvTable';
 import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 
-const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const firstOfMonth = () => {
   const date = new Date();
   date.setDate(1);
   return dateString(date);
 };
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const margin = (value) => `${Number(value || 0).toFixed(2)}%`;
 const label = (value) => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const dateByOptions = [

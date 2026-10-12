@@ -694,6 +694,13 @@ body {
   font-size: 12px;
 }
 
+.vendor-payments-page .ant-table-thead > tr > th,
+.vendor-payments-page .ant-table-column-title {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
 .financial-entry-card .financial-allocation-column {
   padding-inline: 12px !important;
   background: color-mix(in srgb, var(--app-primary) 4%, var(--app-surface));

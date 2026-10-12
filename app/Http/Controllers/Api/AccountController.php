@@ -28,6 +28,8 @@ class AccountController extends Controller
         $accounts = CashAccount::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
             ->where('is_active', true)
+            ->withSum('ledgerEntries as ledger_debits', 'debit')
+            ->withSum('ledgerEntries as ledger_credits', 'credit')
             ->get()
             ->map(function ($account) {
                 return [
@@ -37,7 +39,7 @@ class AccountController extends Controller
                     'account_name' => $account->account_name,
                     'currency_code' => $account->currency_code,
                     'opening_balance' => $account->opening_balance,
-                    'current_balance' => $this->ledgerService->getCashBalance($account->id),
+                    'current_balance' => (float) $account->opening_balance + ($account->ledger_debits ?? 0) - ($account->ledger_credits ?? 0),
                 ];
             });
 
@@ -88,6 +90,8 @@ class AccountController extends Controller
         $accounts = BankAccount::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', $companyId)
             ->where('is_active', true)
+            ->withSum('ledgerEntries as ledger_debits', 'debit')
+            ->withSum('ledgerEntries as ledger_credits', 'credit')
             ->get()
             ->map(function ($account) {
                 return [
@@ -98,7 +102,7 @@ class AccountController extends Controller
                     'account_holder' => $account->account_holder,
                     'currency_code' => $account->currency_code,
                     'opening_balance' => $account->opening_balance,
-                    'current_balance' => $this->ledgerService->getBankBalance($account->id),
+                    'current_balance' => (float) $account->opening_balance + ($account->ledger_debits ?? 0) - ($account->ledger_credits ?? 0),
                 ];
             });
 

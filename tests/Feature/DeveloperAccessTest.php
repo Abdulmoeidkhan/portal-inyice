@@ -88,10 +88,14 @@ class DeveloperAccessTest extends TestCase
 
     public function test_documentation_covers_roles_and_matches_restrictions(): void
     {
-        foreach (['owner', 'admin', 'accounts', 'sales', 'dev'] as $role) {
-            Sanctum::actingAs($this->user($role));
+        foreach (['owner', 'dev'] as $role) {
+            $user = $this->user($role);
+            $user->company->update(['is_paid' => true]);
+            Sanctum::actingAs($user);
             $response = $this->getJson('/api/v1/api-documentation')->assertOk();
             $endpoints = collect($response->json('endpoints'))->keyBy('id');
+            $this->assertSame(['owner', 'admin', 'accounts'], $endpoints['GET:api/v1/accounting']['roles']);
+            $this->assertSame(['owner', 'dev'], $endpoints['GET:api/v1/api-documentation']['roles']);
             $this->assertSame(['dev'], $endpoints['GET:api/v1/dev/export']['roles']);
             $this->assertSame(['owner'], $endpoints['POST:api/v1/company-profile']['roles']);
             $this->assertNotContains('dev', $endpoints['POST:api/v1/receivings']['roles']);
@@ -99,6 +103,23 @@ class DeveloperAccessTest extends TestCase
             $this->assertSame(['owner', 'admin', 'dev'], $endpoints['GET:api/v1/reports/cancelled']['roles']);
             $this->assertFalse($endpoints->contains(fn ($endpoint) => str_contains($endpoint['path'], '/internal/')));
             $this->assertContains('email', array_column($endpoints['POST:api/v1/auth/login']['fields'], 'name'));
+        }
+    }
+
+    public function test_documentation_requires_paid_owner_or_developer(): void
+    {
+        foreach ([false, true] as $paid) {
+            foreach (['owner', 'admin', 'accounts', 'sales', 'dev'] as $role) {
+                $user = $this->user($role);
+                $user->company->update(['is_paid' => $paid]);
+                Sanctum::actingAs($user);
+                $response = $this->getJson('/api/v1/api-documentation');
+                if ($paid && in_array($role, ['owner', 'dev'], true)) {
+                    $response->assertOk();
+                } else {
+                    $response->assertForbidden();
+                }
+            }
         }
     }
 
@@ -166,13 +187,10 @@ class DeveloperAccessTest extends TestCase
         $this->getJson('/api/v1/dev/export')->assertForbidden();
     }
 
-    public function test_existing_tenants_receive_dev_role_idempotently(): void
+    public function test_new_tenant_role_defaults_include_developer_once(): void
     {
-        $user = $this->user('owner');
-        $migration = require database_path('migrations/2026_09_24_000001_add_developer_role.php');
-        $migration->up();
-        $migration->up();
-        $this->assertSame(1, Role::where('tenant_id', $user->tenant_id)->where('code', 'dev')->count());
+        $this->assertCount(1, array_filter(Role::TENANT_DEFAULT_ROLES,
+            fn (array $role) => $role['code'] === 'dev'));
     }
 
     private function user(string $role = 'dev', ?int $tenantId = null): User

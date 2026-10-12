@@ -25,7 +25,7 @@ function cacheKey(path) {
       || !(localStorage.getItem('auth_token') || localStorage.getItem('token'))) return null;
     const url = new URL(path, window.location.origin);
     if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/v1/')
-      || url.pathname === '/api/v1/dev/export') return null;
+      || ['/api/v1/dev/export', '/api/v1/api-documentation', '/api/v1/company-profile'].includes(url.pathname)) return null;
     url.searchParams.sort();
     return CACHE_PREFIX + JSON.stringify([user.tenant_id, user.company_id, user.uid || user.id, user.role, url.pathname + url.search]);
   } catch { return null; }

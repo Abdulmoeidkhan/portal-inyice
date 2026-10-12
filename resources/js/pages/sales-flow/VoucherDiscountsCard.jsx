@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { formatMoney as money } from '../../services/numberFormat';
 import { Button, Card, Col, Divider, Input, InputNumber, Popconfirm, Row, Segmented, Space, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import Table from '../../components/CsvTable';
@@ -7,7 +8,6 @@ import { calculateVoucherTotals } from './voucherTotals';
 
 const { Text } = Typography;
 
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const discountFieldStyle = { display: 'flex', flexDirection: 'column', gap: 8, width: '100%' };
 const discountControlStyle = { width: '100%' };
 

@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Col, Input, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { dateOnly } from '../services/dateFormat';
+import { dateOnly, localDateString as dateString } from '../services/dateFormat';
 import { openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
 import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
-const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
 const firstOfMonth = () => { const date = new Date(); date.setDate(1); return dateString(date); };
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 

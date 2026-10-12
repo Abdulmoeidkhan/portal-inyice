@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { formatMoney as money } from '../services/numberFormat';
+import { localDateString as dateString } from '../services/dateFormat';
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Empty, Input, Row, Space, Statistic, Tag, Typography } from 'antd';
 import { message } from '../services/feedback';
@@ -7,13 +9,12 @@ import useReportTablePagination from '../hooks/useReportTablePagination';
 
 const { Title, Paragraph, Text } = Typography;
 
-const dateString = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const firstOfYear = () => {
   const date = new Date();
   date.setMonth(0, 1);
   return dateString(date);
 };
-const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const monthLabel = (value) => {
   const [year, month] = String(value || '').split('-').map(Number);
   if (!year || !month) return value || '-';
