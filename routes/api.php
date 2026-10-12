@@ -159,15 +159,22 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::cl
     });
 
     // ========== PAYMENTS ==========
+    Route::controller(PaymentController::class)->middleware('role:admin,accounts,sales')->group(function () {
+        Route::get('/payments/vendor', 'vendorPayments')->name('payments.vendor.list');
+        Route::get('/payments/vendor/payment/{uid}', 'showVendorPayment')->name('payments.vendor.show');
+        Route::get('/payments/customer', 'customerPayments')->name('payments.customer.list');
+        Route::get('/payments/invoices/{invoiceUid}/settlements', 'settlements')->name('payments.settlements');
+        Route::get('/receipts/customer', 'customerReceipts')->name('receipts.customer.list');
+        Route::get('/receipts/customer/{uid}', 'showCustomerReceipt')->name('receipts.customer.show');
+        Route::get('/receipts/vendor', 'vendorReceipts')->name('receipts.vendor.list');
+    });
+
     Route::prefix('payments')->controller(PaymentController::class)->middleware('role:admin,accounts')->group(function () {
-        Route::get('/vendor', 'vendorPayments')->name('payments.vendor.list');
-        Route::get('/vendor/payment/{uid}', 'showVendorPayment')->name('payments.vendor.show');
         Route::patch('/vendor/payment/{uid}', 'updateVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.update');
         Route::delete('/vendor/payment/{uid}', 'deleteVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.delete');
         Route::post('/vendor/payment/{uid}/allocate-advance', 'allocateVendorAdvance')->middleware('throttle:sensitive-write')->name('payments.vendor.allocateAdvance');
         Route::get('/vendor/{vendorId}/payables', 'vendorPayables')->name('payments.vendor.payables');
         Route::post('/vendor', 'recordVendorPayment')->middleware('throttle:sensitive-write')->name('payments.vendor.record');
-        Route::get('/customer', 'customerPayments')->name('payments.customer.list');
         Route::get('/refund-allocations/customer/{customerId}', 'customerRefundAllocations')->name('payments.refundAllocations.customer');
         Route::get('/refund-allocations/vendor/{vendorId}', 'vendorRefundAllocations')->name('payments.refundAllocations.vendor');
         Route::post('/refund-allocations/customer-payment', 'recordCustomerRefundPayment')->middleware('throttle:sensitive-write')->name('payments.refundAllocations.customerPayment');
@@ -178,19 +185,15 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::cl
         Route::patch('/customer/{uid}', 'updateCustomerPayment')->middleware('throttle:sensitive-write')->name('payments.customer.update');
         Route::post('/customer/refund', 'recordRefund')->middleware('throttle:sensitive-write')->name('payments.customer.refund');
         Route::post('/apply-advance', 'applyAdvance')->middleware('throttle:sensitive-write')->name('payments.applyAdvance');
-        Route::get('/invoices/{invoiceUid}/settlements', 'settlements')->name('payments.settlements');
     });
 
     Route::prefix('receipts')->controller(PaymentController::class)->middleware('role:admin,accounts')->group(function () {
         Route::post('/customer/record', 'recordCustomerReceipt')->middleware('throttle:sensitive-write')->name('receipts.customer.record');
         Route::post('/customer/record-bulk', 'recordBulkCustomerReceipt')->middleware('throttle:sensitive-write')->name('receipts.customer.recordBulk');
         Route::post('/customer/advance', 'recordAdvance')->middleware('throttle:sensitive-write')->name('receipts.customer.advance');
-        Route::get('/customer', 'customerReceipts')->name('receipts.customer.list');
-        Route::get('/customer/{uid}', 'showCustomerReceipt')->name('receipts.customer.show');
         Route::post('/customer/{uid}/allocate-advance', 'allocateCustomerAdvance')->middleware('throttle:sensitive-write')->name('receipts.customer.allocateAdvance');
         Route::patch('/customer/{uid}', 'updateCustomerReceipt')->middleware('throttle:sensitive-write')->name('receipts.customer.update');
         Route::delete('/customer/{uid}', 'deleteCustomerReceipt')->middleware('throttle:sensitive-write')->name('receipts.customer.delete');
-        Route::get('/vendor', 'vendorReceipts')->name('receipts.vendor.list');
         Route::post('/vendor', 'recordVendorReceipt')->middleware('throttle:sensitive-write')->name('receipts.vendor.record');
         Route::delete('/vendor/{uid}', 'deleteVendorReceipt')->middleware('throttle:sensitive-write')->name('receipts.vendor.delete');
         Route::patch('/vendor/{uid}', 'updateVendorReceipt')->middleware('throttle:sensitive-write')->name('receipts.vendor.update');

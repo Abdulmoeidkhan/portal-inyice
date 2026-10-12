@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Button, Empty, Input, List, Space, Typography, theme } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import React, { useId, useState } from 'react';
+import { Button, Input, List, Typography, theme } from 'antd';
+import { MessageOutlined, SendOutlined } from '@ant-design/icons';
 import { message } from '../services/feedback';
+import './OrderInternalNotes.css';
 
 const { Text, Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -29,6 +30,7 @@ export default function OrderInternalNotes({ order, onOrderChange }) {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const { token } = theme.useToken();
+  const inputId = useId();
 
   if (!order?.uid || notes === null) {
     return null;
@@ -68,24 +70,32 @@ export default function OrderInternalNotes({ order, onOrderChange }) {
 
   const noteCountLabel = notes.length > 0
     ? `${notes.length} note${notes.length === 1 ? '' : 's'}`
-    : 'No data to show';
+    : '0 notes';
   const canAddNote = body.trim().length > 0;
 
   return (
     <section
       className="internal-notes-panel"
+      aria-labelledby={`${inputId}-title`}
       style={{
         '--internal-notes-bg': token.colorBgContainer,
         '--internal-notes-border': token.colorBorderSecondary,
         '--internal-notes-soft-bg': token.colorFillQuaternary,
         '--internal-notes-text': token.colorText,
         '--internal-notes-muted': token.colorTextSecondary,
+        '--internal-notes-accent': token.colorPrimary,
+        '--internal-notes-accent-bg': token.colorPrimaryBg,
       }}
     >
-      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <div className="internal-notes-header">
-          <Title level={4} style={{ margin: 0 }}>Internal Notes</Title>
-          <Text type="secondary">{noteCountLabel}</Text>
+          <div className="internal-notes-heading">
+            <span className="internal-notes-icon" aria-hidden="true"><MessageOutlined /></span>
+            <div>
+              <Title id={`${inputId}-title`} level={4} style={{ margin: 0, fontSize: 16 }}>Internal Notes</Title>
+              <Text type="secondary">Keep your team up to date.</Text>
+            </div>
+          </div>
+          <span className="internal-notes-count">{noteCountLabel}</span>
         </div>
         <List
           className="internal-notes-list"
@@ -93,17 +103,17 @@ export default function OrderInternalNotes({ order, onOrderChange }) {
           dataSource={notes}
           locale={{
             emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<Text type="secondary">No data to show</Text>}
-              />
+              <div className="internal-notes-empty">
+                <Text strong>No notes yet</Text>
+                <Text type="secondary">Add a reminder or an update about this order.</Text>
+              </div>
             ),
           }}
           renderItem={(note) => (
             <List.Item key={note.uid} className="internal-note-item">
               <div className="internal-note-content">
                 <div className="internal-note-meta">
-                  <Text strong>{note.user?.name || 'Staff'}</Text> &nbsp;
+                  <Text strong>{note.user?.name || 'Staff'}</Text>
                   <Text type="secondary">{formatDateTime(note.created_at)}</Text>
                 </div>
                 <Paragraph className="internal-note-body">{note.body}</Paragraph>
@@ -112,16 +122,19 @@ export default function OrderInternalNotes({ order, onOrderChange }) {
           )}
         />
         <div className="internal-notes-composer">
+          <label className="internal-notes-label" htmlFor={inputId}>New note</label>
           <TextArea
+            id={inputId}
             className="internal-notes-input"
-            autoSize={{ minRows: 2, maxRows: 5 }}
+            autoSize={{ minRows: 3, maxRows: 8 }}
             maxLength={5000}
             value={body}
+            disabled={saving}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Add an internal note"
+            placeholder="Write an update for your team…"
           />
-          <br />
-          <br />
+          <div className="internal-notes-actions">
+            <Text type="secondary" className="internal-notes-counter">{body.length.toLocaleString()} / 5,000</Text>
           <Button
             className="internal-notes-submit"
             type="primary"
@@ -132,8 +145,8 @@ export default function OrderInternalNotes({ order, onOrderChange }) {
           >
             Add Note
           </Button>
+          </div>
         </div>
-      </Space>
     </section>
   );
 }

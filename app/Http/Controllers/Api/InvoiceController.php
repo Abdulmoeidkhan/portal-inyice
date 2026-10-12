@@ -215,7 +215,7 @@ class InvoiceController extends Controller
             ->where('company_id', auth()->user()->company_id)
             ->where('uid', $uid)
             ->with($user?->hasRole('sales') === true
-                ? ['lines', 'customer', 'order', 'company']
+                ? ['lines', 'customer', 'order', 'company', 'settlements.referenceDocument']
                 : ['lines', 'discounts.createdBy:id,name', 'discounts.updatedBy:id,name', 'customer', 'order', 'company', 'settlements.referenceDocument'])
             ->first();
 
@@ -227,10 +227,6 @@ class InvoiceController extends Controller
             }
 
             abort(404, 'No query results for model [App\\Models\\Invoice].');
-        }
-
-        if ($user?->hasRole('sales') === true) {
-            $invoice->setRelation('settlements', collect());
         }
 
         if ($this->shouldHideCostProfit($user)) {

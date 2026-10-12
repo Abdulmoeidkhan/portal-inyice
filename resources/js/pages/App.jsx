@@ -70,6 +70,7 @@ import InternalPortal from './InternalPortal';
 import UserProfile from './UserProfile';
 import SalesFlow from './SalesFlow';
 import Payments from './Payments';
+import PaymentHistory from './PaymentHistory';
 import Receivings from './Receivings';
 import CustomerList from './CustomerList';
 import VendorList from './VendorList';
@@ -438,11 +439,11 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/reference-search" element={<ReferenceSearch />} />
               <Route path="/sales-flow" element={<SalesFlow />} />
               <Route path="/receivings" element={<Receivings />} />
-              <Route path="/payments" element={canAccessPayments ? <Payments /> : <Navigate to="/" replace />} />
+              <Route path="/payments" element={canAccessPayments ? <Payments /> : user?.role === 'sales' ? <PaymentHistory key="payments" direction="receipt" partyType="customer" /> : <Navigate to="/" replace />} />
               <Route path="/profit-shares" element={canAccessPayments ? <ProfitShares /> : <Navigate to="/" replace />} />
-              <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
-              <Route path="/vendor-payments" element={canAccessPayments ? <VendorPayments /> : <Navigate to="/" replace />} />
-              <Route path="/vendor-receipts" element={canAccessPayments ? <CounterpartyTransaction direction="receipt" partyType="vendor" /> : <Navigate to="/" replace />} />
+              <Route path="/customer-payments" element={canAccessPayments ? <CounterpartyTransaction direction="payment" partyType="customer" /> : user?.role === 'sales' ? <PaymentHistory key="customer-payments" direction="payment" partyType="customer" /> : <Navigate to="/" replace />} />
+              <Route path="/vendor-payments" element={canAccessPayments ? <VendorPayments /> : user?.role === 'sales' ? <PaymentHistory key="vendor-payments" direction="payment" partyType="vendor" /> : <Navigate to="/" replace />} />
+              <Route path="/vendor-receipts" element={canAccessPayments ? <CounterpartyTransaction direction="receipt" partyType="vendor" /> : user?.role === 'sales' ? <PaymentHistory key="vendor-receipts" direction="receipt" partyType="vendor" /> : <Navigate to="/" replace />} />
               <Route path="/refund-allocations" element={canAccessPayments ? <CustomerRefundAllocation /> : <Navigate to="/" replace />} />
               <Route path="/customers" element={<CustomerList />} />
               <Route path="/vendors" element={<VendorList />} />
@@ -748,6 +749,12 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           label: <Link to="/receivings">Receivings</Link>,
           icon: <DollarOutlined />,
         },
+        ...(signedInUser.role === 'sales' ? [
+          { key: '/payments', label: <Link to="/payments">Customer Receipts</Link>, icon: <BankOutlined /> },
+          { key: '/customer-payments', label: <Link to="/customer-payments">Customer Payments</Link>, icon: <BankOutlined /> },
+          { key: '/vendor-receipts', label: <Link to="/vendor-receipts">Vendor Receipts</Link>, icon: <BankOutlined /> },
+          { key: '/vendor-payments', label: <Link to="/vendor-payments">Vendor Payments</Link>, icon: <BankOutlined /> },
+        ] : []),
         ...(canAccessPayments ? [{
           key: '/profit-shares',
           label: <Link to="/profit-shares">Profit Shares</Link>,

@@ -225,6 +225,18 @@ const PreviewTable = ({ columns, data }) => {
           ))}
         </tbody>
       </table>
+      <div className="voucher-preview-mobile-rows">
+        {keyedData.map((row, rowIndex) => (
+          <dl className="voucher-preview-mobile-row" key={row.__previewRowKey}>
+            {visibleColumns.map((column, columnIndex) => (
+              <div className="voucher-preview-mobile-field" key={columnKey(column, columnIndex)}>
+                <dt>{column.title}</dt>
+                <dd>{renderPrintCell(column, row, rowIndex) || '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        ))}
+      </div>
     </div>
   );
 };
@@ -312,137 +324,138 @@ export default function VoucherPreview({ order }) {
           </div>
         )}
 
-      {secondaryReferenceItems.length > 0 && (
-        <div className="voucher-reference-table voucher-reference-table-secondary">
-          {secondaryReferenceItems.map(([label, value]) => (
-            <div className="voucher-reference-cell" key={label}>
-              <Text type="secondary">{label}</Text>
-              <Text strong>{value}</Text>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {contact.executive_name && (
-        <div className="voucher-preview-contact">
-          <span>{`Executive: ${contact.executive_name}`}</span>
-        </div>
-      )}
-
-      {passengerRows.length > 0 && <Section title="Passenger List">
-        <PreviewTable
-          data={passengerRows}
-          columns={[
-            { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '', alwaysVisible: true },
-            { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '' },
-            { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '' },
-            { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
-            { title: 'Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
-            { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
-          ]}
-        />
-      </Section>}
-
-      {flightRows.length > 0 && <Section title="Flight Details">
-        <PreviewTable
-          data={flightRows}
-          columns={[
-            { title: 'Flight', dataIndex: 'flight_no', width: 95, render: (value) => value || '', alwaysVisible: true },
-            { title: 'Date', dataIndex: 'date', width: 95, render: formatDate },
-            { title: 'From', dataIndex: 'from', width: 115, render: formatAirport },
-            { title: 'To', dataIndex: 'to', width: 115, render: formatAirport },
-            { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '' },
-            { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '' },
-            { title: 'Baggage', dataIndex: 'baggage', width: 80, render: (value) => value || '' },
-          ]}
-        />
-      </Section>}
-
-      {hotelRows.length > 0 && (
-        <Section title="Accommodation Details">
-          <PreviewTable
-            data={hotelRows}
-            columns={[
-              { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
-              { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '', alwaysVisible: true },
-              { title: 'HCN', dataIndex: 'hcn', width: 90, render: (value) => value || '' },
-              { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
-              { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
-              { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
-              { title: 'Nights', dataIndex: 'nights', width: 70, align: 'center', render: (value) => value || '' },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
-            ]}
-          />
-        </Section>
-      )}
-
-      {transferRows.length > 0 && (
-        <Section title="Transport Details">
-          <PreviewTable
-            data={transferRows}
-            columns={[
-              { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
-              { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '', alwaysVisible: true },
-              { title: 'From', dataIndex: 'from_city', width: 95, render: formatPlace },
-              { title: 'To', dataIndex: 'to_city', width: 95, render: formatPlace },
-              { title: 'Vehicle', dataIndex: 'vehicle', width: 110, render: (value) => value || '' },
-              { title: 'Contact', dataIndex: 'contact_person', width: 120, render: (value) => value || '' },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
-            ]}
-          />
-        </Section>
-      )}
-
-      {cityTourRows.length > 0 && (
-        <Section title="City Tour / Ziarat">
-          <PreviewTable
-            data={cityTourRows}
-            columns={[
-              { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
-              { title: 'Title', dataIndex: 'title', width: 145, render: (value) => value || '', alwaysVisible: true },
-              { title: 'Attractions', dataIndex: 'attractions', width: 190, render: (value) => value || '' },
-              { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
-              { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
-            ]}
-          />
-        </Section>
-      )}
-
-      {serviceRows.length > 0 && (
-        <Section title="Other Services">
-          <PreviewTable
-            data={serviceRows}
-            columns={[
-              { title: 'Description', dataIndex: 'description', render: (value) => value || '', alwaysVisible: true },
-            ]}
-          />
-        </Section>
-      )}
-
-      {footerHasContent && (
-        <section className="voucher-preview-footer">
-          <div className="voucher-preview-footer-notes">
-            {voucher.emergency_contact && (
-              <div>
-                <Text className="voucher-preview-section-title">Emergency Contact(s)</Text>
-                <MultilineText>{voucher.emergency_contact}</MultilineText>
+        {secondaryReferenceItems.length > 0 && (
+          <div className="voucher-reference-table voucher-reference-table-secondary">
+            {secondaryReferenceItems.map(([label, value]) => (
+              <div className="voucher-reference-cell" key={label}>
+                <Text type="secondary">{label}</Text>
+                <Text strong>{value}</Text>
               </div>
-            )}
-            {order.notes && (
-              <div>
-                <Text className="voucher-preview-section-title">Notes</Text>
-                <MultilineText>{order.notes}</MultilineText>
-              </div>
-            )}
+            ))}
           </div>
-          {company.footer_logo_url && (
-            <div className="voucher-preview-footer-logo">
-              <Text className="voucher-preview-section-title">QR</Text>
-              <img src={company.footer_logo_url} alt="Voucher footer logo or QR" />
+        )}
+
+        {contact.executive_name && (
+          <div className="voucher-preview-contact">
+            <span>{`Executive: ${contact.executive_name}`}</span>
+          </div>
+        )}
+
+        {passengerRows.length > 0 && <Section title="Passenger List">
+          <PreviewTable
+            data={passengerRows}
+            columns={[
+              { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '', alwaysVisible: true },
+              { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '' },
+              { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '' },
+              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
+              { title: 'Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
+              { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
+            ]}
+          />
+        </Section>}
+
+        {hotelRows.length > 0 && (
+          <Section title="Accommodation Details">
+            <PreviewTable
+              data={hotelRows}
+              columns={[
+                { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
+                { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '', alwaysVisible: true },
+                { title: 'HCN', dataIndex: 'hcn', width: 90, render: (value) => value || '' },
+                { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
+                { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
+                { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
+                { title: 'Nights', dataIndex: 'nights', width: 70, align: 'center', render: (value) => value || '' },
+                { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
+              ]}
+            />
+          </Section>
+        )}
+
+
+        {transferRows.length > 0 && (
+          <Section title="Transport Details">
+            <PreviewTable
+              data={transferRows}
+              columns={[
+                { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
+                { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '', alwaysVisible: true },
+                { title: 'From', dataIndex: 'from_city', width: 95, render: formatPlace },
+                { title: 'To', dataIndex: 'to_city', width: 95, render: formatPlace },
+                { title: 'Vehicle', dataIndex: 'vehicle', width: 110, render: (value) => value || '' },
+                { title: 'Contact', dataIndex: 'contact_person', width: 120, render: (value) => value || '' },
+                { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
+              ]}
+            />
+          </Section>
+        )}
+
+        {cityTourRows.length > 0 && (
+          <Section title="City Tour / Ziarat">
+            <PreviewTable
+              data={cityTourRows}
+              columns={[
+                { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
+                { title: 'Title', dataIndex: 'title', width: 145, render: (value) => value || '', alwaysVisible: true },
+                { title: 'Attractions', dataIndex: 'attractions', width: 190, render: (value) => value || '' },
+                { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
+                { title: 'Notes', dataIndex: 'notes', width: 125, render: (value) => value || '' },
+              ]}
+            />
+          </Section>
+        )}
+
+        {serviceRows.length > 0 && (
+          <Section title="Other Services">
+            <PreviewTable
+              data={serviceRows}
+              columns={[
+                { title: 'Description', dataIndex: 'description', render: (value) => value || '', alwaysVisible: true },
+              ]}
+            />
+          </Section>
+        )}
+
+        {flightRows.length > 0 && <Section title="Flight Details">
+          <PreviewTable
+            data={flightRows}
+            columns={[
+              { title: 'Flight', dataIndex: 'flight_no', width: 95, render: (value) => value || '', alwaysVisible: true },
+              { title: 'Date', dataIndex: 'date', width: 95, render: formatDate },
+              { title: 'From', dataIndex: 'from', width: 115, render: formatAirport },
+              { title: 'To', dataIndex: 'to', width: 115, render: formatAirport },
+              { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '' },
+              { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '' },
+              { title: 'Baggage', dataIndex: 'baggage', width: 80, render: (value) => value || '' },
+            ]}
+          />
+        </Section>}
+
+        {footerHasContent && (
+          <section className="voucher-preview-footer">
+            <div className="voucher-preview-footer-notes">
+              {voucher.emergency_contact && (
+                <div>
+                  <Text className="voucher-preview-section-title">Emergency Contact(s)</Text>
+                  <MultilineText>{voucher.emergency_contact}</MultilineText>
+                </div>
+              )}
+              {order.notes && (
+                <div>
+                  <Text className="voucher-preview-section-title">Notes</Text>
+                  <MultilineText>{order.notes}</MultilineText>
+                </div>
+              )}
             </div>
-          )}
-        </section>
-      )}
+            {company.footer_logo_url && (
+              <div className="voucher-preview-footer-logo">
+                <Text className="voucher-preview-section-title">QR</Text>
+                <img src={company.footer_logo_url} alt="Voucher footer logo or QR" />
+              </div>
+            )}
+          </section>
+        )}
       </Watermark>
     </div>
   );

@@ -2712,7 +2712,7 @@ class FinancialApiTest extends TestCase
         $this->assertArrayNotHasKey('outstanding_balance', $salesVendors->json('0'));
     }
 
-    public function test_sales_role_can_view_and_share_invoice_detail_and_voucher_without_payment_rows(): void
+    public function test_sales_role_can_view_and_share_invoice_detail_and_voucher_with_payment_rows(): void
     {
         $ctx = $this->seedTenantContext();
 
@@ -2738,7 +2738,8 @@ class FinancialApiTest extends TestCase
         $this->getJson('/api/v1/invoices/' . $invoice['uid'])
             ->assertOk()
             ->assertJsonPath('uid', $invoice['uid'])
-            ->assertJsonPath('settlements', []);
+            ->assertJsonCount(1, 'settlements')
+            ->assertJsonPath('settlements.0.amount_received', '100.0000');
 
         $invoiceShare = $this->postJson('/api/v1/invoices/' . $invoice['uid'] . '/share')
             ->assertOk()
@@ -2912,7 +2913,7 @@ class FinancialApiTest extends TestCase
             ->assertJsonPath('order.meta.contact.address', $expectedAddress);
     }
 
-    public function test_sales_role_cannot_view_or_update_receipts_and_payments(): void
+    public function test_sales_role_can_view_but_cannot_update_receipts_and_payments(): void
     {
         $ctx = $this->seedTenantContext();
 
@@ -2943,14 +2944,14 @@ class FinancialApiTest extends TestCase
 
         Sanctum::actingAs($this->salesUserForContext($ctx));
 
-        $this->getJson('/api/v1/receipts/customer')->assertForbidden();
-        $this->getJson('/api/v1/receipts/customer/' . $customerReceipt->uid)->assertForbidden();
-        $this->getJson('/api/v1/receipts/vendor')->assertForbidden();
-        $this->getJson('/api/v1/payments/customer')->assertForbidden();
-        $this->getJson('/api/v1/payments/vendor')->assertForbidden();
-        $this->getJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertForbidden();
+        $this->getJson('/api/v1/receipts/customer')->assertOk()->assertJsonPath('data.0.uid', $customerReceipt->uid);
+        $this->getJson('/api/v1/receipts/customer/' . $customerReceipt->uid)->assertOk();
+        $this->getJson('/api/v1/receipts/vendor')->assertOk();
+        $this->getJson('/api/v1/payments/customer')->assertOk();
+        $this->getJson('/api/v1/payments/vendor')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.uid', $vendorPayment['uid'])->assertJsonPath('data.0.remaining_amount', 50);
+        $this->getJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertOk();
         $this->getJson('/api/v1/payments/vendor/' . $ctx['vendor']->id . '/payables')->assertForbidden();
-        $this->getJson('/api/v1/payments/invoices/' . $invoice['uid'] . '/settlements')->assertForbidden();
+        $this->getJson('/api/v1/payments/invoices/' . $invoice['uid'] . '/settlements')->assertOk();
 
         $this->patchJson('/api/v1/receipts/customer/' . $customerReceipt->uid, [])->assertForbidden();
         $this->patchJson('/api/v1/receipts/vendor/' . $vendorReceipt['uid'], [])->assertForbidden();
@@ -2958,6 +2959,62 @@ class FinancialApiTest extends TestCase
         $this->patchJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'], [])->assertForbidden();
         $this->postJson('/api/v1/receipts/customer/record', [])->assertForbidden();
         $this->postJson('/api/v1/payments/customer', [])->assertForbidden();
+        $this->deleteJson('/api/v1/receipts/customer/' . $customerReceipt->uid)->assertForbidden();
+        $this->deleteJson('/api/v1/payments/vendor/payment/' . $vendorPayment['uid'])->assertForbidden();
+        $this->postJson('/api/v1/receipts/customer/' . $customerReceipt->uid . '/allocate-advance', [])->assertForbidden();
+    }
+
+    public function test_sales_can_see_accounts_receipts_for_invoices_and_on_account_with_company_isolation(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])
+            ->assertCreated()->json('invoice');
+        $ctx['user']->role->update(['code' => 'accounts', 'name' => 'Accounts']);
+        Sanctum::actingAs($ctx['user']->fresh());
+
+        $cash = $this->postJson('/api/v1/accounts/cash', [
+            'account_code' => 'SALES-VISIBILITY', 'account_name' => 'Front Desk', 'currency_code' => 'PKR',
+        ])->assertCreated()->json('account');
+        $this->postJson('/api/v1/receipts/customer/record', [
+            'invoice_uid' => $invoice['uid'], 'amount' => 100, 'payment_method' => 'cash', 'account_id' => $cash['id'],
+        ])->assertCreated();
+        $advance = $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id, 'amount' => 350, 'payment_method' => 'cash', 'account_id' => $cash['id'],
+        ])->assertCreated()->json('receipt');
+        $payment = $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id, 'amount' => 50, 'payment_method' => 'cash', 'account_id' => $cash['id'], 'account_type' => 'cash',
+        ])->assertCreated()->json('payment');
+
+        $sales = $this->salesUserForContext($ctx);
+        Sanctum::actingAs($sales);
+        $this->getJson('/api/v1/receipts/customer?customer_id=' . $ctx['customer']->id)
+            ->assertOk()->assertJsonPath('total', 2)
+            ->assertJsonPath('data.0.uid', $advance['uid'])
+            ->assertJsonPath('data.0.remaining_amount', 350)
+            ->assertJsonPath('data.0.account_id', $cash['id'])
+            ->assertJsonPath('data.1.settlements.0.invoice.uid', $invoice['uid']);
+        $this->getJson('/api/v1/invoices/' . $invoice['uid'])
+            ->assertOk()->assertJsonPath('settlements.0.amount_received', '100.0000');
+        $this->getJson('/api/v1/receipts/customer?customer_id=0')->assertOk()->assertJsonPath('total', 0);
+
+        $otherCompany = $ctx['company']->replicate(['uid']);
+        $otherCompany->uid = (string) Str::ulid();
+        $otherCompany->save();
+        $sales->update(['company_id' => $otherCompany->id]);
+        Sanctum::actingAs($sales->fresh());
+        $this->getJson('/api/v1/receipts/customer')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/payments/vendor')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/receipts/customer/' . $advance['uid'])->assertNotFound();
+        $this->getJson('/api/v1/payments/vendor/payment/' . $payment['uid'])->assertNotFound();
+        $this->getJson('/api/v1/payments/invoices/' . $invoice['uid'] . '/settlements')->assertNotFound();
+
+        $otherTenant = $this->seedTenantContext();
+        Sanctum::actingAs($this->salesUserForContext($otherTenant));
+        $this->getJson('/api/v1/receipts/customer')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/payments/vendor')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/receipts/customer/' . $advance['uid'])->assertNotFound();
+        $this->getJson('/api/v1/payments/vendor/payment/' . $payment['uid'])->assertNotFound();
+        $this->getJson('/api/v1/payments/invoices/' . $invoice['uid'] . '/settlements')->assertNotFound();
     }
 
     public function test_sales_can_create_receivings_accounts_can_clear_and_admin_can_delete_them(): void

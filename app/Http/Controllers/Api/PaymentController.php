@@ -38,7 +38,8 @@ class PaymentController extends Controller
     {
         $query = Payment::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
-            ->with(['vendor:id,name', 'allocations.order:id,order_number'])
+            ->whereNotNull('vendor_id')
+            ->with(['vendor:id,name', 'allocations.order:id,uid,order_number'])
             ->withSum('allocations as allocated_amount', 'amount');
 
         if ($request->filled('vendor_id')) {
@@ -71,7 +72,7 @@ class PaymentController extends Controller
         $query = Receipt::where('tenant_id', auth()->user()->tenant_id)
             ->where('company_id', auth()->user()->company_id)
             ->whereNotNull('customer_id')
-            ->with(['customer:id,name', 'settlements.invoice:id,invoice_number'])
+            ->with(['customer:id,name', 'settlements.invoice:id,uid,invoice_number'])
             ->withSum('settlements as allocated_amount', 'amount_received');
 
         if ($request->filled('customer_id')) {
