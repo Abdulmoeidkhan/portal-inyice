@@ -42,7 +42,7 @@ const uniqueNames = (values) => {
 };
 const hasRowValue = (row, keys) => keys.some((key) => firstFilled(row?.[key]));
 const InvoicePrintTable = ({ columns, dataSource, rowKey }) => (
-  <div className="invoice-lines-table">
+  <div className={`invoice-lines-table${columns.length > 3 ? ' invoice-lines-table-wide' : ''}`}>
     <table>
       <colgroup>
         {columns.map((column) => (
@@ -321,7 +321,7 @@ export default function InvoiceDetail({ shared = false }) {
 
   return (
     <div className="page-shell page-fade-up invoice-document">
-      <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
+      <Space wrap className="invoice-screen-actions" style={{ marginBottom: 16 }}>
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={backToInvoices}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Download PDF</Button>

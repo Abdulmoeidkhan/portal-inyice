@@ -262,9 +262,25 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root .invoice-company-logo {
-      width: 92px !important;
-      height: 68px !important;
+      width: 180px !important;
+      height: 160px !important;
+      flex-shrink: 0 !important;
       object-fit: contain !important;
+    }
+
+    .print-document-root .invoice-heading h4.ant-typography {
+      font-size: 20px !important;
+      line-height: 1.3 !important;
+      margin: 4px 0 8px !important;
+    }
+
+    .print-document-root .invoice-heading .ant-tag {
+      color: #111827 !important;
+      background: #ffffff !important;
+      border: 1px solid #6b7280 !important;
+      font-size: 12px !important;
+      line-height: 22px !important;
+      padding-inline: 8px !important;
     }
 
     .print-document-root .ant-divider {
@@ -318,8 +334,8 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root .voucher-preview-header {
-      grid-template-columns: minmax(0, 1fr) 70px !important;
-      gap: 8px !important;
+      grid-template-columns: minmax(0, 1fr) 180px !important;
+      gap: 16px !important;
       padding: 10px 12px !important;
     }
 
@@ -334,29 +350,32 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root .voucher-preview-logo {
-      width: 104px !important;
-      height: 76px !important;
-      padding: 3px !important;
+      width: 180px !important;
+      height: 160px !important;
+      object-fit: contain !important;
+      padding: 0 !important;
     }
 
     .print-document-root .voucher-reference-table {
-      margin-top: 5px !important;
+      margin-top: 8px !important;
     }
 
     .print-document-root .voucher-reference-table-primary {
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     }
 
     .print-document-root .voucher-reference-table-secondary {
-      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     }
 
     .print-document-root .voucher-reference-cell {
-      padding: 3px 5px !important;
+      padding: 8px !important;
+      gap: 4px !important;
     }
 
     .print-document-root .voucher-reference-cell .ant-typography {
-      font-size: 8px !important;
+      font-size: 10px !important;
+      line-height: 1.4 !important;
     }
 
     .print-document-root .voucher-preview-contact {

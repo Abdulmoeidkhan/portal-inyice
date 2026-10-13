@@ -1946,24 +1946,25 @@ body {
   display: grid;
   margin-top: 12px;
   border: 1px solid rgba(15, 27, 45, 0.12);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   background: #ffffff;
 }
 
 .voucher-reference-table-primary {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .voucher-reference-table-secondary {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .voucher-reference-cell {
   display: grid;
-  gap: 2px;
+  align-content: start;
+  gap: 6px;
   min-width: 0;
-  padding: 8px 11px;
+  padding: 14px;
   border-right: 1px solid rgba(15, 27, 45, 0.1);
   background: #f4f7fb;
 }
@@ -1975,7 +1976,20 @@ body {
 .voucher-reference-cell .ant-typography {
   overflow-wrap: anywhere;
   font-size: 13px;
-  line-height: 1.2;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.voucher-reference-cell .ant-typography-secondary {
+  color: #52657c;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.voucher-reference-cell .ant-typography:not(.ant-typography-secondary) {
+  color: #102033;
+  font-size: 14px;
 }
 
 .voucher-detail-page {
@@ -2064,10 +2078,22 @@ body {
   }
 
   .voucher-preview .voucher-preview-logo {
-    justify-self: start;
-    width: auto;
+    justify-self: center;
+    width: 220px;
     max-width: 100%;
-    height: 80px;
+    height: 180px;
+  }
+
+  .voucher-preview .voucher-preview-footer-logo {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .voucher-preview .voucher-preview-footer-logo img {
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 1;
   }
 
   .voucher-preview .voucher-reference-table {
@@ -2146,6 +2172,11 @@ body {
   border-bottom: 1px solid rgba(15, 27, 45, 0.1);
   background: #ffffff;
   overflow-wrap: anywhere;
+}
+
+.voucher-preview-table td:first-child,
+.voucher-preview-mobile-field:first-child dd {
+  font-weight: 700;
 }
 
 .voucher-preview-table th {
@@ -2260,8 +2291,9 @@ body {
 }
 
 .invoice-company-logo {
-  width: 104px;
-  height: 78px;
+  width: 144px;
+  height: 112px;
+  flex-shrink: 0;
   object-fit: contain;
   padding: 0;
   border: 0;
@@ -2323,6 +2355,13 @@ body {
   display: flex;
   gap: 18px;
   align-items: flex-start;
+}
+
+.invoice-brand > div,
+.invoice-heading,
+.invoice-meta-grid > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .invoice-brand h2.ant-typography {
@@ -2463,6 +2502,68 @@ body {
 .invoice-receipts,
 .invoice-notes {
   margin-top: 44px;
+}
+
+@media screen and (max-width: 767px) {
+  .invoice-document {
+    padding-inline: 0;
+    min-width: 0;
+  }
+
+  .invoice-document .invoice-paper .ant-card-body {
+    padding: 24px 16px;
+  }
+
+  .invoice-document .invoice-header,
+  .invoice-document .invoice-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  .invoice-document .invoice-brand {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .invoice-document .invoice-heading {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .invoice-brand h2.ant-typography {
+    font-size: 24px;
+  }
+
+  .invoice-dates > div,
+  .invoice-totals > div {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .invoice-dates > div > :last-child,
+  .invoice-totals > div > :last-child {
+    text-align: right;
+  }
+
+  .invoice-lines-table {
+    overflow-x: auto;
+  }
+
+  .invoice-lines-table-wide table {
+    min-width: 600px;
+  }
+
+  .invoice-lines-table th,
+  .invoice-lines-table td {
+    padding: 10px 6px;
+  }
+
+  .invoice-receipts,
+  .invoice-notes {
+    margin-top: 28px;
+  }
 }
 
 .receipt-print-host {
@@ -3629,9 +3730,25 @@ body {
   }
 
   .invoice-company-logo {
-    width: 92px !important;
-    height: 68px !important;
+    width: 180px !important;
+    height: 160px !important;
+    flex-shrink: 0 !important;
     object-fit: contain !important;
+  }
+
+  .invoice-document .invoice-heading h4.ant-typography {
+    font-size: 20px !important;
+    line-height: 1.3 !important;
+    margin: 4px 0 8px !important;
+  }
+
+  .invoice-document .invoice-heading .ant-tag {
+    color: #111827 !important;
+    background: #ffffff !important;
+    border: 1px solid #6b7280 !important;
+    font-size: 12px !important;
+    line-height: 22px !important;
+    padding-inline: 8px !important;
   }
 
   .invoice-document .ant-divider {
@@ -3666,8 +3783,8 @@ body {
   }
 
   .voucher-preview-header {
-    grid-template-columns: minmax(0, 1fr) 70px !important;
-    gap: 8px !important;
+    grid-template-columns: minmax(0, 1fr) 180px !important;
+    gap: 16px !important;
     padding: 10px 12px !important;
   }
 
@@ -3682,29 +3799,32 @@ body {
   }
 
   .voucher-preview-logo {
-    width: 104px !important;
-    height: 76px !important;
-    padding: 3px !important;
+    width: 180px !important;
+    height: 160px !important;
+    object-fit: contain !important;
+    padding: 0 !important;
   }
 
   .voucher-reference-table {
-    margin-top: 5px !important;
+    margin-top: 8px !important;
   }
 
   .voucher-reference-table-primary {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 
   .voucher-reference-table-secondary {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 
   .voucher-reference-cell {
-    padding: 3px 5px !important;
+    padding: 8px !important;
+    gap: 4px !important;
   }
 
   .voucher-reference-cell .ant-typography {
-    font-size: 8px !important;
+    font-size: 10px !important;
+    line-height: 1.4 !important;
   }
 
   .voucher-preview-contact {

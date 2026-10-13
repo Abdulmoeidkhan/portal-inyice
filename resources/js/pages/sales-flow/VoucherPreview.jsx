@@ -274,17 +274,17 @@ export default function VoucherPreview({ order }) {
   const primaryReferenceItems = [
     ['Voucher', voucher.voucher_no],
     ['Issue Date', formatDate(voucher.issue_date)],
-    ['Travel', voucher.package_type],
+    ['Service Type', voucher.package_type],
     ['Pax', passengerRows.length || voucher.pricing?.length || ''],
     ['Days', packageDays],
-  ].filter(([, value]) => hasValue(value));
+  ];
   const secondaryReferenceItems = [
     ['Lead Passenger', leadPassenger],
     ['Booking Ref', bookingRef],
     ['Airline Ref', airlineRef],
     ['HCN', hcnRef],
     ['TN', tnRef],
-  ].filter(([, value]) => hasValue(value));
+  ];
   const companyName = firstFilled(company.display_name, company.legal_name, contact.company_name, 'inYice Travel Voucher');
   const companyAddress = firstFilled(company.address, contact.address);
   const companyEmail = firstFilled(company.email, contact.email);
@@ -292,7 +292,7 @@ export default function VoucherPreview({ order }) {
   const contactLine = [companyAddress, [companyEmail, companyPhone].filter(Boolean).join(' | ')].filter(Boolean).join('\n');
   const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(order.notes) || hasValue(company.footer_logo_url);
   const showInyiceWatermark = company && company.is_paid === false;
-  const documentLabel = order.status === 'quote' ? 'Quotation' : 'Voucher';
+  const documentLabel = order.status === 'quote' ? 'Quotation' : 'Travel Voucher';
 
   return (
     <div className="voucher-preview">
@@ -318,7 +318,7 @@ export default function VoucherPreview({ order }) {
             {primaryReferenceItems.map(([label, value]) => (
               <div className="voucher-reference-cell" key={label}>
                 <Text type="secondary">{label === 'Voucher' ? documentLabel : label}</Text>
-                <Text strong>{value}</Text>
+                <Text strong>{hasValue(value) ? value : '—'}</Text>
               </div>
             ))}
           </div>
@@ -329,7 +329,7 @@ export default function VoucherPreview({ order }) {
             {secondaryReferenceItems.map(([label, value]) => (
               <div className="voucher-reference-cell" key={label}>
                 <Text type="secondary">{label}</Text>
-                <Text strong>{value}</Text>
+                <Text strong>{hasValue(value) ? value : '—'}</Text>
               </div>
             ))}
           </div>
@@ -345,10 +345,10 @@ export default function VoucherPreview({ order }) {
           <PreviewTable
             data={passengerRows}
             columns={[
+              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
               { title: 'Passenger', dataIndex: 'name', width: 145, render: (value) => value || '', alwaysVisible: true },
               { title: 'Passport No', dataIndex: 'passport_no', width: 105, render: (value) => value || '' },
               { title: 'Ticket No', dataIndex: 'ticket_no', width: 110, render: (value) => value || '' },
-              { title: 'Visa No', dataIndex: 'visa_no', width: 105, render: (value) => value || '' },
               { title: 'Publisher', dataIndex: 'visa_publisher', width: 120, render: (value) => value || '' },
               { title: 'Notes', dataIndex: 'notes', width: 130, render: (value) => value || '' },
             ]}
@@ -360,9 +360,9 @@ export default function VoucherPreview({ order }) {
             <PreviewTable
               data={hotelRows}
               columns={[
+                { title: 'HCN', dataIndex: 'hcn', width: 90, render: (value) => value || '' },
                 { title: 'City', dataIndex: 'city', width: 90, render: formatPlace },
                 { title: 'Hotel', dataIndex: 'hotel_name', width: 155, render: (value) => value || '', alwaysVisible: true },
-                { title: 'HCN', dataIndex: 'hcn', width: 90, render: (value) => value || '' },
                 { title: 'Room', dataIndex: 'room_type', width: 90, render: (value) => value || '' },
                 { title: 'Check In', dataIndex: 'check_in', width: 90, render: formatDate },
                 { title: 'Check Out', dataIndex: 'check_out', width: 90, render: formatDate },
@@ -379,6 +379,7 @@ export default function VoucherPreview({ order }) {
             <PreviewTable
               data={transferRows}
               columns={[
+                { title: 'TN', dataIndex: 'tn', width: 90, render: (value) => value || '' },
                 { title: 'Date', dataIndex: 'date', width: 90, render: formatDate },
                 { title: 'Service', dataIndex: 'service', width: 125, render: (value) => value || '', alwaysVisible: true },
                 { title: 'From', dataIndex: 'from_city', width: 95, render: formatPlace },
@@ -421,6 +422,7 @@ export default function VoucherPreview({ order }) {
           <PreviewTable
             data={flightRows}
             columns={[
+              { title: 'Airline Ref', dataIndex: 'pnr', width: 95, render: (value) => value || '' },
               { title: 'Flight', dataIndex: 'flight_no', width: 95, render: (value) => value || '', alwaysVisible: true },
               { title: 'Date', dataIndex: 'date', width: 95, render: formatDate },
               { title: 'From', dataIndex: 'from', width: 115, render: formatAirport },

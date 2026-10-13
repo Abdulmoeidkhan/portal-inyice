@@ -29,6 +29,7 @@ class DeveloperAccessTest extends TestCase
         $checked = 0;
         foreach (Route::getRoutes() as $route) {
             if (! str_starts_with($route->uri(), 'api/v1/') || $route->uri() === 'api/v1/auth/logout'
+                || $route->getName() === 'auth.profile.update'
                 || ! in_array('auth:sanctum', $route->gatherMiddleware(), true)) {
                 continue;
             }
@@ -39,6 +40,37 @@ class DeveloperAccessTest extends TestCase
             }
         }
         $this->assertGreaterThan(50, $checked);
+    }
+
+    public function test_developer_can_read_and_update_only_their_own_profile_name(): void
+    {
+        $dev = $this->user();
+        $other = $this->user('dev', $dev->tenant_id);
+        Sanctum::actingAs($dev);
+
+        $this->getJson('/api/v1/user')->assertOk()->assertJsonPath('id', $dev->id);
+        $this->patchJson('/api/v1/user', [
+            'name' => ' Updated Developer ',
+            'id' => $other->id,
+            'role_id' => $other->role_id,
+            'email' => $other->email,
+        ])->assertOk()->assertJsonPath('user.name', 'Updated Developer');
+
+        $this->assertSame('Updated Developer', $dev->fresh()->name);
+        $this->assertSame($dev->email, $dev->fresh()->email);
+        $this->assertSame($dev->role_id, $dev->fresh()->role_id);
+        $this->assertSame('Developer', $other->fresh()->name);
+        $this->patchJson('/api/v1/user', ['name' => ' '])->assertUnprocessable();
+    }
+
+    public function test_read_only_api_token_cannot_update_own_profile(): void
+    {
+        $dev = $this->user();
+        $dev->company->update(['is_paid' => true]);
+        $token = $dev->createToken('dev-api', ['data:read'])->plainTextToken;
+
+        $this->withToken($token)->patchJson('/api/v1/user', ['name' => 'Changed'])->assertForbidden();
+        $this->assertSame('Developer', $dev->fresh()->name);
     }
 
     public function test_developer_can_read_financial_routes_but_not_internal_provider_data(): void

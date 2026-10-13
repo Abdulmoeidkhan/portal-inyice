@@ -423,6 +423,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             {user?.role === 'dev' ? <Routes>
               {accountingRoutes}
               <Route path="/" element={<DeveloperData />} />
+              <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/api-documentation" element={canAccessApiDocumentation ? <ApiDocumentation /> : <Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes> : <Routes>
