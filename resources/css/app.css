@@ -1952,11 +1952,11 @@ body {
 }
 
 .voucher-reference-table-primary {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr));
 }
 
 .voucher-reference-table-secondary {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr));
 }
 
 .voucher-reference-cell {
@@ -3810,11 +3810,11 @@ body {
   }
 
   .voucher-reference-table-primary {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr)) !important;
   }
 
   .voucher-reference-table-secondary {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr)) !important;
   }
 
   .voucher-reference-cell {

@@ -361,11 +361,11 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root .voucher-reference-table-primary {
-      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr)) !important;
     }
 
     .print-document-root .voucher-reference-table-secondary {
-      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(var(--voucher-reference-columns, 5), minmax(0, 1fr)) !important;
     }
 
     .print-document-root .voucher-reference-cell {

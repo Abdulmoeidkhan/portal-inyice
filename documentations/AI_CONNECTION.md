@@ -1,5 +1,7 @@
 # Connect an AI assistant to agency accounts
 
+For the current ChatGPT, Claude and Gemini connection package, compatibility findings and test results, see [the client integration guide](../integrations/README.md) (2026-10-13). The deployment section below is historical operator guidance, not a requirement to rebuild or redeploy an already working server.
+
 The project exposes a read-only HTTP MCP server at `/mcp/agency`. MCP lets a compatible AI client discover named tools, understand their inputs, and request live data. The model runs in your chosen AI application; Laravel authenticates each call and runs the accounting queries. No model API key is needed by this Laravel server.
 
 Users can now connect through OAuth: ChatGPT opens InYice, the user signs in and approves read access, and ChatGPT receives a renewable access token. Users do not run terminal commands or paste passwords into chat. This repository does not include a published ChatGPT directory listing, an embedded chat interface, or financial writes.
@@ -62,7 +64,7 @@ Official setup and authentication references (verified September 2026): [Connect
 
 The portal HTML and OAuth pages link to `/llms.txt` (plain-text connection instructions) and `/connect/ai` (a public, server-rendered connection guide). These pages use `APP_URL` for the MCP and OAuth addresses and expose no agency data. Deploy the updated PHP routes and Blade views, then run `php artisan optimize:clear`; these discovery pages do not require a frontend build.
 
-Assistants that read these links can guide users to add the MCP server and complete OAuth in their browser. `/llms.txt` is guidance, not a universal auto-install mechanism. The AI host must support custom remote MCP connections and the user must authorize access. Currently only ChatGPT callback domains are allowed by `config/mcp.php`; other clients need explicitly configured callback support. Visiting the sign-in page alone does not connect a client.
+Assistants that read these links can guide users to add the MCP server and complete OAuth in their browser. `/llms.txt` is guidance, not a universal auto-install mechanism. The AI host must support custom remote MCP connections and the user must authorize access. `config/mcp.php` allows ChatGPT, Claude and restricted loopback callbacks; Gemini web callback support remains unverified. Visiting the sign-in page alone does not connect a client.
 
 ## User control and connection lifetime
 

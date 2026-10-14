@@ -276,14 +276,14 @@ export default function VoucherPreview({ order }) {
     ['Issue Date', formatDate(voucher.issue_date)],
     ['Service Type', voucher.package_type],
     ['Pax', passengerRows.length || voucher.pricing?.length || ''],
-    ['Days', packageDays],
+    ...((hotelRows.length || transferRows.length || cityTourRows.length) && hasValue(packageDays) ? [['Days', packageDays]] : []),
   ];
   const secondaryReferenceItems = [
     ['Lead Passenger', leadPassenger],
     ['Booking Ref', bookingRef],
     ['Airline Ref', airlineRef],
-    ['HCN', hcnRef],
-    ['TN', tnRef],
+    ...(hotelRows.length ? [['HCN', hcnRef]] : []),
+    ...(transferRows.length ? [['TN', tnRef]] : []),
   ];
   const companyName = firstFilled(company.display_name, company.legal_name, contact.company_name, 'inYice Travel Voucher');
   const companyAddress = firstFilled(company.address, contact.address);
@@ -314,7 +314,7 @@ export default function VoucherPreview({ order }) {
         </header>
 
         {primaryReferenceItems.length > 0 && (
-          <div className="voucher-reference-table voucher-reference-table-primary">
+          <div className="voucher-reference-table voucher-reference-table-primary" style={{ '--voucher-reference-columns': primaryReferenceItems.length }}>
             {primaryReferenceItems.map(([label, value]) => (
               <div className="voucher-reference-cell" key={label}>
                 <Text type="secondary">{label === 'Voucher' ? documentLabel : label}</Text>
@@ -325,7 +325,7 @@ export default function VoucherPreview({ order }) {
         )}
 
         {secondaryReferenceItems.length > 0 && (
-          <div className="voucher-reference-table voucher-reference-table-secondary">
+          <div className="voucher-reference-table voucher-reference-table-secondary" style={{ '--voucher-reference-columns': secondaryReferenceItems.length }}>
             {secondaryReferenceItems.map(([label, value]) => (
               <div className="voucher-reference-cell" key={label}>
                 <Text type="secondary">{label}</Text>

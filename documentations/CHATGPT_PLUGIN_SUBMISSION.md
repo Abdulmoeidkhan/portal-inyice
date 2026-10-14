@@ -32,7 +32,7 @@ https://os.inyice.com/mcp/agency
 
 The existing server uses OAuth authorization code, S256 PKCE, dynamic registration of public clients, and scope `mcp:use`. It advertises discovery at `/.well-known/oauth-protected-resource/mcp/agency` and `/.well-known/oauth-authorization-server`. There is no separate UI widget or skill bundle for this version.
 
-Current callback allowlist: HTTPS on chatgpt.com and chat.openai.com. Confirm the callback supplied by the submission portal is allowed before testing. Never disable callback validation to make a scan pass.
+Current callback allowlist: HTTPS on chatgpt.com, chat.openai.com and claude.ai, plus restricted local CLI callbacks. Confirm the callback supplied by the submission portal is allowed before testing. Never disable callback validation to make a scan pass. See [the current package and submission guide](../integrations/README.md) for the portable ZIP and October 2026 dashboard flow.
 
 Workspace domain restrictions are not implemented: the current server has no OpenID Connect UserInfo endpoint or openid/email scopes. Do not advertise this capability.
 

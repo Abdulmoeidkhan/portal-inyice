@@ -263,10 +263,12 @@ export default function InvoiceDetail({ shared = false }) {
     const response = await fetch(`/api/v1/invoices/${uid}/share`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
     const data = await response.json();
     if (!response.ok) return message.error(data.message || 'Could not create share link');
+    const shareUrl = new URL(data.share_url, window.location.origin);
+    if (detailed) shareUrl.searchParams.set('view', 'detailed');
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(data.share_url);
+      await navigator.clipboard.writeText(shareUrl.href);
       message.success('Shareable invoice link copied');
-    } else window.prompt('Copy this shareable invoice link:', data.share_url);
+    } else window.prompt('Copy this shareable invoice link:', shareUrl.href);
   };
 
   if (loading) return <div className="page-shell"><Card><Skeleton active /></Card></div>;

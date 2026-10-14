@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "inyice-agency-accounts",
+  "version": "1.0.0",
+  "description": "Read your authorized InYice agency's customers, outstanding invoices, statements, account balances and profit reports through your own InYice login. Requires an eligible paid agency account."
+}

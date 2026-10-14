@@ -19,6 +19,10 @@ Route::get('/support', [SupportController::class, 'show'])->name('support.show')
 Route::post('/support', [SupportController::class, 'store'])
     ->middleware('throttle:3,10')->name('support.store');
 
+Route::get('/shared/{document}/{token}', [\App\Http\Controllers\SharedDocumentController::class, 'show'])
+    ->where('document', 'quotations|vouchers|invoices')
+    ->middleware('throttle:public-api');
+
 Route::get('/{any}', function () {
     return view('app');
 })->where('any', '.*');
