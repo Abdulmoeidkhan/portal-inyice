@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Services\StatementService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,7 @@ class StatementController extends Controller
             $validated['to_date'] ?? null
         );
 
-        return response()->json($statement);
+        return $this->statementResponse($request, $statement);
     }
 
     public function customerStatement(int $customerId, Request $request): JsonResponse
@@ -49,7 +50,7 @@ class StatementController extends Controller
             $validated['to_date'] ?? null
         );
 
-        return response()->json($statement);
+        return $this->statementResponse($request, $statement);
     }
 
     /**
@@ -69,6 +70,19 @@ class StatementController extends Controller
             $validated['from_date'] ?? null,
             $validated['to_date'] ?? null
         );
+
+        return $this->statementResponse($request, $statement);
+    }
+
+    private function statementResponse(Request $request, array $statement): JsonResponse
+    {
+        $company = Company::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail($request->user()->company_id);
+
+        $statement['company'] = $company->only([
+            'display_name', 'legal_name', 'address', 'email', 'phone', 'logo_url',
+        ]);
 
         return response()->json($statement);
     }

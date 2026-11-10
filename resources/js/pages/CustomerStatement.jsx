@@ -4,6 +4,7 @@ import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typ
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import { statementMetadata } from '../services/statementExport';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -75,7 +76,8 @@ export default function CustomerStatement() {
   const transactionColumns = [
     { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name' }] : []),
-    { title: 'Reference', dataIndex: 'reference' }, { title: 'Description', dataIndex: 'description',width: 450, },
+    { title: 'Reference', dataIndex: 'reference' },
+    { title: 'Narration', dataIndex: 'description', key: 'description', width: 450, render: (value) => value || '-' },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: money },
@@ -137,6 +139,7 @@ export default function CustomerStatement() {
                 scroll={{ x: 'max-content' }}
                 columns={columns}
                 dataSource={statement.customer_currency_invoices}
+                statementExport={statementMetadata(statement, 'customer', true)}
                 rowKey="invoice_uid"
                 summary={() => (
                   <Table.Summary.Row>
@@ -154,6 +157,7 @@ export default function CustomerStatement() {
                 scroll={{ x: 'max-content' }}
                 columns={transactionColumns}
                 dataSource={statement.transactions}
+                statementExport={statementMetadata(statement, 'customer')}
                 rowKey="id"
                 summary={() => (
                   <Table.Summary.Row>

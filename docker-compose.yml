@@ -15,6 +15,7 @@ services:
 
   app:
     image: webdevops/php-nginx:8.4-alpine
+    pull_policy: always
     restart: unless-stopped
     working_dir: /app
     env_file:
@@ -33,6 +34,7 @@ services:
     command: >
       sh -c "
         set -e;
+        php -r 'exit(PHP_VERSION_ID >= 80427 ? 0 : 1);' || { echo 'PHP 8.4.27 or newer is required. Pull the latest app image.' >&2; exit 1; };
         mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache;
         chown -R application:application storage bootstrap/cache || true;
         chmod -R ug+rwX storage bootstrap/cache || true;

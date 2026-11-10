@@ -1990,6 +1990,26 @@ class FinancialApiTest extends TestCase
             ->assertJsonFragment(['type' => 'Customer', 'reference' => $ctx['customer']->name]);
     }
 
+    public function test_statements_include_current_agency_branding(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $ctx['company']->update(['logo_path' => 'company-logos/test.png']);
+
+        foreach ([
+            '/api/v1/statements/customers',
+            '/api/v1/statements/customer/' . $ctx['customer']->id,
+            '/api/v1/statements/vendor/' . $ctx['vendor']->id,
+        ] as $url) {
+            $this->getJson($url)->assertOk()
+                ->assertJsonPath('company.display_name', $ctx['company']->display_name)
+                ->assertJsonPath('company.email', $ctx['company']->email)
+                ->assertJsonPath('company.address', $ctx['company']->address)
+                ->assertJsonPath('company.phone', $ctx['company']->phone)
+                ->assertJsonPath('company.logo_url', $ctx['company']->logo_url)
+                ->assertJsonMissingPath('company.tax_settings');
+        }
+    }
+
     public function test_reports_and_statements_endpoints_work(): void
     {
         $ctx = $this->seedTenantContext();

@@ -416,6 +416,7 @@ function CsvTable({
   csvDownload = true,
   sortable = true,
   exportAllDataSource,
+  statementExport,
   pagination,
   ...props
 }) {
@@ -445,13 +446,14 @@ function CsvTable({
       showTotal: paginationProps.showTotal || defaultShowTotal,
     };
   }, [pagination, rows.length]);
-  const showCsvButton = csvDownload && isPaidAgency() && rows.length > 0;
+  const showCsvButton = csvDownload && isPaidAgency() && (rows.length > 0 || statementExport);
 
   const renderTitle = showCsvButton || title
     ? (currentPageData) => {
       const titleNode = typeof title === 'function' ? title(currentPageData) : title;
       const fileName = csvFileName || defaultFileName();
       const exportItems = [
+        ...(statementExport ? [{ key: 'xlsx', icon: <DownloadOutlined />, label: 'Excel (.xlsx)' }] : []),
         { key: 'csv', icon: <DownloadOutlined />, label: 'CSV' },
         { key: 'pdf', icon: <FilePdfOutlined />, label: 'PDF' },
       ];
@@ -465,6 +467,23 @@ function CsvTable({
         try {
           const exportRows = await resolveExportRows(data);
           const rowsForExport = Array.isArray(exportRows) ? exportRows : [];
+          if (statementExport) {
+            const { createStatementExport, downloadStatement } = await import('../services/statementExport');
+            const selectedColumns = exportColumns(columns);
+            const values = rows.map((record, rowIndex) => selectedColumns.map(column => {
+              const raw = valueAtPath(record, column.dataIndex);
+              const rendered = typeof column.render === 'function' ? column.render(raw, record, rowIndex) : raw;
+              const text = nodeToText(rendered);
+              if (/^(Debit|Credit|Balance|Amount|Paid|Outstanding)$/.test(columnTitle(column))) {
+                if (columnTitle(column) === 'Paid') return Number(record.amount || 0) - Number(record.outstanding || 0);
+                if (columnTitle(column) === 'Amount') return Number(raw ?? record.amount ?? 0);
+                return Number(raw || 0);
+              }
+              return text;
+            }));
+            await downloadStatement(createStatementExport(statementExport, selectedColumns.map(columnTitle), values), key);
+            return;
+          }
           if (!rowsForExport.length) {
             message.info('No rows available to export');
             return;
@@ -491,20 +510,20 @@ function CsvTable({
           <span>{titleNode}</span>
           {showCsvButton && (
             <Space size={8}>
-              <Dropdown
+              {!statementExport && <Dropdown
                 trigger={['click']}
                 menu={{ items: exportItems, onClick: handleExport(currentPageData, titleNode) }}
               >
                 <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />}>
                   CSV/PDF <DownOutlined />
                 </Button>
-              </Dropdown>
+              </Dropdown>}
               <Dropdown
                 trigger={['click']}
                 menu={{ items: exportItems, onClick: handleExport(exportAllDataSource || rows, title, true) }}
               >
                 <Button className="csv-table-download-button" size="small" icon={<DownloadOutlined />} loading={exportingAll}>
-                  ALL CSV/PDF <DownOutlined />
+                  {statementExport ? 'Excel / CSV / PDF' : 'ALL CSV/PDF'} <DownOutlined />
                 </Button>
               </Dropdown>
             </Space>

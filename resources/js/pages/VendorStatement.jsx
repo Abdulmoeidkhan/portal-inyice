@@ -4,6 +4,7 @@ import { Button, Card, Col, Input, Row, Select, Space, Spin, Statistic, Tag, Typ
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import { statementMetadata } from '../services/statementExport';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -117,6 +118,7 @@ export default function VendorStatement() {
                 scroll={{ x: 'max-content' }}
                 columns={columns}
                 dataSource={statement.transactions}
+                statementExport={statementMetadata(statement, 'vendor')}
                 rowKey="id"
                 summary={() => (
                   <Table.Summary.Row>
