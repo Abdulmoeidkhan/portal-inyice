@@ -47,6 +47,7 @@ import { accountingSections } from './accounting/sections';
 import OrderList from './OrderList';
 import OrderEdit from './OrderEdit';
 import AgingReport from './AgingReport';
+import PartyBalances from './PartyBalances';
 import RevenueReport from './RevenueReport';
 import PerformanceReport from './PerformanceReport';
 import ProfitReport from './ProfitReport';
@@ -452,6 +453,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/profile/company-users" element={<CompanyUsers />} />
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/reports/aging" element={canAccessReports ? <AgingReport /> : <Navigate to="/" replace />} />
+              <Route path="/reports/party-balances" element={canAccessReports ? <PartyBalances /> : <Navigate to="/" replace />} />
               <Route path="/reports/revenue" element={canAccessReports ? <RevenueReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/performance" element={canAccessReports ? <PerformanceReport /> : <Navigate to="/" replace />} />
               <Route path="/reports/profit" element={canAccessReports ? <ProfitReport /> : <Navigate to="/" replace />} />
@@ -829,6 +831,10 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         {
           key: '/reports/aging',
           label: <Link to="/reports/aging">Aging Report</Link>,
+        },
+        {
+          key: '/reports/party-balances',
+          label: <Link to="/reports/party-balances">Payables &amp; Receivables</Link>,
         },
         {
           key: '/reports/revenue',

@@ -1490,6 +1490,89 @@ class FinancialApiTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_party_balance_report_lists_all_parties_and_reconciles_totals(): void
+    {
+        $other = $this->seedTenantContext();
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $other['order']->id])->assertCreated();
+        $ctx = $this->seedTenantContext();
+        $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])->assertCreated();
+        $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id, 'amount' => 200, 'payment_method' => 'cash',
+        ])->assertCreated();
+        $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id, 'amount' => 300, 'payment_method' => 'cash',
+        ])->assertCreated();
+
+        // Include more than the dashboard's six parties, including credits with no invoice.
+        foreach (range(1, 7) as $index) {
+            $customer = $ctx['customer']->replicate(['uid']);
+            $customer->uid = (string) Str::ulid();
+            $customer->name = 'Advance customer ' . $index;
+            $customer->email = 'advance' . $index . '@example.test';
+            $customer->save();
+            $this->postJson('/api/v1/receipts/customer/advance', [
+                'customer_id' => $customer->id, 'amount' => 10, 'payment_method' => 'cash',
+            ])->assertCreated();
+        }
+        $response = $this->getJson('/api/v1/reports/party-balances')->assertOk()
+            ->assertJsonCount(9, 'rows')
+            ->assertJsonPath('totals.0.currency', 'PKR')
+            ->assertJsonPath('totals.0.receivable', 800)
+            ->assertJsonPath('totals.0.payable', 770);
+        $rows = collect($response->json('rows'));
+        $this->assertFalse($rows->contains(fn ($row) => $row['type'] === 'customer' && $row['party_id'] === $other['customer']->id));
+        $this->assertFalse($rows->contains(fn ($row) => $row['type'] === 'vendor' && $row['party_id'] === $other['vendor']->id));
+        $this->assertEquals(800, $rows->sum('receivable'));
+        $this->assertEquals(770, $rows->sum('payable'));
+    }
+
+    public function test_party_balance_report_separates_currencies_and_keeps_vendor_advances(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $invoice = $this->postJson('/api/v1/invoices/create-from-order', ['order_id' => $ctx['order']->id])->assertCreated()->json('invoice');
+        Invoice::where('uid', $invoice['uid'])->update(['currency_code' => 'USD']);
+        $this->postJson('/api/v1/receipts/customer/advance', [
+            'customer_id' => $ctx['customer']->id, 'amount' => 200, 'payment_method' => 'cash',
+        ])->assertCreated();
+        $this->postJson('/api/v1/payments/vendor', [
+            'vendor_id' => $ctx['vendor']->id, 'amount' => 1500, 'payment_method' => 'cash',
+        ])->assertCreated();
+        $response = $this->getJson('/api/v1/reports/party-balances')->assertOk()->assertJsonCount(3, 'rows');
+        $totals = collect($response->json('totals'))->keyBy('currency');
+        $this->assertEquals(1000, $totals['USD']['receivable']);
+        $this->assertEquals(0, $totals['USD']['payable']);
+        $this->assertEquals(500, $totals['PKR']['receivable']);
+        $this->assertEquals(200, $totals['PKR']['payable']);
+    }
+
+    public function test_customer_statement_includes_service_and_booking_narration(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $ctx['order']->update([
+            'booking_reference' => 'ABC123',
+            'meta' => [
+                'pricing' => [['pax_name' => 'Test Passenger']],
+                'flights' => [['date' => '2026-07-16', 'flight_no' => 'XY-806']],
+                'hotels' => [['hotel_name' => 'Test Hotel', 'city' => 'Karachi']],
+            ],
+        ]);
+        $this->postJson('/api/v1/invoices/create-from-order', [
+            'order_id' => $ctx['order']->id,
+        ])->assertCreated();
+
+        foreach (['/api/v1/statements/customer/' . $ctx['customer']->id, '/api/v1/statements/customers'] as $url) {
+            $response = $this->getJson($url)->assertOk()
+                ->assertJsonPath('customer_currency_invoices.0.service', 'FLIGHT, HOTEL')
+                ->assertJsonPath('transactions.0.service', 'FLIGHT, HOTEL')
+                ->assertJsonPath('summary.total_outstanding', 1000);
+            $description = $response->json('transactions.0.description');
+            foreach (['Test Passenger', 'ABC123', '2026-07-16', 'XY-806', 'Test Hotel'] as $detail) {
+                $this->assertStringContainsString($detail, $description);
+            }
+            $this->assertSame($description, $response->json('customer_currency_invoices.0.description'));
+        }
+    }
+
     public function test_customer_statement_summary_uses_net_statement_balance(): void
     {
         $ctx = $this->seedTenantContext();

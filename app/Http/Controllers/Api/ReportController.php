@@ -9,6 +9,14 @@ use Illuminate\Http\JsonResponse;
 
 class ReportController extends Controller
 {
+    public function partyBalances(Request $request): JsonResponse
+    {
+        return response()->json(app(\App\Services\PartyBalanceReportService::class)->report(
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
+        ));
+    }
+
     public function __construct(private ReportService $reportService)
     {
     }

@@ -229,6 +229,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::cl
 
     Route::prefix('reports')->controller(ReportController::class)->middleware('role:admin,accounts')->group(function () {
         Route::get('/aging', 'agingReport')->name('reports.aging');
+        Route::get('/party-balances', 'partyBalances')->name('reports.partyBalances');
         Route::get('/revenue', 'revenueReport')->name('reports.revenue');
         Route::get('/performance', 'performanceReport')->name('reports.performance');
         Route::get('/profit', 'profitReport')->name('reports.profit');

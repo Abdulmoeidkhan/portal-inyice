@@ -126,16 +126,25 @@ export async function statementPdf(report) {
   const doc = new jsPDF({ orientation: 'landscape' });
   const number = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const display = value => typeof value === 'number' ? number.format(value) : value;
-  let headerY = 12;
-  const headerLines = report.header.map((row, index) => {
-    const fontSize = index === 0 || index === report.brandingRows ? 14 : 9;
-    doc.setFontSize(fontSize);
-    const lines = doc.splitTextToSize(row.map(display).join('   '), report.logo ? 225 : 277);
-    const result = { lines, y: headerY, fontSize };
-    headerY += lines.length * 6;
-    return result;
-  });
-  const headerHeight = Math.max(headerY, report.logo ? 36 : 0);
+  const headerLines = [];
+  const addHeaderColumn = (rows, x, width) => {
+    let y = 12;
+    rows.forEach((row, index) => {
+      const fontSize = index === 0 ? 12 : 9;
+      const lineHeight = fontSize * 0.3528 * 1.15;
+      doc.setFontSize(fontSize);
+      const lines = doc.splitTextToSize(row.map(display).join('   '), width);
+      headerLines.push({ lines, x, y, fontSize });
+      y += lines.length * lineHeight + (index === 0 ? 1.5 : 0.8);
+    });
+    return y;
+  };
+  const companyBottom = addHeaderColumn(report.header.slice(0, report.brandingRows), 10, 126);
+  const details = report.header.slice(report.brandingRows);
+  // Keep currency and opening balance together, leaving room for long account names.
+  if (details.length > 4) details.splice(3, 2, [...details[3], ...details[4]]);
+  const detailsBottom = addHeaderColumn(details, 144, report.logo ? 94 : 143);
+  const headerHeight = Math.max(companyBottom, detailsBottom, report.logo ? 30 : 0) + 3;
   autoTable(doc, {
     head: [report.columns], body: [...report.rows, ...report.summary].map(row => row.map(display)),
     startY: headerHeight, margin: { top: headerHeight, bottom: 18, left: 10, right: 10 },
@@ -146,9 +155,9 @@ export async function statementPdf(report) {
       if (data.section === 'body' && data.row.index >= report.rows.length) data.cell.styles.fontStyle = 'bold';
     },
     willDrawPage: () => {
-      headerLines.forEach(({ lines, y, fontSize }) => {
+      headerLines.forEach(({ lines, x, y, fontSize }) => {
         doc.setFontSize(fontSize);
-        doc.text(lines, 10, y);
+        doc.text(lines, x, y, { lineHeightFactor: 1.15 });
       });
       if (report.logo) {
         const scale = Math.min(40 / report.logo.width, 22 / report.logo.height);

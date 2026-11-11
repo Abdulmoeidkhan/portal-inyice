@@ -16,7 +16,7 @@ const statementTotals = (rows = []) => ({
 
 export default function VendorStatement() {
   const [vendors, setVendors] = useState([]);
-  const [vendorId, setVendorId] = useState(null);
+  const [vendorId, setVendorId] = useState(() => Number(new URLSearchParams(window.location.search).get('party_id')) || null);
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fromDate, setFromDate] = useState('');
@@ -28,6 +28,7 @@ export default function VendorStatement() {
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load vendors')))
       .then(setVendors)
       .catch((error) => message.error(error.message));
+    if (new URLSearchParams(window.location.search).has('party_id')) fetchStatement();
   }, []);
 
   const fetchStatement = async () => {

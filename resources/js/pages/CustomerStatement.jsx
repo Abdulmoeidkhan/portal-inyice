@@ -21,7 +21,7 @@ const invoiceTotals = (rows = []) => ({
 
 export default function CustomerStatement() {
   const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState('all');
+  const [selectedCustomer, setSelectedCustomer] = useState(() => Number(new URLSearchParams(window.location.search).get('party_id')) || 'all');
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fromDate, setFromDate] = useState('');
@@ -33,6 +33,7 @@ export default function CustomerStatement() {
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load customers')))
       .then(setCustomers)
       .catch((error) => message.error(error.message));
+    if (new URLSearchParams(window.location.search).has('party_id')) fetchStatement();
   }, []);
 
   const fetchStatement = async () => {
@@ -68,6 +69,8 @@ export default function CustomerStatement() {
     { title: 'Invoice', dataIndex: 'invoice_number', key: 'invoice_number' },
     { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date', render: dateOnly },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: dateOnly },
+    { title: 'Service', dataIndex: 'service', key: 'service', width: 120, render: (value) => value ? <Tag>{value}</Tag> : '-' },
+    { title: 'Narration', dataIndex: 'description', key: 'description', width: 450, render: (value) => value || '-' },
     { title: 'Amount', dataIndex: 'amount_in_client_currency', align: 'right', render: (value, row) => money(value ?? row.amount) },
     { title: 'Paid', key: 'paid', align: 'right', render: (_, row) => money(Number(row.amount || 0) - Number(row.outstanding || 0)) },
     { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', render: money },
@@ -77,6 +80,7 @@ export default function CustomerStatement() {
     { title: 'Date', dataIndex: 'date', render: dateOnly }, { title: 'Type', dataIndex: 'type', render: (value) => <Tag>{String(value).replace(/_/g, ' ').toUpperCase()}</Tag> },
     ...(isAllCustomers ? [{ title: 'Customer', dataIndex: 'customer_name' }] : []),
     { title: 'Reference', dataIndex: 'reference' },
+    { title: 'Service', dataIndex: 'service', key: 'service', width: 120, render: (value) => value ? <Tag>{value}</Tag> : '-' },
     { title: 'Narration', dataIndex: 'description', key: 'description', width: 450, render: (value) => value || '-' },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: money },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: money },
@@ -143,11 +147,11 @@ export default function CustomerStatement() {
                 rowKey="invoice_uid"
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 4 : 3}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 4 : 3} align="right"><Text strong>{money(invoiceSummary.amount)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 5 : 4} align="right"><Text strong>{money(invoiceSummary.paid)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(invoiceSummary.outstanding)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} />
+                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 6 : 5}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(invoiceSummary.amount)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} align="right"><Text strong>{money(invoiceSummary.paid)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 8 : 7} align="right"><Text strong>{money(invoiceSummary.outstanding)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 9 : 8} />
                   </Table.Summary.Row>
                 )}
               />
@@ -161,10 +165,10 @@ export default function CustomerStatement() {
                 rowKey="id"
                 summary={() => (
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 5 : 4}><Text strong>Total</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 5 : 4} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={isAllCustomers ? 6 : 5}><Text strong>Total</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 6 : 5} align="right"><Text strong>{money(totals.debit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 7 : 6} align="right"><Text strong>{money(totals.credit)}</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={isAllCustomers ? 8 : 7} align="right"><Text strong>{money(totals.balance)}</Text></Table.Summary.Cell>
                   </Table.Summary.Row>
                 )}
               />
