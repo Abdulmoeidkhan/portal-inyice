@@ -17,6 +17,7 @@ class SharedDocumentMetadataTest extends TestCase
         [$company, $order, $invoice] = $this->documents();
         foreach ([
             ['/shared/vouchers/'.$order->share_token, 'Travel Voucher RT-140'],
+            ['/shared/itineraries/'.$order->share_token, 'Travel Itinerary RT-140'],
             ['/shared/quotations/'.$order->share_token, 'Quotation RT-140'],
             ['/shared/invoices/'.$invoice->share_token, 'Invoice INV-140'],
             ['/shared/invoices/'.$invoice->share_token.'?view=detailed', 'Detailed Invoice INV-140'],
@@ -46,6 +47,7 @@ class SharedDocumentMetadataTest extends TestCase
         $path = '/shared/vouchers/'.$order->share_token;
         $order->update(['share_token' => null]);
         $this->get($path)->assertNotFound()->assertDontSee('RT-140');
+        $this->get('/shared/itineraries/'.substr($path, strrpos($path, '/') + 1))->assertNotFound();
         $this->get('/shared/invoices/not-a-valid-token')->assertNotFound();
         $this->get('/shared/invoices/'.$invoice->uid)->assertNotFound();
     }

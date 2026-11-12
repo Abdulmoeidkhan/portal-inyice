@@ -58,6 +58,7 @@ import ProfitShares from './ProfitShares';
 import PaymentReport from './PaymentReport';
 import InvoiceDetail from './InvoiceDetail';
 import VoucherDetail from './VoucherDetail';
+import ItineraryDetail from './ItineraryDetail';
 import QuotationDetail from './QuotationDetail';
 import CounterpartyTransaction from './CounterpartyTransaction';
 import Login from './Login';
@@ -436,6 +437,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/invoices/:uid" element={<InvoiceDetail />} />
               <Route path="/orders" element={<OrderList />} />
               <Route path="/orders/:uid/voucher" element={<VoucherDetail />} />
+              <Route path="/orders/:uid/itinerary" element={<ItineraryDetail />} />
               <Route path="/orders/:uid/quotation" element={<QuotationDetail />} />
               <Route path="/orders/:uid/edit" element={<OrderEdit />} />
               <Route path="/reference-search" element={<ReferenceSearch />} />
@@ -890,6 +892,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Routes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
+        <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
         <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
         <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
@@ -915,6 +918,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       <Routes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
+        <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
         <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
         <Route path="/login" element={<Navigate to="/internal" replace />} />
         <Route path="/register" element={<Navigate to="/internal" replace />} />
@@ -931,6 +935,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
     <Routes>
       <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
       <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
+      <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
       <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />

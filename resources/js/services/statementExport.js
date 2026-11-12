@@ -45,7 +45,7 @@ export function createStatementExport(meta, columns, rows, now = new Date()) {
 }
 
 // Normalize the agency's supported image formats (including WebP) for both exporters.
-async function loadAgencyLogo(url) {
+export async function loadAgencyLogo(url) {
   if (!url) return null;
   const image = new Image();
   image.crossOrigin = 'anonymous';

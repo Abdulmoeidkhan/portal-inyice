@@ -636,7 +636,7 @@ export default function OrderEdit() {
   };
 
   const handleSave = () => submitOrder(false);
-  const backToOrders = () => backToRoute(navigate, location, '/orders');
+  const goBack = () => backToRoute(navigate, location, '/orders');
 
   const openInvoiceDateModal = () => {
     setInvoiceDueDate(dayjs().add(1, 'month'));
@@ -699,8 +699,8 @@ export default function OrderEdit() {
           message={`${userName} is working on this order`}
           description="This order is temporarily locked for editing. Try again after they finish or the lock expires."
           action={(
-            <Button icon={<ArrowLeftOutlined />} onClick={backToOrders}>
-              Back to Orders
+            <Button icon={<ArrowLeftOutlined />} onClick={goBack}>
+              Back
             </Button>
           )}
         />
@@ -712,8 +712,8 @@ export default function OrderEdit() {
     <div className="page-shell page-fade-up">
       <div className="elevated-card border-beam-aurora" style={{ marginBottom: 16 }}>
         <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={backToOrders} style={{ width: 'fit-content' }}>
-            Back to Orders
+          <Button icon={<ArrowLeftOutlined />} onClick={goBack} style={{ width: 'fit-content' }}>
+            Back
           </Button>
           <Title level={2} style={{ margin: 0 }}>
             Edit {order?.order_number || 'Order'}
@@ -727,7 +727,7 @@ export default function OrderEdit() {
       <Affix className="edit-order-action-affix" offsetTop={10} target={affixTarget}>
         <Card className="edit-order-action-card border-beam-aurora" style={{ marginBottom: 16 }}>
           <Space className="edit-order-actions">
-            <Button danger onClick={backToOrders}>Cancel</Button>
+            <Button danger onClick={goBack}>Cancel</Button>
             {canCreateInvoice && (
               <Button type={isRefundRequestOrder ? 'primary' : 'default'} danger={isRefundRequestOrder} icon={<FileTextOutlined />} loading={invoiceSaving} onClick={openInvoiceDateModal}>
                 {isRefundRequestOrder ? 'Refund' : 'Invoice'}

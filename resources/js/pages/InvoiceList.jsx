@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ItineraryButton from '../components/ItineraryButton';
 import { formatMoney as money } from '../services/numberFormat';
 import { Button, Card, Col, Descriptions, Divider, Drawer, Dropdown, Grid, Input, InputNumber, Modal, Popconfirm, Row, Segmented, Select, Space, Spin, Tag, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, PercentageOutlined, PlusOutlined, RollbackOutlined, ShareAltOutlined, StopOutlined } from '@ant-design/icons';
@@ -619,6 +620,7 @@ export default function InvoiceList() {
             {showLabels ? 'Voucher' : null}
           </Button>
         )}
+        {!invoice.is_refund_order && invoice.order?.uid && <ItineraryButton order={invoice.order} />}
         {canEditInvoices && <Dropdown menu={{ items: invoiceActionItems(invoice) }} trigger={['click']}>
           <Button size="small" icon={<DownOutlined />} loading={actionLoadingKey.startsWith(`${invoice.uid}:`)}>
             {showLabels ? 'Actions' : null}
@@ -693,7 +695,7 @@ export default function InvoiceList() {
     {
       title: 'Actions',
       key: 'action',
-      width: compactActions ? 172 : 330,
+      width: compactActions ? 277 : 435,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
       onCell: () => ({ onClick: (event) => event.stopPropagation() }),

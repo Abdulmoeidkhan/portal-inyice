@@ -16,7 +16,8 @@ class SharedDocumentController extends Controller
             ->where('share_token', $token)->with('company')->firstOrFail();
         $detailed = $isInvoice && $request->query('view') === 'detailed';
         $type = $isInvoice ? ($detailed ? 'Detailed Invoice' : 'Invoice')
-            : ($document === 'quotations' || $record->status === 'quote' ? 'Quotation' : 'Travel Voucher');
+            : ($document === 'itineraries' ? 'Travel Itinerary'
+                : ($document === 'quotations' || $record->status === 'quote' ? 'Quotation' : 'Travel Voucher'));
         $company = $record->company;
         $brand = $company?->is_paid ? ($company->display_name ?: $company->legal_name) : 'InYice';
         $reference = $isInvoice ? $record->invoice_number : ($record->meta['voucher_no'] ?? $record->order_number);

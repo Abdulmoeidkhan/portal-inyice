@@ -1,0 +1,27 @@
+.itinerary-paper { max-width: 850px; margin: 0 auto; padding: 36px; background: #fff; color: #20313f; border: 1px solid #dce3e9; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+.itinerary-brand { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #203e57; padding-bottom: 20px; overflow-wrap: anywhere; }
+.itinerary-brand h1 { margin: 0 0 8px; font-size: 24px; }
+.itinerary-brand img { max-width: 150px; max-height: 85px; object-fit: contain; align-self: flex-start; }
+.itinerary-paper h2 { font-size: 22px; margin: 22px 0 10px; }
+.itinerary-references { display: flex; gap: 12px 28px; flex-wrap: wrap; }
+.itinerary-passengers { margin: 24px 0; }
+.itinerary-passengers h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #526776; margin-bottom: 8px; }
+.itinerary-passengers > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #e5eaf0; padding: 7px 0; }
+.itinerary-flight { margin-top: 24px; border: 1px solid #dce3e9; border-radius: 6px; overflow: hidden; break-inside: avoid; }
+.itinerary-flight h3 { margin: 0; padding: 10px 16px; background: #203e57; color: #fff; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.itinerary-airline { display: flex; flex-direction: column; gap: 3px; padding: 12px 18px; background: #f5f3eb; border-bottom: 1px solid #dce3e9; }
+.itinerary-airline strong { font-size: 18px; }
+.itinerary-route { display: grid; grid-template-columns: 1fr 1fr; }
+.itinerary-route > div { padding: 18px; overflow-wrap: anywhere; }
+.itinerary-route > div + div { border-left: 1px solid #dce3e9; }
+.itinerary-route small { display: block; text-transform: uppercase; letter-spacing: 1px; color: #526776; }
+.itinerary-airport { display: block; font-size: 27px; margin: 4px 0; }
+.itinerary-time { display: block; font-size: 23px; margin-top: 14px; }
+.itinerary-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; padding: 14px 18px; margin: 0; background: #f3f6f8; }
+.itinerary-facts dt { font-size: 12px; color: #526776; }
+.itinerary-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.itinerary-paper footer { font-size: 12px; color: #526776; margin-top: 24px; }
+@media (max-width: 540px) { .itinerary-paper { padding: 18px; } .itinerary-brand { flex-direction: column-reverse; gap: 12px; } .itinerary-route > div { padding: 12px; } .itinerary-facts { padding: 12px; gap: 12px; } }
+
+.itinerary-route .itinerary-direction { display: flex; align-items: center; gap: 8px; }
+.itinerary-direction img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ItineraryButton from '../components/ItineraryButton';
 import { formatMoney as money } from '../services/numberFormat';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Typography, Watermark } from 'antd';
@@ -194,11 +195,12 @@ export default function QuotationDetail({ shared = false }) {
 
   return (
     <div className="page-shell page-fade-up invoice-document quotation-document">
-      <Space className="invoice-screen-actions" style={{ marginBottom: 16 }}>
+      <Space wrap className="invoice-screen-actions" style={{ marginBottom: 16 }}>
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => backToRoute(navigate, location, '/orders')}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.quotation-document .invoice-paper', 'Quotation')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareQuotation}>Copy share link</Button>
+        <ItineraryButton order={order} sharedToken={shared ? token : undefined} size="middle" />
       </Space>
       <Card className="invoice-paper">
         <Watermark

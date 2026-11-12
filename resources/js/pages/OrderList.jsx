@@ -10,6 +10,7 @@ import { openRoute } from '../services/navigation';
 import OrderInternalNotes from '../components/OrderInternalNotes';
 import VoucherSummaryCard from './sales-flow/VoucherSummaryCard';
 import Table from '../components/CsvTable';
+import ItineraryButton from '../components/ItineraryButton';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -538,6 +539,7 @@ export default function OrderList() {
       >
         {showLabels ? 'Voucher' : null}
       </Button>
+      <ItineraryButton order={record} />
       <Button
         size="small"
         icon={<CopyOutlined />}
@@ -614,7 +616,7 @@ export default function OrderList() {
     {
       title: 'Actions',
       key: 'actions',
-      width: compactActions ? 180 : 360,
+      width: compactActions ? 285 : 465,
       align: compactActions ? 'center' : undefined,
       fixed: compactActions ? undefined : 'right',
       onCell: () => ({ onClick: (event) => event.stopPropagation() }),

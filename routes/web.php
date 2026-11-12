@@ -20,7 +20,7 @@ Route::post('/support', [SupportController::class, 'store'])
     ->middleware('throttle:3,10')->name('support.store');
 
 Route::get('/shared/{document}/{token}', [\App\Http\Controllers\SharedDocumentController::class, 'show'])
-    ->where('document', 'quotations|vouchers|invoices')
+    ->where('document', 'quotations|vouchers|invoices|itineraries')
     ->middleware('throttle:public-api');
 
 Route::get('/{any}', function () {

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ItineraryButton from '../components/ItineraryButton';
 import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Col, Divider, Empty, Row, Skeleton, Space, Tag, Typography, Watermark } from 'antd';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -328,6 +329,7 @@ export default function InvoiceDetail({ shared = false }) {
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.invoice-document .invoice-paper', 'Invoice')}>Download PDF</Button>
         {!shared && !invoice.is_virtual_invoice && <Button type="primary" icon={<ShareAltOutlined />} onClick={share}>Copy share link</Button>}
+        {!shared && invoice.order?.uid && <ItineraryButton order={invoice.order} size="middle" />}
       </Space>
       <Card className="invoice-paper">
         <Watermark

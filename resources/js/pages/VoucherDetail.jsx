@@ -7,6 +7,7 @@ import { printDocument } from '../services/printDocument';
 import { backToRoute } from '../services/navigation';
 import OrderInternalNotes from '../components/OrderInternalNotes';
 import VoucherPreview from './sales-flow/VoucherPreview';
+import ItineraryButton from '../components/ItineraryButton';
 
 const authHeaders = () => {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -106,13 +107,14 @@ export default function VoucherDetail({ shared = false }) {
 
   return (
     <div className="page-shell page-fade-up voucher-detail-page">
-      <Space className="voucher-screen-actions">
+      <Space wrap className="voucher-screen-actions">
         {!shared && <Button icon={<ArrowLeftOutlined />} onClick={() => backToRoute(navigate, location, '/orders')}>Back</Button>}
         <Button icon={<PrinterOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Print</Button>
         <Button icon={<DownloadOutlined />} onClick={() => printDocument('.voucher-preview', 'Voucher')}>Download PDF</Button>
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareVoucher}>
           Copy share link
         </Button>
+        <ItineraryButton order={order} sharedToken={shared ? token : undefined} size="middle" />
       </Space>
       <VoucherPreview order={order} />
       {!shared && <OrderInternalNotes order={order} onOrderChange={setOrder} />}
