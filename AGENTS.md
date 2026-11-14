@@ -4,6 +4,7 @@ Read this file before making changes in this repository.
 
 ## Project Workflow
 
+- Read the current handoff in `documentations/DEVELOPER_GUIDE.md` before continuing repository work. Update it when work changes or stops: record completed changes, validation results, unresolved issues, and the next concrete step so another agent can continue.
 - At the start of repository work, use the applicable project tools without waiting for a reminder: Graphify for codebase context, Laravel Boost MCP for Laravel/PHP/API/database work, Ant Design MCP for Ant Design UI work, and any other MCP/tool that fits the task.
 - Do not run `npm run build`, `npm.cmd run build`, or other production frontend builds unless the user explicitly asks for a build or approves it for the current task.
 - Prefer lighter checks for frontend edits, such as JSX parsing, targeted lint/type checks if available, or focused tests.

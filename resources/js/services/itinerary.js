@@ -1,13 +1,50 @@
 import airlines from '../../../JSON/airline.json' with { type: 'json' };
+import airports from '../../../JSON/airports.json' with { type: 'json' };
+
+const airportByCode = Object.fromEntries(Object.values(airports).filter((a) => a.iata).map((a) => [a.iata.toUpperCase(), a]));
+const tripDate = (value) => {
+  const date = calendarDate(value);
+  return date ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date).toUpperCase() : '';
+};
+
+export function transitMinutes(flight, next) {
+  if (!next || !flight.to || flight.to !== next.from) return null;
+  const arrival = calendarDate(flight.arrivalDate);
+  const departure = calendarDate(next.date);
+  const arrivalTime = timeMinutes(flight.arrival);
+  const departureTime = timeMinutes(next.departure);
+  if (!arrival || !departure || arrivalTime === null || departureTime === null) return null;
+  return (departure - arrival) / 60000 + departureTime - arrivalTime;
+}
 
 const text = (value) => String(value ?? '').trim();
 const capitalize = (value) => text(value).replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+export const flightAirlineCode = (number) => text(number).toUpperCase().match(/^([A-Z0-9]{2})[\s-]*\d/)?.[1] || '';
+export const airlineLogoFallback = '/images/airline-logos/no-image.svg';
+export const airlineLogoUrl = (number) => flightAirlineCode(number) ? `/images/airline-logos/${flightAirlineCode(number)}.png` : airlineLogoFallback;
 export const flightAirlineName = (number) => {
-  const code = text(number).toUpperCase().match(/^([A-Z0-9]{2})[\s-]*\d/)?.[1];
+  const code = flightAirlineCode(number);
   return airlines[code]?.name || '';
 };
 const first = (...values) => values.map(text).find(Boolean) || '';
 const rows = (value) => Array.isArray(value) ? value : [];
+
+export function estimatedFlightDuration(from, to) {
+  const origin = airportByCode[text(from).toUpperCase()];
+  const destination = airportByCode[text(to).toUpperCase()];
+  const valid = (airport) => airport && Number.isFinite(airport.lat) && Number.isFinite(airport.lon)
+    && Math.abs(airport.lat) <= 90 && Math.abs(airport.lon) <= 180;
+  if (!valid(origin) || !valid(destination)) return '';
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const lat = radians(destination.lat - origin.lat);
+  const lon = radians(destination.lon - origin.lon);
+  const a = Math.sin(lat / 2) ** 2 + Math.cos(radians(origin.lat)) * Math.cos(radians(destination.lat)) * Math.sin(lon / 2) ** 2;
+  const distance = 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, a))));
+  if (distance < 1) return '';
+  // Rough route estimate: 800 km/h plus 30 minutes for takeoff/landing, rounded to 5 minutes.
+  const minutes = Math.round((distance / 800 * 60 + 30) / 5) * 5;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
 
 const calendarDate = (value) => {
   const raw = text(value);
@@ -26,6 +63,47 @@ const timeMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+// Resolve airport-local wall time without using the computer's time zone.
+// Reject missing/ambiguous DST times rather than inventing a duration.
+const airportInstant = (dateValue, timeValue, zone) => {
+  const date = calendarDate(dateValue);
+  const minutes = timeMinutes(timeValue);
+  if (!date || minutes === null || !zone) return null;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-GB', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const wallTime = (instant) => {
+      const parts = Object.fromEntries(formatter.formatToParts(new Date(instant)).map(({ type, value }) => [type, value]));
+      return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+    };
+    const target = date.getTime() + minutes * 60000;
+    const offsets = new Set([-36, -12, 0, 12, 36].map((hours) => {
+      const probe = target + hours * 3600000;
+      return wallTime(probe) - probe;
+    }));
+    const candidates = [...offsets].map((offset) => target - offset).filter((instant) => wallTime(instant) === target);
+    return candidates.length === 1 ? candidates[0] : null;
+  } catch { return null; }
+};
+
+export function scheduledFlightTiming(flight) {
+  const fromZone = airportByCode[text(flight.from).toUpperCase()]?.tz;
+  const toZone = airportByCode[text(flight.to).toUpperCase()]?.tz;
+  const departure = airportInstant(flight.date, flight.departure, fromZone);
+  if (departure === null) return null;
+  const explicitDate = text(flight.arrival_date);
+  const dates = explicitDate ? [explicitDate] : [-1, 0, 1, 2].map((offset) => {
+    const date = calendarDate(flight.date);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
+  });
+  const candidates = dates.map((arrivalDate) => {
+    const arrival = airportInstant(arrivalDate, flight.arrival, toZone);
+    const minutes = arrival === null ? null : (arrival - departure) / 60000;
+    return { arrivalDate, minutes };
+  }).filter(({ minutes }) => minutes > 0 && minutes <= 24 * 60);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 export const flightDateLabel = (value) => {
   const date = calendarDate(value);
   if (!date) return text(value) || 'Date not provided';
@@ -37,6 +115,8 @@ export const flightDateLabel = (value) => {
 
 export const flightArrivalDate = (flight) => {
   if (text(flight.arrival_date)) return text(flight.arrival_date);
+  const timing = scheduledFlightTiming(flight);
+  if (timing) return timing.arrivalDate;
   const date = calendarDate(flight.date);
   const departure = timeMinutes(flight.departure);
   const arrival = timeMinutes(flight.arrival);
@@ -55,10 +135,18 @@ export function itineraryData(order, airportLabel = () => '') {
   const meta = order?.meta || {};
   const company = order?.company || {};
   const passengers = rows(meta.passengers).filter((p) => text(p?.name));
-  return {
+  const phones = [...new Set(text(company.phone).split(/[,;\/\n\r|]+/).map(text).filter(Boolean))];
+  const contacts = [
+    ...phones.map((value) => ({ type: 'phone', value })),
+    ...(text(company.email) ? [{ type: 'email', value: text(company.email) }] : []),
+  ];
+  const data = {
     agency: first(company.display_name, company.legal_name, 'Travel Agency'),
-    contact: [company.address, company.phone, company.email].map(text).filter(Boolean),
+    contact: contacts.map(({ value }) => value),
+    contacts,
     logoUrl: company.logo_url,
+    footerLogoUrl: company.footer_logo_url,
+    address: text(company.address),
     unpaid: company.is_paid === false,
     reference: first(order?.voucher_no, meta.voucher_no, order?.order_number),
     booking: first(order?.booking_reference, meta.booking_reference),
@@ -66,16 +154,43 @@ export function itineraryData(order, airportLabel = () => '') {
     passengers: (passengers.length ? passengers : rows(meta.pricing).filter((p) => text(p?.pax_name))).map((p) => ({
       name: first(p.name, p.pax_name), ticket: first(p.ticket_no, p.flight_ticket_no),
     })),
-    flights: itineraryFlights(order).map((f) => ({
+    flights: itineraryFlights(order).map((f) => {
+      const timing = scheduledFlightTiming(f);
+      return {
       number: text(f.flight_no), date: text(f.date), from: text(f.from).toUpperCase(), to: text(f.to).toUpperCase(),
-      airline: flightAirlineName(f.flight_no),
+      airline: flightAirlineName(f.flight_no), airlineCode: flightAirlineCode(f.flight_no), logoUrl: airlineLogoUrl(f.flight_no),
+      estimatedDuration: timing ? `${Math.floor(timing.minutes / 60)}h ${timing.minutes % 60}m` : estimatedFlightDuration(f.from, f.to),
+      durationLabel: timing ? 'Scheduled flight duration' : 'Estimated flight duration',
       fromLabel: airportLabel(text(f.from)), toLabel: airportLabel(text(f.to)),
-      departure: text(f.departure), arrival: text(f.arrival), arrivalDate: flightArrivalDate(f),
+      departure: text(f.departure), arrival: text(f.arrival), arrivalDate: timing?.arrivalDate || flightArrivalDate(f),
       cabin: capitalize(f.cabin), bookingClass: text(f.booking_class), baggage: text(f.baggage),
       booking: first(f.gds_pnr, order?.booking_reference, meta.booking_reference), airlineReference: text(f.pnr),
-    })),
+      };
+    }),
     emergency: text(meta.emergency_contact),
   };
+  // Pricing may contain the ticket even when the passenger row only contains a name.
+  data.passengers.forEach((p) => {
+    const pricing = rows(meta.pricing).find((row) => text(row.pax_name).toUpperCase() === p.name.toUpperCase());
+    p.ticket = first(p.ticket, pricing?.flight_ticket_no);
+  });
+  data.status = data.passengers.some((p) => p.ticket) ? 'Confirmed' : data.quote ? 'Proposed' : 'Booked';
+  data.reservationCodes = [...new Set([data.booking, ...data.flights.map((f) => f.booking)].filter(Boolean))].join(' / ');
+  data.airlineReservationCodes = [...new Set(data.flights.filter((f) => f.airlineReference).map((f) => {
+    const code = f.number.toUpperCase().match(/^([A-Z0-9]{2})[\s-]*\d/)?.[1];
+    return `${f.airlineReference}${code ? ` (${code})` : ''}`;
+  }))].join(' / ');
+  data.flights.forEach((f, i) => {
+    const minutes = transitMinutes(f, data.flights[i + 1]);
+    f.transit = minutes > 0 && minutes < 28 * 60 ? `Transit at ${f.to}: ${Math.floor(minutes / 60)}h ${minutes % 60}m` : '';
+  });
+  const destination = data.flights.find((f, i) => transitMinutes(f, data.flights[i + 1]) >= 28 * 60) || data.flights.at(-1);
+  const airport = airportByCode[destination?.to];
+  const country = airport?.country ? new Intl.DisplayNames(['en'], { type: 'region' }).of(airport.country) : '';
+  const place = [airport?.city, country].filter(Boolean).join(', ') || destination?.to || '';
+  const dates = [...new Set([tripDate(data.flights[0]?.date), tripDate(data.flights.at(-1)?.arrivalDate || data.flights.at(-1)?.date)].filter(Boolean))].join(' - ');
+  data.tripTitle = [dates, place ? `TRIP TO ${place.toUpperCase()}` : ''].filter(Boolean).join('  ');
+  return data;
 }
 
 export function itineraryFilename(data) {
@@ -102,7 +217,7 @@ export function itineraryFilename(data) {
 
 export const itineraryNotice = 'All times are local to the departure or arrival airport. Verify flight times, baggage and travel requirements with the airline before departure. This itinerary is not a ticket.';
 
-export async function itineraryPdf(data, logo = null, icons = {}) {
+export async function itineraryPdf(data, logo = null, icons = {}, footerLogo = null, shareQr = null) {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const pdf = new jsPDF();
   pdf.setProperties({ title: 'Travel Itinerary', author: data.agency });
@@ -120,19 +235,16 @@ export async function itineraryPdf(data, logo = null, icons = {}) {
   };
   pdf.setTextColor(24, 48, 72);
   pdf.setFont('helvetica', 'bold');
-  paragraph(data.agency, 18, logo ? 130 : 180);
+  const qrImages = [shareQr, footerLogo].filter(Boolean);
+  const headingWidth = 180 - qrImages.length * 32;
+  paragraph(data.quote ? 'PROPOSED TRAVEL ITINERARY' : 'TRAVEL ITINERARY', 15, headingWidth);
+  paragraph(data.tripTitle, 12, headingWidth);
+  qrImages.forEach((qr, i) => {
+    const scale = Math.min(30 / qr.width, 30 / qr.height);
+    pdf.addImage(qr.data, 'PNG', 195 - (qrImages.length - i) * 32 + 2, 10, qr.width * scale, qr.height * scale);
+  });
+  if (qrImages.length) y = Math.max(y, 43);
   pdf.setFont('helvetica', 'normal');
-  data.contact.forEach((line) => paragraph(line, 9, logo ? 130 : 180));
-  if (logo) {
-    const scale = Math.min(35 / logo.width, 22 / logo.height);
-    pdf.addImage(logo.data, 'PNG', 160, 12, logo.width * scale, logo.height * scale);
-    y = Math.max(y, 38);
-  }
-  y += 4;
-  pdf.setFont('helvetica', 'bold');
-  paragraph(data.quote ? 'PROPOSED TRAVEL ITINERARY' : 'TRAVEL ITINERARY', 15);
-  pdf.setFont('helvetica', 'normal');
-  if (data.booking) paragraph(`Booking reference: ${data.booking}`, 10);
   const table = (head, body, options = {}) => {
     autoTable(pdf, {
       startY: y, margin: { top: 16, bottom: 20, left: margin, right: margin },
@@ -142,6 +254,59 @@ export async function itineraryPdf(data, logo = null, icons = {}) {
     });
     y = pdf.lastAutoTable.finalY + 8;
   };
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'bold');
+  const logoOffset = logo ? 22 : 0;
+  let agencyName = data.agency;
+  if (pdf.getTextWidth(agencyName) > 74 - logoOffset) {
+    while (agencyName && pdf.getTextWidth(`${agencyName}...`) > 74 - logoOffset) agencyName = agencyName.slice(0, -1);
+    agencyName += '...';
+  }
+  const agencyLines = [agencyName];
+  pdf.setFont('helvetica', 'normal');
+  const contactLines = data.contacts.map((contact) => ({ ...contact, lines: pdf.splitTextToSize(contact.value, 68 - logoOffset) }));
+  const textHeight = agencyLines.length * 4.5 + 3
+    + contactLines.reduce((height, contact) => height + contact.lines.length * 4.5 + 2, 0);
+  const rowHeight = Math.max(logo ? 22 : 0, textHeight);
+  pdf.setFontSize(9);
+  const addressLines = data.address ? pdf.splitTextToSize(data.address, 74) : [];
+  const brandingHeight = rowHeight + (addressLines.length ? 2 + addressLines.length * 4 : 0) + 6;
+  table([], [[
+    { content: `PREPARED FOR\n${data.passengers.map((p) => p.name).join('\n') || 'Not provided'}\n\nRESERVATION CODE: ${data.reservationCodes || '-'}\nAIRLINE RESERVATION CODE: ${data.airlineReservationCodes || '-'}\nSTATUS: ${data.status}`, styles: { cellWidth: 100 } },
+    { content: '', styles: { cellWidth: 80, minCellHeight: brandingHeight } },
+  ]], {
+    theme: 'plain', pageBreak: 'avoid',
+    didDrawCell: ({ section, column, cell }) => {
+      if (section !== 'body' || column.index !== 1) return;
+      const x = cell.x + 3 + logoOffset;
+      let brandY = cell.y + 3;
+      if (logo) {
+        const scale = Math.min(18 / logo.width, 22 / logo.height);
+        pdf.addImage(logo.data, 'PNG', cell.x + 3, cell.y + 3, logo.width * scale, logo.height * scale);
+      }
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      agencyLines.forEach((line) => { pdf.text(line, x, brandY + 3.5); brandY += 4.5; });
+      brandY += 3;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setDrawColor(32, 62, 87);
+      pdf.setLineWidth(0.3);
+      contactLines.forEach(({ type, lines }) => {
+        if (type === 'email') {
+          pdf.rect(x, brandY + 0.5, 4, 3);
+          pdf.line(x, brandY + 0.5, x + 2, brandY + 2.2);
+          pdf.line(x + 2, brandY + 2.2, x + 4, brandY + 0.5);
+        } else {
+          pdf.roundedRect(x + 0.7, brandY, 2.6, 4.2, 0.4, 0.4);
+          pdf.line(x + 1.4, brandY + 3.4, x + 2.6, brandY + 3.4);
+        }
+        lines.forEach((line) => { pdf.text(line, x + 6, brandY + 3.5); brandY += 4.5; });
+        brandY += 2;
+      });
+      pdf.setFontSize(9);
+      addressLines.forEach((line, i) => pdf.text(line, cell.x + 3, cell.y + 3 + rowHeight + 5 + i * 4));
+    },
+  });
   if (data.passengers.length) table([['Passenger', 'Ticket number']], data.passengers.map((p) => [p.name, p.ticket || '-']));
   data.flights.forEach((f) => {
     if (y > 220) { pdf.addPage(); y = 18; }
@@ -150,29 +315,52 @@ export async function itineraryPdf(data, logo = null, icons = {}) {
       [{ content: flightTimeReminder, colSpan: 3, styles: { fontStyle: 'normal', fontSize: 9, fillColor: [243, 246, 248], textColor: [75, 90, 105] } }],
     ], [
       [
-        { content: `${(f.airline || 'Airline not provided').toUpperCase()}\n${f.number || 'Flight number not provided'}`, styles: { fontStyle: 'bold', fontSize: 10 } },
+        { content: `${(f.airline || 'Airline not provided').toUpperCase()}\n${f.number || 'Flight number not provided'}`, colSpan: 2, styles: { fontStyle: 'bold', fontSize: 10 } },
+        { content: `${f.durationLabel || 'Estimated flight duration'}\n${f.estimatedDuration || 'Unavailable'}`, styles: { halign: 'right', fillColor: [245, 243, 235] } },
+      ],
+      [
+        '',
         `DEPARTURE\n${f.departure || '-'}  ${f.from}\n${f.fromLabel}`,
         `ARRIVAL\n${f.arrival || '-'}  ${f.to}\n${f.toLabel}`,
       ],
       [`Cabin: ${f.cabin || '-'}${f.bookingClass ? ` (${f.bookingClass})` : ''}`, { content: flightDateLabel(f.date), styles: { fontStyle: 'bold' } }, { content: flightDateLabel(f.arrivalDate), styles: { fontStyle: 'bold' } }],
+      [{ content: `Status: ${data.status}`, colSpan: 3 }],
       [`Baggage: ${f.baggage || 'Not provided'}`, `Booking reference: ${f.booking || '-'}`, `Airline reference: ${f.airlineReference || '-'}`],
     ], {
       pageBreak: 'avoid',
       columnStyles: { 0: { cellWidth: 48, fillColor: [245, 243, 235] }, 1: { cellWidth: 66 }, 2: { cellWidth: 66 } },
       didParseCell: ({ section, row, column, cell }) => {
+        if (section === 'body' && row.index === 0 && column.index === 0) {
+          const airlineLogo = icons.airlines?.[f.airlineCode];
+          const width = 114 - (airlineLogo ? 15 : 6);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10);
+          let name = (f.airline || 'Airline not provided').toUpperCase();
+          if (pdf.getTextWidth(name) > width) {
+            while (name && pdf.getTextWidth(`${name}...`) > width) name = name.slice(0, -1);
+            name += '...';
+          }
+          cell.text = [name, f.number || 'Flight number not provided'];
+          if (airlineLogo) cell.styles.cellPadding = { top: 3, right: 3, bottom: 3, left: 12 };
+        }
         const icon = column.index === 1 ? icons.takeoff : column.index === 2 ? icons.landing : null;
-        if (section === 'body' && row.index === 0 && icon) {
+        if (section === 'body' && row.index === 1 && icon) {
           cell.styles.cellPadding = { top: 3, right: 3, bottom: 3, left: 12 };
           cell.styles.minCellHeight = 12;
         }
       },
       didDrawCell: ({ section, row, column, cell }) => {
+        const airlineLogo = icons.airlines?.[f.airlineCode];
+        if (section === 'body' && row.index === 0 && column.index === 0 && airlineLogo) {
+          const scale = Math.min(7 / airlineLogo.width, 7 / airlineLogo.height);
+          pdf.addImage(airlineLogo.data, 'PNG', cell.x + 2, cell.y + 3, airlineLogo.width * scale, airlineLogo.height * scale);
+        }
         const name = column.index === 1 ? 'takeoff' : column.index === 2 ? 'landing' : null;
-        if (section === 'body' && row.index === 0 && icons[name]) {
+        if (section === 'body' && row.index === 1 && icons[name]) {
           pdf.addImage(icons[name], 'PNG', cell.x + 3, cell.y + 3, 6, 6, name);
         }
       },
     });
+    if (f.transit) paragraph(f.transit, 10);
   });
   if (data.emergency) paragraph(`Emergency contact: ${data.emergency}`, 9);
   paragraph(itineraryNotice, 9);
@@ -198,7 +386,7 @@ export async function fetchItineraryOrder(uid, token) {
   return data;
 }
 
-export async function shareItinerary(uid, sharedToken) {
+export async function itineraryShareUrl(uid, sharedToken) {
   let token = sharedToken;
   if (!token) {
     const authToken = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -209,7 +397,11 @@ export async function shareItinerary(uid, sharedToken) {
     if (!response.ok || !data.share_token) throw new Error(data.message || 'Could not create share link');
     token = data.share_token;
   }
-  const url = `${window.location.origin}/shared/itineraries/${encodeURIComponent(token)}`;
+  return `${window.location.origin}/shared/itineraries/${encodeURIComponent(token)}`;
+}
+
+export async function shareItinerary(uid, sharedToken) {
+  const url = await itineraryShareUrl(uid, sharedToken);
   if (navigator.clipboard?.writeText) {
     try { await navigator.clipboard.writeText(url); return true; } catch { /* Show a selectable link below. */ }
   }

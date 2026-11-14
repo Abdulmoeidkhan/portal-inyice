@@ -2,6 +2,33 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
+## Current Development Handoff — November 14, 2026
+
+Task: itinerary flight-duration behavior and persistent agent handoff. Earlier itinerary, branding, sharing, voucher, CSS, controller, and test edits are already uncommitted in this workspace; preserve them. This pass changes duration labels, adds edge-case tests, and updates workflow/documentation.
+
+### Implemented behavior
+
+- `resources/js/services/itinerary.js` supplies both `resources/js/pages/ItineraryDetail.jsx` and the PDF. `scheduledFlightTiming()` converts entered departure/arrival times using airport IANA `tz` values from `JSON/airports.json`, including seasonal DST and fractional offsets independently of the computer timezone.
+- With valid dates/times/zones, `itineraryData()` returns the existing `estimatedDuration` property and `durationLabel: 'Scheduled flight duration'`. Both page and PDF use this label. The value is the elapsed interval between entered times, not live tracking or an airborne-time prediction.
+- Without a usable schedule, the label is `Estimated flight duration`. The existing fallback uses great-circle distance at 800 km/h plus 30 minutes, rounded to five minutes. It does not model winds, route direction, aircraft, or airline schedules. Unknown airports display `Unavailable`.
+- Missing arrival dates are inferred from the unique positive interval up to 24 hours across nearby dates. The calculation honors explicit `arrival_date`; invalid/ambiguous DST times cannot supply a scheduled duration. Existing arrival-date fallback uses local clock ordering when timezone resolution fails. Known limits: the order editor has no explicit arrival-date input, and parsed voucher mapping does not preserve that field. These were not changed in this pass.
+
+### XY806 discrepancy and remaining verification
+
+The user reported XY806 showing 4h 5m versus XY805 links showing roughly 3h 22m–3h 45m. Checked November 14, 2026:
+
+- [XY805 history](https://www.flightradar24.com/data/flights/xy805): MED → KHI; November 11 recorded 3h 22m.
+- [XY806 history](https://www.flightradar24.com/data/flights/xy806): KHI → MED; October 27 recorded 4h 5m, with nearby examples 3h 57m–4h 8m. Different directions and historical observations must not become hardcoded durations.
+- A read-only local database query found no matching XY805/XY806 flight rows. The user's exact entered date/times and deployed assets remain unverified. This comparison does not establish a calculation defect.
+- Next step if the discrepancy persists: obtain the saved itinerary's route, date, departure and arrival times; reproduce through `scheduledFlightTiming()` and inspect the displayed duration source. Live/historical flight-data integration has not been requested or implemented.
+
+### Validation and continuation
+
+- Focused command: `node --test tests/js/itinerary.test.mjs`. Coverage includes PDF output, entered-time calculations, DST, westbound flights, fractional offsets, date-line crossings, leap-day rollover, and missing schedules/airports.
+- Final checks: all 19 itinerary tests passed; `ItineraryDetail.jsx` passed Babel JSX parsing. No production frontend build was run. Browser layout and the user's saved XY806 record were not verified.
+- `graphify update .` completed (2,337 nodes, 6,072 edges). It warned that `airline.json` and `boost.json` produced zero AST nodes and that community labels changed; no LLM relabeling was run. `git diff --check` passed.
+- Update this section before stopping work with actual results and outstanding issues; use this existing development file rather than creating competing progress files.
+
 ## Project Stack
 
 - Laravel 13.11

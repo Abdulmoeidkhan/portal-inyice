@@ -3239,6 +3239,31 @@ class FinancialApiTest extends TestCase
         ]);
     }
 
+    public function test_voucher_ticket_numbers_require_digits_on_create_and_update(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $payload = [
+            'customer_id' => $ctx['customer']->id,
+            'status' => 'order',
+            'voucher' => [
+                'active_sections' => ['flights'],
+                'passengers' => [['name' => 'Test Passenger', 'ticket_no' => '0012345678901']],
+                'pricing' => [['pax_name' => 'Test Passenger', 'flight_ticket_no' => '0012345678901']],
+            ],
+        ];
+        $created = $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertSuccessful();
+        $uid = $created->json('order.uid');
+        $this->assertNotEmpty($uid);
+        $this->assertSame('0012345678901', $created->json('order.meta.passengers.0.ticket_no'));
+        foreach (['PAX NAME', '123-456', '1e12', '-123', '12.34'] as $invalid) {
+            $payload['voucher']['passengers'][0]['ticket_no'] = $invalid;
+            $payload['voucher']['pricing'][0]['flight_ticket_no'] = $invalid;
+            $fields = ['voucher.passengers.0.ticket_no', 'voucher.pricing.0.flight_ticket_no'];
+            $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertUnprocessable()->assertJsonValidationErrors($fields);
+            $this->patchJson('/api/v1/orders/'.$uid, $payload)->assertUnprocessable()->assertJsonValidationErrors($fields);
+        }
+    }
+
     private function seedTenantContext(): array
     {
         $tenant = Tenant::create([

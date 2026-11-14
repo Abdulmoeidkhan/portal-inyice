@@ -241,7 +241,7 @@ const PreviewTable = ({ columns, data }) => {
   );
 };
 
-export default function VoucherPreview({ order }) {
+export default function VoucherPreview({ order, highlighted = true }) {
   if (!order) {
     return null;
   }
@@ -295,7 +295,7 @@ export default function VoucherPreview({ order }) {
   const documentLabel = order.status === 'quote' ? 'Quotation' : 'Travel Voucher';
 
   return (
-    <div className="voucher-preview">
+    <div className="voucher-preview" data-header-style={highlighted ? 'highlighted' : 'original'}>
       <Watermark
         content={showInyiceWatermark ? 'InYice' : undefined}
         rotate={-24}

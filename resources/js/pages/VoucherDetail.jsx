@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Result, Skeleton, Space } from 'antd';
-import { ArrowLeftOutlined, DownloadOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DownloadOutlined, HighlightOutlined, PrinterOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { message } from '../services/feedback';
 import { printDocument } from '../services/printDocument';
@@ -34,6 +34,7 @@ export default function VoucherDetail({ shared = false }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
+  const [highlighted, setHighlighted] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -114,9 +115,12 @@ export default function VoucherDetail({ shared = false }) {
         <Button type="primary" icon={<ShareAltOutlined />} loading={sharing} onClick={shareVoucher}>
           Copy share link
         </Button>
+        <Button icon={<HighlightOutlined />} type={highlighted ? 'primary' : 'default'} aria-pressed={highlighted}
+          title={highlighted ? 'Switch to original voucher headers' : 'Highlight voucher headers'}
+          onClick={() => setHighlighted((value) => !value)}>{highlighted ? 'Highlighted' : 'Original'}</Button>
         <ItineraryButton order={order} sharedToken={shared ? token : undefined} size="middle" />
       </Space>
-      <VoucherPreview order={order} />
+      <VoucherPreview order={order} highlighted={highlighted} />
       {!shared && <OrderInternalNotes order={order} onOrderChange={setOrder} />}
     </div>
   );

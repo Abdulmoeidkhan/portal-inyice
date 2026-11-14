@@ -179,8 +179,7 @@ const buildPrintHtml = (source, title) => {
       color: #4b5563 !important;
     }
 
-    .print-document-root .voucher-preview-document-title,
-    .print-document-root .voucher-preview-section > .voucher-preview-section-title {
+    .print-document-root .voucher-preview-document-title {
       color: #a46f15 !important;
     }
 
@@ -200,8 +199,8 @@ const buildPrintHtml = (source, title) => {
 
     .print-document-root .voucher-preview-section .ant-table-thead > tr > th,
     .print-document-root .voucher-preview-section .ant-table-thead > tr > th * {
-      color: #102033 !important;
-      background: #edf4fb !important;
+      color: var(--voucher-table-heading-color) !important;
+      background: var(--voucher-table-heading-background) !important;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;
     }
@@ -390,8 +389,17 @@ const buildPrintHtml = (source, title) => {
       page-break-inside: avoid;
     }
 
-    .print-document-root .voucher-preview-section-title {
+    .print-document-root .voucher-preview .voucher-preview-section-title {
       font-size: 9px !important;
+      padding: var(--voucher-heading-print-padding) !important;
+      color: var(--voucher-heading-color) !important;
+      background: var(--voucher-heading-background) !important;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .print-document-root .voucher-preview .voucher-preview-section > .voucher-preview-section-title {
+      color: var(--voucher-section-heading-color) !important;
     }
 
     .print-document-root .voucher-preview .ant-table-cell {
@@ -421,7 +429,8 @@ const buildPrintHtml = (source, title) => {
     .print-document-root .voucher-preview-table th {
       font-weight: 800 !important;
       border-bottom-color: rgba(15, 27, 45, 0.14) !important;
-      background: #edf4fb !important;
+      color: var(--voucher-table-heading-color) !important;
+      background: var(--voucher-table-heading-background) !important;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;
     }

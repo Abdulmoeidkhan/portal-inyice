@@ -9,7 +9,11 @@
 .itinerary-passengers > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #e5eaf0; padding: 7px 0; }
 .itinerary-flight { margin-top: 24px; border: 1px solid #dce3e9; border-radius: 6px; overflow: hidden; break-inside: avoid; }
 .itinerary-flight h3 { margin: 0; padding: 10px 16px; background: #203e57; color: #fff; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; }
-.itinerary-airline { display: flex; flex-direction: column; gap: 3px; padding: 12px 18px; background: #f5f3eb; border-bottom: 1px solid #dce3e9; }
+.itinerary-airline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; background: #f5f3eb; border-bottom: 1px solid #dce3e9; }
+.itinerary-airline-details { min-width: 0; flex: 1; }
+.itinerary-duration { text-align: right; flex-shrink: 0; }
+.itinerary-duration small, .itinerary-duration strong { display: block; }
+.itinerary-duration small { font-size: 11px; }
 .itinerary-airline strong { font-size: 18px; }
 .itinerary-route { display: grid; grid-template-columns: 1fr 1fr; }
 .itinerary-route > div { padding: 18px; overflow-wrap: anywhere; }
@@ -25,3 +29,32 @@
 
 .itinerary-route .itinerary-direction { display: flex; align-items: center; gap: 8px; }
 .itinerary-direction img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.itinerary-trip-title { font-size: 18px; font-weight: 700; padding-bottom: 10px; border-bottom: 1px solid #203e57; }
+.itinerary-heading { position: relative; }
+.itinerary-heading-with-qr { padding-right: 240px; min-height: 130px; border-bottom: 1px solid #203e57; }
+.itinerary-heading-with-qr .itinerary-trip-title { border-bottom: 0; }
+.itinerary-qrs { position: absolute; right: 0; top: -8px; display: flex; gap: 8px; }
+.itinerary-qrs > div { width: 112px; text-align: center; }
+.itinerary-qrs small { display: block; font-size: 10px; }
+.itinerary-qr { display: block; width: 112px; height: 112px; object-fit: contain; }
+.itinerary-airline-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.itinerary-airline-name img { width: 32px; height: 32px; flex-shrink: 0; object-fit: contain; }
+.itinerary-airline-name span, .itinerary-brand h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itinerary-airline-name span { min-width: 0; }
+.itinerary-agency { align-self: start; }
+.itinerary-address { margin-top: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.itinerary-summary { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; padding: 16px 0; border-bottom: 2px solid #203e57; }
+.itinerary-summary > div { min-width: 0; overflow-wrap: anywhere; }
+.itinerary-summary .itinerary-passengers { margin: 0 0 16px; }
+.itinerary-summary .itinerary-passengers h3 { margin-top: 0; }
+.itinerary-summary .itinerary-references { display: block; }
+.itinerary-summary .itinerary-brand { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; border: 0; padding: 0; }
+.itinerary-summary .itinerary-brand > img { width: 64px; max-height: 85px; flex-shrink: 0; align-self: center; }
+.itinerary-summary .itinerary-brand > div { min-width: 0; flex: 1; }
+.itinerary-summary .itinerary-brand h1 { font-size: 20px; }
+.itinerary-contact { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.itinerary-contact .anticon { flex-shrink: 0; }
+.itinerary-contact > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.itinerary-transit { padding: 12px 18px; background: #edf4f8; border-left: 3px solid #203e57; margin-top: 12px; font-weight: 600; break-inside: avoid; }
+@media (max-width: 540px) { .itinerary-summary { grid-template-columns: 1fr; } }
+@media (max-width: 540px) { .itinerary-heading-with-qr { padding-right: 0; } .itinerary-qrs { position: static; justify-content: flex-end; } }

@@ -420,7 +420,7 @@ export default function VoucherRowsSections({
                         style={{ display: 'block', marginTop: 8 }}
                       />
                     </Col>
-                    <Col xs={24} sm={12} md={8} lg={8} xl={4}><Text>Ticket No</Text><Input value={row.ticket_no} onChange={(e) => setRowField('passengers', idx, 'ticket_no', e.target.value)} /></Col>
+                    <Col xs={24} sm={12} md={8} lg={8} xl={4}><Text>Ticket No</Text><Input inputMode="numeric" pattern="[0-9]*" value={row.ticket_no} onChange={(e) => setRowField('passengers', idx, 'ticket_no', e.target.value.replace(/[^0-9]/g, ''))} /></Col>
                     <Col xs={24} sm={12} md={8} lg={8} xl={4}><Text>Passport No</Text><Input value={row.passport_no} onChange={(e) => setRowField('passengers', idx, 'passport_no', e.target.value)} /></Col>
                     <Col xs={24} sm={12} md={8} lg={8} xl={4}>
                       <Text>Visa No</Text>
@@ -497,7 +497,8 @@ export default function VoucherRowsSections({
                 {visibleFlightPricingFields.map(([label, field, inputProps]) => (
                   <Col {...flightPricingColProps} key={field}>
                     <Text>{label}</Text>
-                    <InputNumber
+                    {field === 'flight_ticket_no' ? <Input inputMode="numeric" pattern="[0-9]*" value={row[field] ?? ''}
+                      onChange={(e) => setPricingField(idx, field, e.target.value.replace(/[^0-9]/g, ''))} /> : <InputNumber
                       {...inputProps}
                       stringMode
                       controls={false}
@@ -509,7 +510,7 @@ export default function VoucherRowsSections({
                           : row[field]}
                       onChange={(value) => setPricingField(idx, field, value)}
                       style={{ width: '100%' }}
-                    />
+                    />}
                   </Col>
                 ))}
               </Row>

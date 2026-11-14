@@ -1942,6 +1942,42 @@ body {
   letter-spacing: 0.08em;
 }
 
+.voucher-preview {
+  --voucher-heading-color: #ffffff;
+  --voucher-section-heading-color: #ffffff;
+  --voucher-heading-background: #203e57;
+  --voucher-heading-padding: 10px 16px;
+  --voucher-heading-print-padding: 5px 8px;
+  --voucher-table-heading-color: #ffffff;
+  --voucher-table-heading-background: #203e57;
+}
+
+.voucher-preview[data-header-style="original"] {
+  --voucher-heading-color: #52657c;
+  --voucher-section-heading-color: #a46f15;
+  --voucher-heading-background: transparent;
+  --voucher-heading-padding: 0;
+  --voucher-heading-print-padding: 0;
+  --voucher-table-heading-color: #102033;
+  --voucher-table-heading-background: #edf4fb;
+}
+
+.voucher-preview .voucher-preview-section-title {
+  color: var(--voucher-heading-color) !important;
+  background: var(--voucher-heading-background);
+  padding: var(--voucher-heading-padding);
+  border-radius: 5px;
+  width: 100%;
+  box-sizing: border-box;
+  break-after: avoid;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.voucher-preview .voucher-preview-section > .voucher-preview-section-title {
+  color: var(--voucher-section-heading-color) !important;
+}
+
 .voucher-reference-table {
   display: grid;
   margin-top: 12px;
@@ -2025,7 +2061,6 @@ body {
 
 .voucher-preview-section > .voucher-preview-section-title {
   margin-bottom: 8px;
-  color: #a46f15;
   font-size: 14px;
 }
 
@@ -2182,7 +2217,8 @@ body {
 .voucher-preview-table th {
   font-weight: 800;
   border-bottom-color: rgba(15, 27, 45, 0.14);
-  background: #edf4fb;
+  color: var(--voucher-table-heading-color) !important;
+  background: var(--voucher-table-heading-background);
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
@@ -2215,11 +2251,11 @@ body {
 }
 
 .voucher-preview-section .ant-table-thead > tr > th {
-  color: #102033;
+  color: var(--voucher-table-heading-color) !important;
   font-size: 11px;
   font-weight: 800;
   border-bottom-color: rgba(15, 27, 45, 0.14);
-  background: #edf4fb !important;
+  background: var(--voucher-table-heading-background) !important;
 }
 
 .voucher-preview-section .ant-table-tbody > tr > td {
@@ -3838,8 +3874,11 @@ body {
     break-inside: avoid;
   }
 
-  .voucher-preview-section-title {
+  .voucher-preview .voucher-preview-section-title {
     font-size: 9px !important;
+    padding: var(--voucher-heading-print-padding) !important;
+    color: var(--voucher-heading-color) !important;
+    background: var(--voucher-heading-background) !important;
   }
 
   .voucher-preview .ant-table-cell {
@@ -3875,7 +3914,8 @@ body {
 
   .voucher-preview-table th {
     font-weight: 800 !important;
-    background: #edf4fb !important;
+    color: var(--voucher-table-heading-color) !important;
+    background: var(--voucher-table-heading-background) !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
