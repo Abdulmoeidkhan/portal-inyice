@@ -111,3 +111,7 @@
 .itinerary-notes { margin-top: 20px; padding-top: 12px; border-top: 1px solid #aaa; font-size: 12px; }
 .itinerary-notes h3 { margin: 0 0 6px; font-size: 13px; }
 .itinerary-notes > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print {
+  .itinerary-notes, .itinerary-paper footer p { break-inside: avoid; page-break-inside: avoid; orphans: 3; widows: 3; }
+  .itinerary-notes h3 { break-after: avoid; page-break-after: avoid; }
+}

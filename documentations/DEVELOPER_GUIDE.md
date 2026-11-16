@@ -2,7 +2,14 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 16, 2026 (consolidated company notes migration)
+## Current Development Handoff - November 16, 2026 (notes page breaks)
+
+- Voucher print styles (both application print CSS and isolated printDocument iframe) now keep the footer and individual emergency/company note cards together where they fit. QR stays with the footer. Oversized content may paginate, with widow/orphan protection for text.
+- Selectable itinerary PDF measures notes including their heading/separator and emergency contact before drawing, moving sections to a fresh page when needed. Notes longer than a page still flow without dropping text. The final notice stays together too. Browser itinerary print CSS also protects note sections/headings.
+- Validation: 22 itinerary JS tests passed, including intact section movement and oversized emergency text. Chromium printed fixtures using the actual printDocument template and application CSS: 18-line emergency section, company note and QR all appear on page 2 together; 160-line emergency text spans pages 2–4 with every line and the company note preserved (verified with PDF text extraction). Whitespace check passed. No production build or database changes.
+- Browser verification script/artifacts: `storage/app/itinerary-review/check-note-pagination.mjs`, `notes-18.pdf`, `notes-160.pdf`. Graphify refreshed with existing zero-node warnings. Next step: refresh and print/download the user's actual voucher and itinerary to confirm their saved content; release updated assets through the approved build pipeline.
+
+## Previous Development Handoff - November 16, 2026 (consolidated company notes migration)
 
 - User confirmed notes columns have already been applied on hosting. Moved nullable voucher_notes and itinerary_notes definitions into the original `2026_05_22_000002_create_companies_table.php` and removed the separate add-company-document-notes migration.
 - Fresh installations create both columns with companies. Existing databases do not rerun the original migration; hosting is already updated per the user. No application database migration, rollback, column deletion, or migration-history edits were performed in this consolidation. Any other existing installation must have the columns provisioned before using notes.

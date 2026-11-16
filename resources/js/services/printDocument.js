@@ -436,6 +436,8 @@ const buildPrintHtml = (source, title) => {
     }
 
     .print-document-root .voucher-preview-footer {
+      break-inside: avoid;
+      page-break-inside: avoid;
       margin-top: 7px !important;
       grid-template-columns: minmax(0, 1fr) 112px !important;
       gap: 8px !important;
@@ -443,10 +445,14 @@ const buildPrintHtml = (source, title) => {
 
     .print-document-root .voucher-preview-footer-notes > div,
     .print-document-root .voucher-preview-footer-logo {
+      break-inside: avoid;
+      page-break-inside: avoid;
       padding: 7px !important;
     }
 
     .print-document-root .voucher-preview-footer p {
+      orphans: 3;
+      widows: 3;
       font-size: 10px !important;
     }
 

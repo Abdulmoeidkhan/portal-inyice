@@ -247,6 +247,14 @@ export async function itineraryPdf(data, logo = null, icons = {}, footerLogo = n
   pdf.setProperties({ title: 'Travel Itinerary', author: data.agency });
   const margin = 15;
   let y = 18;
+  const keepTogether = (height) => {
+    // Oversized sections must still flow, but start them on a fresh page.
+    if (y + Math.min(height, 252) > 270 && y > 18) { pdf.addPage(); y = 18; }
+  };
+  const paragraphHeight = (value, size = 9) => {
+    pdf.setFontSize(size);
+    return pdf.splitTextToSize(value, 180).length * size * 0.45 + 3;
+  };
   const paragraph = (value, size = 10, width = 180) => {
     pdf.setFontSize(size);
     const lines = pdf.splitTextToSize(value, width);
@@ -379,7 +387,7 @@ STATUS: ${data.status}`,
     if (f.transit) paragraph(f.transit, 10);
   });
   if (data.notes) {
-    if (y > 250) { pdf.addPage(); y = 18; }
+    keepTogether(6 + 7.5 + paragraphHeight(data.notes));
     pdf.setDrawColor(180);
     pdf.setLineWidth(0.2);
     pdf.line(margin, y, 195, y);
@@ -389,7 +397,12 @@ STATUS: ${data.status}`,
     pdf.setFont('helvetica', 'normal');
     paragraph(data.notes, 9);
   }
-  if (data.emergency) paragraph(`Emergency contact: ${data.emergency}`, 9);
+  if (data.emergency) {
+    const emergency = `Emergency contact: ${data.emergency}`;
+    keepTogether(paragraphHeight(emergency));
+    paragraph(emergency, 9);
+  }
+  keepTogether(paragraphHeight(itineraryNotice));
   paragraph(itineraryNotice, 9);
   for (let page = 1; page <= pdf.getNumberOfPages(); page += 1) {
     pdf.setPage(page);

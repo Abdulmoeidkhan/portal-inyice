@@ -3922,6 +3922,8 @@ body {
 
   .voucher-preview-footer {
     margin-top: 7px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
     grid-template-columns: minmax(0, 1fr) 112px !important;
     gap: 8px !important;
   }
@@ -3929,10 +3931,14 @@ body {
   .voucher-preview-footer-notes > div,
   .voucher-preview-footer-logo {
     padding: 7px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .voucher-preview-footer p {
     font-size: 10px !important;
+    orphans: 3;
+    widows: 3;
   }
 
   .voucher-preview-footer-logo img {

@@ -43,6 +43,27 @@ test('PDF includes all segments across pages, branding, and quote wording', asyn
   assert.ok(!output.includes('PRIVATE-PASSPORT'));
 });
 
+test('notes and emergency contact move intact to a new PDF page when they fit there', async () => {
+  for (const field of ['notes', 'emergency']) {
+    const data = itineraryData(order);
+    data[field] = 'SECTION START\n' + 'A complete line of terms and conditions.\n'.repeat(39) + 'SECTION END';
+    const pdf = await itineraryPdf(data);
+    const pages = pdf.internal.pages.slice(1).map((page) => page.join('\n'));
+    const start = pages.findIndex((page) => page.includes('SECTION START'));
+    assert.ok(start > 0, `${field} should move past the flight page`);
+    assert.ok(pages[start].includes('SECTION END'), `${field} must remain together`);
+    if (field === 'notes') assert.ok(pages[start].includes('(Notes)'));
+  }
+});
+
+test('oversized emergency contacts continue without losing text', async () => {
+  const data = itineraryData(order);
+  data.emergency = Array.from({ length: 150 }, (_, i) => `CONTACT-LINE-${i + 1}`).join('\n');
+  const pdf = await itineraryPdf(data);
+  assert.ok(pdf.getNumberOfPages() > 2);
+  for (let i = 1; i <= 150; i++) assert.ok(pdf.output().includes(`CONTACT-LINE-${i}`));
+});
+
 test('agency logo embeds in PDF', async () => {
   const logo = { width: 1, height: 1, data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4XmNgYGD4DwABBAEA43qFxAAAAABJRU5ErkJggg==' };
   const pdf = await itineraryPdf(itineraryData(order), logo);
