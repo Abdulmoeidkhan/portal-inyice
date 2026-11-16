@@ -229,6 +229,16 @@ export default function CompanyProfile() {
                     </Form.Item>
                   </Col>
                 </Row>
+                <Card size="small" title="Voucher notes" style={{ marginBottom: 16 }}>
+                  <Form.Item name="voucher_notes" extra="Used when a voucher has no notes of its own. Printed after emergency contacts, or alone when no emergency contact is provided." rules={[{ max: 10000 }]}>
+                    <Input.TextArea aria-label="Voucher notes" autoSize={{ minRows: 4, maxRows: 12 }} maxLength={10000} showCount />
+                  </Form.Item>
+                </Card>
+                <Card size="small" title="Itinerary notes" style={{ marginBottom: 16 }}>
+                  <Form.Item name="itinerary_notes" extra="Printed after the itinerary details with a separator, including PDF and image downloads." rules={[{ max: 10000 }]}>
+                    <Input.TextArea aria-label="Itinerary notes" autoSize={{ minRows: 4, maxRows: 12 }} maxLength={10000} showCount />
+                  </Form.Item>
+                </Card>
                 <Card size="small" title="Invoice tax" style={{ marginBottom: 16 }}>
                   <Paragraph type="secondary">Choose whether inYice calculates tax or you handle it externally. Changes apply to new invoices; saved invoices keep their tax settings.</Paragraph>
                   <Form.Item name={['tax_settings', 'enabled']} label="Calculate tax in inYice" valuePropName="checked">

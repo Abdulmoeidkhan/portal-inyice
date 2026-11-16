@@ -1,3 +1,4 @@
+import { removePassengerBaggage } from '../services/baggage';
 import React, { useMemo, useState } from 'react';
 import { Button, Card, Form, Space, Steps, Tabs, Typography, Grid } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
@@ -144,6 +145,10 @@ export default function SalesFlow() {
       }
 
       const nextVoucher = { ...prev, [section]: prev[section].filter((_, rowIdx) => rowIdx !== idx) };
+
+      if (section === 'passengers') {
+        nextVoucher.flights = removePassengerBaggage(prev.flights, idx);
+      }
 
       if (section === 'passengers' && prev.pricing.length > 1) {
         nextVoucher.pricing = prev.pricing.filter((_, rowIdx) => rowIdx !== idx);

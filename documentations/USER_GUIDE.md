@@ -354,3 +354,10 @@ The table shows saved tax labels, registration numbers, fixed rates, net taxable
 Each currency has its own tax charged, tax reversed and net tax summary; different currencies are never added together. Refund amounts are negative. Records come from saved invoice snapshots, so changing company tax settings does not recalculate this report. Enabled zero-rate/zero-tax invoices remain visible. Invoices without saved tax settings and draft/cancelled/void invoices are excluded.
 
 This is an invoice-based report, not tax calculated from cash received. Invoice dates determine the period. Confirmed refund orders without an active invoice use their creation date and saved refund tax amounts; unconfirmed refund requests are excluded. Once a refund has an invoice, only that invoice is counted, using its invoice date. Payments do not add tax entries. Discounts reflect the invoice's current saved discounted totals in its invoice-date period.
+
+
+### Voucher and itinerary notes
+
+Owners can save optional **Voucher notes** and **Itinerary notes** in Company Profile. Each supports multiline plain text up to 10,000 characters. Clear the field and save to remove the default.
+
+Voucher notes are used only when the voucher has no notes of its own. They print after emergency contacts, or alone when no emergency contact is set. Itinerary notes print after the flight details with a separator, including image and selectable PDF downloads. Changes apply to existing documents that use company defaults.

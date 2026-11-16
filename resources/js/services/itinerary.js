@@ -1,3 +1,4 @@
+import { baggageSummary, passengerBaggage } from './baggage.js';
 import airlines from '../../../JSON/airline.json' with { type: 'json' };
 import airports from '../../../JSON/airports.json' with { type: 'json' };
 
@@ -163,18 +164,41 @@ export function itineraryData(order, airportLabel = () => '') {
       durationLabel: timing ? 'Scheduled flight duration' : 'Estimated flight duration',
       fromLabel: airportLabel(text(f.from)), toLabel: airportLabel(text(f.to)),
       departure: text(f.departure), arrival: text(f.arrival), arrivalDate: timing?.arrivalDate || flightArrivalDate(f),
-      cabin: capitalize(f.cabin), bookingClass: text(f.booking_class), baggage: text(f.baggage),
+      cabin: capitalize(f.cabin), bookingClass: text(f.booking_class), baggage: baggageSummary(f, rows(meta.passengers)),
       booking: first(f.gds_pnr, order?.booking_reference, meta.booking_reference), airlineReference: text(f.pnr),
       };
     }),
     emergency: text(meta.emergency_contact),
+    notes: text(company.itinerary_notes),
   };
   // Pricing may contain the ticket even when the passenger row only contains a name.
   data.passengers.forEach((p) => {
     const pricing = rows(meta.pricing).find((row) => text(row.pax_name).toUpperCase() === p.name.toUpperCase());
     p.ticket = first(p.ticket, pricing?.flight_ticket_no);
   });
+  data.passengerSections = (passengers.length
+    ? rows(meta.passengers).map((p, index) => ({ p, index })).filter(({ p }) => text(p?.name))
+    : rows(meta.pricing).map((p, index) => ({ p, index })).filter(({ p }) => text(p?.pax_name))
+  ).map(({ p, index }, displayIndex) => ({
+    number: index + 1,
+    name: first(p.name, p.pax_name),
+    ticket: data.passengers[displayIndex]?.ticket || '',
+    segments: itineraryFlights(order).map((flight, segmentIndex) => ({
+      number: segmentIndex + 1,
+      flight: text(flight.flight_no),
+      date: text(flight.date),
+      from: text(flight.from).toUpperCase(),
+      to: text(flight.to).toUpperCase(),
+      baggage: text(passengerBaggage(flight, index)),
+    })),
+  }));
   data.status = data.passengers.some((p) => p.ticket) ? 'Confirmed' : data.quote ? 'Proposed' : 'Booked';
+  data.flights.forEach((flight, index) => {
+    if (data.passengerSections.length) {
+      flight.baggage = data.passengerSections.map((passenger) =>
+        `PAX ${passenger.number} ${passenger.segments[index].baggage || 'Not provided'}`).join(', ');
+    }
+  });
   data.reservationCodes = [...new Set([data.booking, ...data.flights.map((f) => f.booking)].filter(Boolean))].join(' / ');
   data.airlineReservationCodes = [...new Set(data.flights.filter((f) => f.airlineReference).map((f) => {
     const code = f.number.toUpperCase().match(/^([A-Z0-9]{2})[\s-]*\d/)?.[1];
@@ -189,7 +213,7 @@ export function itineraryData(order, airportLabel = () => '') {
   const country = airport?.country ? new Intl.DisplayNames(['en'], { type: 'region' }).of(airport.country) : '';
   const place = [airport?.city, country].filter(Boolean).join(', ') || destination?.to || '';
   const dates = [...new Set([tripDate(data.flights[0]?.date), tripDate(data.flights.at(-1)?.arrivalDate || data.flights.at(-1)?.date)].filter(Boolean))].join(' - ');
-  data.tripTitle = [dates, place ? `TRIP TO ${place.toUpperCase()}` : ''].filter(Boolean).join('  ');
+  data.tripTitle = [data.quote ? 'PROPOSED ITINERARY : ' : 'ITINERARY : ', dates, place ? `TRIP TO ${place.toUpperCase()}` : ''].filter(Boolean).join('  ');
   return data;
 }
 
@@ -236,14 +260,6 @@ export async function itineraryPdf(data, logo = null, icons = {}, footerLogo = n
   pdf.setTextColor(24, 48, 72);
   pdf.setFont('helvetica', 'bold');
   const qrImages = [shareQr, footerLogo].filter(Boolean);
-  const headingWidth = 180 - qrImages.length * 32;
-  paragraph(data.quote ? 'PROPOSED TRAVEL ITINERARY' : 'TRAVEL ITINERARY', 15, headingWidth);
-  paragraph(data.tripTitle, 12, headingWidth);
-  qrImages.forEach((qr, i) => {
-    const scale = Math.min(30 / qr.width, 30 / qr.height);
-    pdf.addImage(qr.data, 'PNG', 195 - (qrImages.length - i) * 32 + 2, 10, qr.width * scale, qr.height * scale);
-  });
-  if (qrImages.length) y = Math.max(y, 43);
   pdf.setFont('helvetica', 'normal');
   const table = (head, body, options = {}) => {
     autoTable(pdf, {
@@ -257,36 +273,44 @@ export async function itineraryPdf(data, logo = null, icons = {}, footerLogo = n
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
   const logoOffset = logo ? 22 : 0;
-  let agencyName = data.agency;
-  if (pdf.getTextWidth(agencyName) > 74 - logoOffset) {
-    while (agencyName && pdf.getTextWidth(`${agencyName}...`) > 74 - logoOffset) agencyName = agencyName.slice(0, -1);
-    agencyName += '...';
-  }
-  const agencyLines = [agencyName];
+  pdf.setFontSize(14);
+  const agencyLines = pdf.splitTextToSize(data.agency, 110 - logoOffset);
   pdf.setFont('helvetica', 'normal');
-  const contactLines = data.contacts.map((contact) => ({ ...contact, lines: pdf.splitTextToSize(contact.value, 68 - logoOffset) }));
-  const textHeight = agencyLines.length * 4.5 + 3
+  pdf.setFontSize(10);
+  const contactLines = data.contacts.map((contact) => ({ ...contact, lines: pdf.splitTextToSize(contact.value, 104 - logoOffset) }));
+  const textHeight = agencyLines.length * 6 + 3
     + contactLines.reduce((height, contact) => height + contact.lines.length * 4.5 + 2, 0);
   const rowHeight = Math.max(logo ? 22 : 0, textHeight);
   pdf.setFontSize(9);
-  const addressLines = data.address ? pdf.splitTextToSize(data.address, 74) : [];
+  const addressLines = data.address ? pdf.splitTextToSize(data.address, 110) : [];
   const brandingHeight = rowHeight + (addressLines.length ? 2 + addressLines.length * 4 : 0) + 6;
   table([], [[
-    { content: `PREPARED FOR\n${data.passengers.map((p) => p.name).join('\n') || 'Not provided'}\n\nRESERVATION CODE: ${data.reservationCodes || '-'}\nAIRLINE RESERVATION CODE: ${data.airlineReservationCodes || '-'}\nSTATUS: ${data.status}`, styles: { cellWidth: 100 } },
-    { content: '', styles: { cellWidth: 80, minCellHeight: brandingHeight } },
+    { content: '', styles: { cellWidth: 116, minCellHeight: Math.max(brandingHeight, qrImages.length ? 38 : 0) } },
+    { content: '', styles: { cellWidth: 64 } },
   ]], {
     theme: 'plain', pageBreak: 'avoid',
     didDrawCell: ({ section, column, cell }) => {
-      if (section !== 'body' || column.index !== 1) return;
+      if (section !== 'body') return;
+      if (column.index === 1) {
+        qrImages.forEach((qr, i) => {
+          const scale = Math.min(28 / qr.width, 28 / qr.height);
+          pdf.addImage(qr.data, 'PNG', cell.x + i * 32 + 2, cell.y + 3, qr.width * scale, qr.height * scale);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+          pdf.text(qr === shareQr ? 'Itinerary' : 'Agency', cell.x + i * 32 + 16, cell.y + 34, { align: 'center' });
+        });
+        return;
+      }
       const x = cell.x + 3 + logoOffset;
       let brandY = cell.y + 3;
       if (logo) {
         const scale = Math.min(18 / logo.width, 22 / logo.height);
         pdf.addImage(logo.data, 'PNG', cell.x + 3, cell.y + 3, logo.width * scale, logo.height * scale);
       }
-      pdf.setFontSize(10);
+      pdf.setFontSize(14);
       pdf.setFont('helvetica', 'bold');
-      agencyLines.forEach((line) => { pdf.text(line, x, brandY + 3.5); brandY += 4.5; });
+      agencyLines.forEach((line) => { pdf.text(line, x, brandY + 4.5); brandY += 6; });
+      pdf.setFontSize(10);
       brandY += 3;
       pdf.setFont('helvetica', 'normal');
       pdf.setDrawColor(32, 62, 87);
@@ -307,68 +331,71 @@ export async function itineraryPdf(data, logo = null, icons = {}, footerLogo = n
       addressLines.forEach((line, i) => pdf.text(line, cell.x + 3, cell.y + 3 + rowHeight + 5 + i * 4));
     },
   });
-  if (data.passengers.length) table([['Passenger', 'Ticket number']], data.passengers.map((p) => [p.name, p.ticket || '-']));
+  pdf.setDrawColor(32, 62, 87);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, y - 3, 195, y - 3);
+  y += 2;
+  pdf.setFont('helvetica', 'bold');
+  paragraph(data.tripTitle, 12);
+  pdf.setFont('helvetica', 'normal');
+  table([], [[
+    data.passengers.length ? `PREPARED FOR\n${data.passengers.map((p) => `${p.name}${p.ticket ? ` - ${p.ticket}` : ''}`).join('\n')}` : '',
+    `RESERVATION CODE: ${data.reservationCodes || '-'}
+AIRLINE RESERVATION CODE: ${data.airlineReservationCodes || '-'}
+STATUS: ${data.status}`,
+  ]], {
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 0, overflow: 'linebreak', valign: 'top' },
+    columnStyles: { 0: { cellWidth: 98, cellPadding: { right: 8 } }, 1: { cellWidth: 82 } },
+  });
   data.flights.forEach((f) => {
-    if (y > 220) { pdf.addPage(); y = 18; }
-    table([
-      [{ content: `DEPARTURE: ${flightDateLabel(f.date)}`, colSpan: 3 }],
-      [{ content: flightTimeReminder, colSpan: 3, styles: { fontStyle: 'normal', fontSize: 9, fillColor: [243, 246, 248], textColor: [75, 90, 105] } }],
-    ], [
+    if (y > 205) { pdf.addPage(); y = 18; }
+    const airlineLogo = icons.airlines?.[f.airlineCode];
+    const departureHeading = `DEPARTURE: ${flightDateLabel(f.date)}${f.arrivalDate && f.arrivalDate !== f.date ? ` / ARRIVAL: ${flightDateLabel(f.arrivalDate)}` : ''}`;
+    table([[{ content: departureHeading, colSpan: 3, styles: { cellPadding: { top: 3, bottom: 1, left: airlineLogo ? 17 : 0, right: 0 } } }],
+      [{ content: flightTimeReminder, colSpan: 3, styles: { fontSize: 8, fontStyle: 'normal', cellPadding: { top: 0, bottom: 3, left: airlineLogo ? 17 : 0, right: 0 } } }]], [
       [
-        { content: `${(f.airline || 'Airline not provided').toUpperCase()}\n${f.number || 'Flight number not provided'}`, colSpan: 2, styles: { fontStyle: 'bold', fontSize: 10 } },
-        { content: `${f.durationLabel || 'Estimated flight duration'}\n${f.estimatedDuration || 'Unavailable'}`, styles: { halign: 'right', fillColor: [245, 243, 235] } },
+        { content: `${(f.airline || 'Airline not provided').toUpperCase()}\n${f.number || 'Flight number not provided'}\n\n${f.durationLabel || 'Estimated flight duration'}\n${f.estimatedDuration || 'Unavailable'}\n\nCabin\n${[f.cabin, f.bookingClass].filter(Boolean).join(' / ') || 'Not provided'}\n\nStatus\n${data.status}`, rowSpan: 2, styles: { fillColor: [243, 240, 230] } },
+        `${f.from || '-'}\n${f.fromLabel}`,
+        `${f.to || '-'}\n${f.toLabel}`,
       ],
       [
-        '',
-        `DEPARTURE\n${f.departure || '-'}  ${f.from}\n${f.fromLabel}`,
-        `ARRIVAL\n${f.arrival || '-'}  ${f.to}\n${f.toLabel}`,
+        `Departing at:\n${f.departure || 'Not provided'}${f.arrivalDate !== f.date ? `\n${flightDateLabel(f.date)}` : ''}`,
+        `Arriving at:\n${f.arrival || 'Not provided'}${f.arrivalDate !== f.date ? `\n${flightDateLabel(f.arrivalDate)}` : ''}`,
       ],
-      [`Cabin: ${f.cabin || '-'}${f.bookingClass ? ` (${f.bookingClass})` : ''}`, { content: flightDateLabel(f.date), styles: { fontStyle: 'bold' } }, { content: flightDateLabel(f.arrivalDate), styles: { fontStyle: 'bold' } }],
-      [{ content: `Status: ${data.status}`, colSpan: 3 }],
-      [`Baggage: ${f.baggage || 'Not provided'}`, `Booking reference: ${f.booking || '-'}`, `Airline reference: ${f.airlineReference || '-'}`],
     ], {
       pageBreak: 'avoid',
-      columnStyles: { 0: { cellWidth: 48, fillColor: [245, 243, 235] }, 1: { cellWidth: 66 }, 2: { cellWidth: 66 } },
-      didParseCell: ({ section, row, column, cell }) => {
-        if (section === 'body' && row.index === 0 && column.index === 0) {
-          const airlineLogo = icons.airlines?.[f.airlineCode];
-          const width = 114 - (airlineLogo ? 15 : 6);
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10);
-          let name = (f.airline || 'Airline not provided').toUpperCase();
-          if (pdf.getTextWidth(name) > width) {
-            while (name && pdf.getTextWidth(`${name}...`) > width) name = name.slice(0, -1);
-            name += '...';
-          }
-          cell.text = [name, f.number || 'Flight number not provided'];
-          if (airlineLogo) cell.styles.cellPadding = { top: 3, right: 3, bottom: 3, left: 12 };
-        }
-        const icon = column.index === 1 ? icons.takeoff : column.index === 2 ? icons.landing : null;
-        if (section === 'body' && row.index === 1 && icon) {
-          cell.styles.cellPadding = { top: 3, right: 3, bottom: 3, left: 12 };
-          cell.styles.minCellHeight = 12;
-        }
-      },
-      didDrawCell: ({ section, row, column, cell }) => {
-        const airlineLogo = icons.airlines?.[f.airlineCode];
-        if (section === 'body' && row.index === 0 && column.index === 0 && airlineLogo) {
-          const scale = Math.min(7 / airlineLogo.width, 7 / airlineLogo.height);
-          pdf.addImage(airlineLogo.data, 'PNG', cell.x + 2, cell.y + 3, airlineLogo.width * scale, airlineLogo.height * scale);
-        }
-        const name = column.index === 1 ? 'takeoff' : column.index === 2 ? 'landing' : null;
-        if (section === 'body' && row.index === 1 && icons[name]) {
-          pdf.addImage(icons[name], 'PNG', cell.x + 3, cell.y + 3, 6, 6, name);
+      headStyles: { fillColor: [255, 255, 255], textColor: [32, 45, 58], fontSize: 10, lineWidth: 0 },
+      columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 60 }, 2: { cellWidth: 60 } },
+      didDrawCell: ({ section, cell, row }) => {
+        if (section === 'head' && row.index === 0 && airlineLogo) {
+          const scale = Math.min(12 / airlineLogo.width, 7 / airlineLogo.height);
+          pdf.addImage(airlineLogo.data, 'PNG', cell.x + 2, cell.y + 1, airlineLogo.width * scale, airlineLogo.height * scale);
         }
       },
     });
+    y -= 4;
+    paragraph(`Baggage: ${f.baggage || 'Not provided'}`, 9);
     if (f.transit) paragraph(f.transit, 10);
   });
+  if (data.notes) {
+    if (y > 250) { pdf.addPage(); y = 18; }
+    pdf.setDrawColor(180);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, 195, y);
+    y += 6;
+    pdf.setFont('helvetica', 'bold');
+    paragraph('Notes', 10);
+    pdf.setFont('helvetica', 'normal');
+    paragraph(data.notes, 9);
+  }
   if (data.emergency) paragraph(`Emergency contact: ${data.emergency}`, 9);
   paragraph(itineraryNotice, 9);
   for (let page = 1; page <= pdf.getNumberOfPages(); page += 1) {
     pdf.setPage(page);
     pdf.setFontSize(8);
     pdf.setTextColor(100);
-    pdf.text(data.agency, 15, 286, { maxWidth: 145 });
+
     pdf.text(`${page} / ${pdf.getNumberOfPages()}`, 195, 286, { align: 'right' });
     if (data.unpaid) pdf.text('Powered by InYice', 105, 292, { align: 'center' });
   }

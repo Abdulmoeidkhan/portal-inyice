@@ -93,6 +93,25 @@ class CompanyProfileApiTest extends TestCase
         $this->assertTrue($ctx['company']->fresh()->sales_can_edit_cost);
     }
 
+    public function test_document_notes_are_scoped_saved_preserved_cleared_and_validated(): void
+    {
+        $ctx = $this->seedCompanyContext('owner');
+        $other = $this->seedCompanyContext('owner');
+        Sanctum::actingAs($ctx['user']);
+        $notes = ['voucher_notes' => "Voucher line one\nVoucher line two", 'itinerary_notes' => 'Arrive early'];
+        $this->post('/api/v1/company-profile', $this->validProfilePayload($notes), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('company.voucher_notes', $notes['voucher_notes'])
+            ->assertJsonPath('company.itinerary_notes', 'Arrive early');
+        $this->getJson('/api/v1/company-profile')->assertOk()->assertJsonPath('company.itinerary_notes', 'Arrive early');
+        $this->assertNull($other['company']->fresh()->voucher_notes);
+        $this->postJson('/api/v1/company-profile', $this->validProfilePayload())->assertOk()
+            ->assertJsonPath('company.itinerary_notes', 'Arrive early');
+        $this->postJson('/api/v1/company-profile', $this->validProfilePayload(['voucher_notes' => '', 'itinerary_notes' => null]))
+            ->assertOk()->assertJsonPath('company.voucher_notes', null)->assertJsonPath('company.itinerary_notes', null);
+        $this->postJson('/api/v1/company-profile', $this->validProfilePayload(['voucher_notes' => str_repeat('a', 10001), 'itinerary_notes' => ['bad']]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['voucher_notes', 'itinerary_notes']);
+    }
+
     /**
      * @return array<string, mixed>
      */

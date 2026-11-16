@@ -744,3 +744,8 @@ No historical backfill and no new tables or foreign-key relationships. Existing 
 
 
 Tax Report (`/api/v1/reports/tax`) reads the existing invoice tax snapshots and confirmed refund order metadata. It adds no tables or columns. Physical invoices supersede virtual refund rows; totals are grouped by currency. Current company tax configuration and payment records are not used to calculate report amounts.
+
+
+### Company document notes
+
+Migration `2026_11_16_000001_add_company_document_notes.php` adds nullable TEXT columns `companies.voucher_notes` and `companies.itinerary_notes`. These optional plain-text defaults are company-scoped and edited through the owner-only Company Profile API (10,000-character limit each). No new relationships or backfill. Voucher order notes take precedence over the voucher default; itinerary notes are read from the current company. Shared voucher responses intentionally expose both fields for public document rendering.

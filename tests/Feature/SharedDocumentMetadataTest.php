@@ -62,6 +62,15 @@ class SharedDocumentMetadataTest extends TestCase
             ->assertSee('/images/icons/icon-512x512.png', false);
     }
 
+    public function test_shared_voucher_exposes_company_document_notes(): void
+    {
+        [$company, $order] = $this->documents();
+        $company->update(['voucher_notes' => 'Voucher default', 'itinerary_notes' => 'Itinerary default']);
+        $this->getJson('/api/v1/shared-vouchers/'.$order->share_token)->assertOk()
+            ->assertJsonPath('company.voucher_notes', 'Voucher default')
+            ->assertJsonPath('company.itinerary_notes', 'Itinerary default');
+    }
+
     private function documents(): array
     {
         $this->withoutVite();

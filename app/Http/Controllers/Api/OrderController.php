@@ -200,6 +200,8 @@ class OrderController extends Controller
             'voucher.flights.*.cabin' => 'nullable|string|max:50',
             'voucher.flights.*.booking_class' => ['nullable', 'regex:/^[A-Z]$/'],
             'voucher.flights.*.baggage' => 'nullable|string|max:50',
+            'voucher.flights.*.passenger_baggage' => 'sometimes|array|list',
+            'voucher.flights.*.passenger_baggage.*' => 'nullable|string|max:50',
             'voucher.flights.*.notes' => 'nullable|string',
             'voucher.passengers' => 'nullable|array',
             'voucher.passengers.*.name' => 'nullable|string|max:255',
@@ -569,7 +571,7 @@ class OrderController extends Controller
             'updated_at',
         ]);
         $order->customer?->setVisible(['name', 'email', 'phone', 'address', 'city', 'country_code', 'postal_code']);
-        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid', 'sales_can_edit_cost']);
+        $order->company?->setVisible(['legal_name', 'display_name', 'email', 'phone', 'address', 'country_code', 'logo_url', 'footer_logo_url', 'is_paid', 'sales_can_edit_cost', 'voucher_notes', 'itinerary_notes']);
         $order->items->each->setVisible(['id', 'description', 'quantity', 'unit_price', 'total_price']);
 
         return response()->json($this->normalizeResponseText($order->toArray()));
@@ -631,6 +633,8 @@ class OrderController extends Controller
             'voucher.flights.*.cabin' => 'nullable|string|max:50',
             'voucher.flights.*.booking_class' => ['nullable', 'regex:/^[A-Z]$/'],
             'voucher.flights.*.baggage' => 'nullable|string|max:50',
+            'voucher.flights.*.passenger_baggage' => 'sometimes|array|list',
+            'voucher.flights.*.passenger_baggage.*' => 'nullable|string|max:50',
             'voucher.flights.*.notes' => 'nullable|string',
             'voucher.passengers' => 'nullable|array',
             'voucher.passengers.*.name' => 'nullable|string|max:255',

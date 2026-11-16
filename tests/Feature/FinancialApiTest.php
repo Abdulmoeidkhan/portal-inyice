@@ -111,6 +111,33 @@ class FinancialApiTest extends TestCase
         $this->assertSame('2026-09-23', Invoice::where('uid', $response->json('invoice.uid'))->firstOrFail()->due_date->toDateString());
     }
 
+    public function test_baggage_is_saved_per_passenger_and_flight(): void
+    {
+        $ctx = $this->seedTenantContext();
+        $payload = [
+            'customer_id' => $ctx['customer']->id, 'currency_code' => 'PKR', 'status' => 'order',
+            'voucher' => [
+                'active_sections' => ['flights'],
+                'passengers' => [['name' => 'Adult'], ['name' => 'Child'], ['name' => 'Infant']],
+                'flights' => [
+                    ['from' => 'KHI', 'to' => 'ISB', 'passenger_baggage' => ['30K', '30K', '10K']],
+                    ['from' => 'ISB', 'to' => 'KHI', 'passenger_baggage' => ['45K', '25K', '10K']],
+                ],
+            ],
+        ];
+        $created = $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertCreated();
+        $order = Order::where('uid', $created->json('order.uid'))->firstOrFail();
+        $this->assertSame($payload['voucher']['flights'], $order->meta['flights']);
+        $payload['voucher']['flights'][1]['passenger_baggage'][1] = '20K';
+        $this->patchJson('/api/v1/orders/'.$order->uid, $payload)->assertOk();
+        $this->assertSame($payload['voucher']['flights'], $order->fresh()->meta['flights']);
+        $payload['voucher']['flights'][0]['passenger_baggage'][0] = str_repeat('K', 51);
+        $this->postJson('/api/v1/orders/create-from-voucher', $payload)->assertUnprocessable()
+            ->assertJsonValidationErrors('voucher.flights.0.passenger_baggage.0');
+        $this->patchJson('/api/v1/orders/'.$order->uid, $payload)->assertUnprocessable()
+            ->assertJsonValidationErrors('voucher.flights.0.passenger_baggage.0');
+    }
+
     public function test_transfer_dates_are_saved_updated_and_validated(): void
     {
         $ctx = $this->seedTenantContext();

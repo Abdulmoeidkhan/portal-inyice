@@ -2,7 +2,103 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff — November 14, 2026
+## Current Development Handoff - November 16, 2026 (production review)
+
+- Reviewed the complete pending diff (company notes, passenger baggage, itinerary preview/download changes). Fixed malformed question-mark separators in baggage labels. Image export now waits for stylesheet links even before their sheet object exists and rejects failed same-origin application CSS rather than downloading an unstyled image; unavailable external fonts retain fallback behavior.
+- Validation: complete backend suite passed (196 tests, 2,489 assertions); all 44 JavaScript tests passed; all 15 changed/new JS/JSX/MJS files parsed. Browser recheck passed desktop/mobile PNG and selectable PDF downloads, no page JS errors or leftover export frames. Earlier notes fallback/ordering and mobile button checks remain valid. Whitespace check passed. No production build, push, deployment, or production database access performed.
+- Database review: the new migration only adds two nullable TEXT fields; no data rewrite/backfill. Existing rows default to null. Owner-only update middleware and tenant/company scoping are unchanged. Omitted notes fields preserve stored values. Shared responses deliberately expose the two public document notes, and React renders them as plain text. Local migration is applied.
+- Dependency audit (`npm audit --omit=dev`): 6 reported vulnerabilities, 2 high and 4 moderate, across axios/follow-redirects/react-router/react-router-dom/exceljs/uuid. These are existing locked dependency versions, unchanged by this work. Lockfile comparison confirms html-to-image 1.11.13 is the only added package; it has no reported advisory in this audit. Do not claim a security-clean release; dependency remediation, including compatibility-sensitive router/Excel changes, remains separate work.
+
+### Required production release steps
+
+1. Include every required new file in the commit: the company-notes migration, ItineraryDocument.jsx, itineraryPreviewImage.jsx, baggage.js, and the new tests; include package.json and package-lock.json. A tracked-files-only commit would omit required imports. Exclude .env, public/hot, local storage artifacts and node_modules.
+2. Use the existing release pipeline and a database backup. Run `npm ci` and the approved production frontend build in CI/staging (not performed here); publish matching generated assets with the PHP/JS source. Existing public/build assets do not include this work.
+3. Before serving the new application version, run `php artisan migrate --force --path=database/migrations/2026_11_16_000001_add_company_document_notes.php` on the production database using the release process. Other pending migrations must be reviewed independently. Database-engine-specific locking and the production server's policies were not tested locally (tests use SQLite).
+4. Refresh application caches through the usual deployment process. Verify owner profile save/clear, an old voucher with no company notes, voucher-specific note precedence, public itinerary, PNG and selectable PDF exports, and mobile action controls on staging and after release. Browser/image export checks here used the dev server, not bundled production assets.
+5. For an application rollback, keep the additive columns in place so saved notes are retained; do not run the migration down merely to roll back code. Revert application and built assets together.
+
+- Next concrete step: run the approved CI/staging production build and release smoke checks, and assess/remediate the existing dependency advisories before declaring production readiness. Graphify refresh and final whitespace check run before completion.
+
+## Previous Development Handoff - November 16, 2026 (company document notes)
+
+- Company Profile has owner-editable Voucher notes and Itinerary notes sections (optional multiline plain text, max 10,000 characters). Added nullable company columns through `2026_11_16_000001_add_company_document_notes.php`; migration applied locally. Existing profile requests omitting these fields preserve saved values; empty values clear them. Deployments must apply this migration.
+- VoucherPreview uses order.notes first, falling back to company.voucher_notes for empty/whitespace notes. Notes follow Emergency Contact(s), or print alone when that contact is empty. Existing voucher print/PDF shares this component.
+- Company itinerary notes appear immediately after flight details behind a separator in the shared preview, PNG image export and selectable PDF. Multiline formatting is retained and long PDF notes paginate. Empty notes omit the whole section. Shared voucher API company allowlist includes both fields. These are current company defaults, not per-order snapshots; changing them affects existing documents using the defaults.
+- Validation: 9 focused backend tests (102 assertions) pass, covering owner access, scoping, multipart save/read, omitted-field preservation, clearing, validation and shared notes. All 24 focused JS tests pass, including long selectable-PDF notes. Changed PHP lint and JSX parsing pass. Playwright verified itinerary separator/mobile overflow and voucher fallback, override and emergency ordering. Existing Google Fonts/Modal warnings persist. No production build; no booking records changed.
+- Next step: owner opens Company Profile, saves the desired notes, then refreshes a voucher/itinerary and downloads or prints it. Graphify refresh and whitespace check run before completion.
+
+## Previous Development Handoff - November 16, 2026 (mobile itinerary action)
+
+- Shared ItineraryButton now uses the same Ant Design sm breakpoint as the neighboring order/invoice actions: icon-only below 576px, icon plus Itinerary label on larger screens. Added title and aria-label for the icon-only button. Dropdown actions are unchanged.
+- Validation: JSX parsing passed. Playwright mounted the actual component and verified 24x24px icon buttons at 390px/575px, visible labels at 576px/1440px, accessible name, and working mobile dropdown. No page JS errors in the final check. No production build. Graphify refresh and whitespace check run before completion.
+- Next step: refresh the mobile order/invoice list to see the compact action aligned with its neighbors.
+
+## Previous Development Handoff - November 16, 2026 (separate image and selectable PDF)
+
+- Added adjacent Download image and Download PDF actions on the itinerary preview and both choices in the itinerary dropdown. PDF is the default for existing download callers.
+- Download image now saves an actual PNG via `itineraryPreviewImage.jsx`, rendering the shared preview component in a desktop iframe. It exports the complete document as one image, with resolution capped for very long documents to stay within canvas limits. Temporary frames/canvases and blob URLs are cleaned up.
+- Download PDF uses selectable text through `itineraryPdf()` again. Brought its design closer to the preview: wrapped agency heading, QR labels, header divider, flight reminder above the grid, separate field labels/values, and baggage beneath each segment. The PDF retains A4 pagination and page numbers; typography is similar rather than pixel-identical. Removed the raster-PDF download path.
+- Validation: all 23 focused itinerary/baggage tests pass; changed JSX parses. Playwright clicked both actions using fixture API responses, verified PNG signature/extension, desktop/mobile PDF downloads, no page JS errors or mobile overflow, and export-frame cleanup. PyMuPDF extracted passenger/ticket/flight/baggage text from the downloaded PDF and confirmed a single passenger-name occurrence; rendered PDF visually inspected. No production build or saved booking mutations.
+- Artifacts: `storage/app/itinerary-review/verify-two-downloads.mjs`, `preview-image.png`, `passenger-baggage.pdf` (now selectable), `selectable-mobile.pdf`, `selectable-1.png`. Existing blocked Google Fonts and Modal deprecation warnings remain. Graphify refresh and diff whitespace check run before completion.
+- Next step: refresh and choose Download PDF for selectable text or Download image for the exact preview appearance.
+
+## Previous Development Handoff - November 16, 2026 (PDF matches preview)
+
+- Extracted the unchanged preview document into `ItineraryDocument.jsx`, shared by the page and PDF exporter. Downloads now use `itineraryPreviewPdf.jsx` to render that component with the actual application CSS in an isolated desktop iframe, embed images/fonts, and capture at 2x resolution into A4 pages. Mobile downloads use the desktop document layout. No backend changes.
+- Added pinned `html-to-image@1.11.13` and lockfile entry. Existing logo loading and QR generation are reused. Export keeps ordinary document sections together, splits oversized blocks at text-line boundaries, and removes its temporary iframe on success/failure. The existing vector `itineraryPdf()` helper remains for compatibility/tests but is no longer used by Download PDF.
+- Tradeoff: downloaded document content is rasterized, so PDF text is not selectable/searchable. The shared web preview retains accessible text. Page breaks are added for A4; there is no separate PDF-only typography or footer.
+- Validation: Playwright exercised actual Download PDF on desktop and mobile with intercepted fixtures; resulting PDFs rendered pixel-identically. A 65-passenger/12-segment export exercised multipage/oversized-block handling. Sample PDF pages were rasterized and visually inspected. No page JS errors, mobile horizontal overflow, or leftover export frames. All 23 existing itinerary/baggage JS tests pass; changed JSX parsing passes. No production build.
+- Existing Google Fonts network restrictions cause fallback fonts in both preview and export and font-embedding console warnings; existing Ant Design Modal warning persists. Browser artifacts/scripts remain under `storage/app/itinerary-review/`, including `verify-preview-export.mjs`, `passenger-baggage.pdf`, `mobile-export.pdf`, `long-export.pdf` and rendered PNGs. Fixtures are not saved business data.
+- Next step: refresh and download using actual booking data; compare with the preview. Graphify refresh and whitespace checks run before completion.
+
+## Previous Development Handoff - November 16, 2026 (single itinerary heading)
+
+- Removed the separate Travel itinerary heading and the divider below the trip title. Preview and PDF now use one heading: ITINERARY followed by the dates and destination. Quotes retain PROPOSED ITINERARY wording.
+- Validation: all 23 focused JS tests pass; ItineraryDetail JSX parses. No production build or browser visual review in this pass. Graphify refresh and diff whitespace check run before completion.
+- Next step: refresh the preview and download a fresh PDF to review with actual booking data.
+
+## Previous Development Handoff - November 16, 2026 (reservation summary placement)
+
+- Moved reservation codes and status into the right column beside Prepared for in preview and PDF. Preview stacks on narrow screens. Removed the eTicket label beside passenger names, preserving ticket values.
+- Validation: 23 focused itinerary/baggage tests pass; ItineraryDetail JSX parses. No production build or repeated browser visual review. Graphify refreshed with existing zero-node/community-label warnings; whitespace check run before completion.
+- Next step: refresh and download a new PDF to review the requested placement with actual booking data.
+
+## Previous Development Handoff - November 16, 2026 (compact PAX baggage)
+
+- Preview and PDF now put eTicket numbers immediately after passenger names in the Prepared for summary. Removed the repeated passenger/ticket tables below every segment.
+- Segment baggage now uses comma-separated PAX labels, for example `PAX 1 30KG, PAX 2 30KG`, using saved allowance text. Original passenger indexes remain aligned when unnamed rows are omitted. Legacy allowances and pricing-only passengers remain supported. Voucher/form baggage formatting is unchanged.
+- Validation: all 23 focused itinerary/baggage JS tests pass, including PDF assertions for a single occurrence of each passenger name, tickets beside names, and correct per-segment allowances. ItineraryDetail JSX parses. No production build. Browser visual review was not repeated for this small text/table-removal change.
+- Next step: refresh the itinerary and download a fresh PDF with actual booking data to review the compact presentation.
+
+## Previous Development Handoff - November 16, 2026 (reference PDF layout)
+
+- Continuation verification: re-read the handoff and queried Graphify; all 23 focused itinerary/baggage JS tests pass, itinerary page/download JSX parses, and `git diff --check` passes (line-ending warnings only). No implementation changes or production build in this continuation. Actual-booking review remains outstanding; next step is to open the updated itinerary and download a fresh PDF for the user's selected booking.
+- Inspected and rasterized the user's two-page Travel Reservation March 28 PDF from Downloads. Applied its segment-based structure after the existing first-page branding/QR header: prepared-for names and reservation references; airline/duration/cabin/status left column with departure/arrival columns; per-passenger baggage line under each segment; passenger/eTicket table below. Replaced the appended per-passenger baggage sections with this presentation. Existing passenger-aligned allowance storage is unchanged.
+- Airline logo appears beside each segment heading when available. No plane graphics or fallback substitute images. Missing logos are omitted. Download no longer fetches takeoff/landing icons. No invented aircraft, terminal, cabin-baggage, meal, emission, or seat values; existing SEAT exclusion remains. Baggage stays labelled Baggage because stored allowances have no checked/cabin classification.
+- Changed itinerary page/CSS/service/download component and corresponding layout regression assertions only; earlier voucher/form/backend edits preserved.
+- Validation: 23 focused JS tests passed and changed JSX parsed. Playwright tested the local app with intercepted sample API data, desktop/mobile layouts, individual segment baggage, and PDF download; no page JS errors or horizontal overflow. Rendered downloaded PDF pages using workspace-local PyMuPDF and visually inspected page 1 and browser screenshot. Existing Google Fonts network block and Modal deprecation warning persist. No production build.
+- Artifacts in storage/app/itinerary-review: reference-1.png/reference-2.png (user PDF), result-1.png/result-2.png (rendered sample), passenger-baggage.pdf, desktop.png/mobile.png. PyMuPDF was installed there with approved network access; no project dependency manifest changed. Fixtures are not saved business data.
+- Next step: user reviews the updated itinerary with their actual booking data. Refresh and download again. Graphify refresh and diff whitespace check run before completion.
+
+## Previous Development Handoff - November 16, 2026 (header placement)
+
+- Itinerary preview now shows company logo/name/contact/address on the left and the QR blocks on the right in a single top header row. Title/trip dates follow below, then passenger/reservation details. Company block is no longer in the passenger summary.
+- PDF uses the same ordering; company branding and QR images are drawn once at the top. Removed the repeated company-name footer; page numbers remain. Existing flight and passenger baggage layouts remain intact.
+- Validation: all 23 focused JS tests pass; JSX parsing passes. Browser checked with full mock company details and two image blocks at desktop/mobile widths, no JS errors or horizontal overflow on final run. Header screenshot visually reviewed. Browser PDF download succeeded; a five-page PDF check confirmed company branding exists on page 1 only. No production build.
+- Review artifacts refreshed in `storage/app/itinerary-review/` (header.png, desktop.png, mobile.png, passenger-baggage.pdf). Mock logos are only test fixtures, not saved company data. Google Fonts remained blocked in the test browser; existing Modal deprecation warning persists.
+- Next step: user reviews header placement using their saved company branding and downloads a fresh PDF. Graphify refreshed; its existing zero-node/community-label warnings persist.
+
+## Previous Development Handoff - November 16, 2026
+
+Task: itinerary-only passenger baggage sections, retaining existing flight layout for user comparison.
+
+- Added `passengerSections` to itinerary data, preserving original passenger indexes even when unnamed rows are filtered. Each section lists the passenger's segment, flight/date, route, and baggage. Legacy flight-level allowances remain supported; missing allowances show Not provided.
+- `ItineraryDetail.jsx`, itinerary CSS, and `itineraryPdf()` now append one section per passenger after the existing flight layout. Earlier Create/Edit, voucher, and backend edits were preserved without further changes in this task. SEAT is unchanged.
+- Validation: 22 existing baggage/itinerary tests plus the new passenger-section PDF regression passed. JSX parsing passed. Playwright Chromium checked the actual shared itinerary component in the local app using intercepted sample API data (no saved orders modified), at 1440px and 390px. Three correct passenger tables, both original flight cards, no mobile horizontal overflow, no page JS errors. Browser Download PDF succeeded; downloaded bytes contain all passenger headings, both routes, and allowances. Google Fonts was network-blocked and the app emitted an existing Ant Design Modal deprecation warning.
+- Review artifacts: `storage/app/itinerary-review/passenger-baggage.pdf`, `desktop.png`, and `mobile.png`. Browser screenshots were visually inspected; PDF contents verified but PDF pages were not rasterized. User's specific saved record was not supplied or checked. No production build run.
+- Next step: user compares old flight layout and appended passenger sections and selects preferred presentation. Refresh itinerary and download a new PDF to see these changes.
+
+## Previous Development Handoff — November 14, 2026
 
 Task: itinerary flight-duration behavior and persistent agent handoff. Earlier itinerary, branding, sharing, voucher, CSS, controller, and test edits are already uncommitted in this workspace; preserve them. This pass changes duration labels, adds edge-case tests, and updates workflow/documentation.
 

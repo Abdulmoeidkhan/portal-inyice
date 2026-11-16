@@ -46,6 +46,8 @@ class CompanyProfileController extends Controller
             'email' => ['nullable', 'email', 'max:200'],
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:1000'],
+            'voucher_notes' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'itinerary_notes' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'country_code' => ['nullable', 'string', 'size:2'],
             'default_timezone' => ['required', 'timezone'],
             'sales_can_edit_cost' => ['sometimes', 'boolean'],
@@ -70,6 +72,12 @@ class CompanyProfileController extends Controller
             'country_code' => isset($validated['country_code']) ? strtoupper($validated['country_code']) : null,
             'default_timezone' => $validated['default_timezone'],
         ]);
+
+        foreach (['voucher_notes', 'itinerary_notes'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $company->{$field} = $validated[$field];
+            }
+        }
 
         if (array_key_exists('sales_can_edit_cost', $validated)) {
             $company->sales_can_edit_cost = (bool) $validated['sales_can_edit_cost'];
@@ -141,6 +149,8 @@ class CompanyProfileController extends Controller
             'email' => $company->email,
             'phone' => $company->phone,
             'address' => $company->address,
+            'voucher_notes' => $company->voucher_notes,
+            'itinerary_notes' => $company->itinerary_notes,
             'country_code' => $company->country_code,
             'base_currency_code' => $company->base_currency_code,
             'default_timezone' => $company->default_timezone,

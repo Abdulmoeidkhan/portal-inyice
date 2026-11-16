@@ -344,7 +344,7 @@ export const buildVoucherFromParsed = (prevVoucher, gdsSource, parsedPayload) =>
           baggage: firstFilled(segment.baggage, segment.baggage_allowance),
           notes: segment.notes || `Segment ${idx + 1}`,
         }))
-      : prevVoucher.flights,
+      : passengers.length ? prevVoucher.flights.map(({ passenger_baggage, ...flight }) => flight) : prevVoucher.flights,
     passengers: passengers.length
       ? passengers.map((pax, idx) => ({
           ...blankPassenger(),

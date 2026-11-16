@@ -1,3 +1,4 @@
+import { baggageSummary } from '../../services/baggage';
 import React from 'react';
 import { Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
@@ -290,7 +291,8 @@ export default function VoucherPreview({ order, highlighted = true }) {
   const companyEmail = firstFilled(company.email, contact.email);
   const companyPhone = firstFilled(company.phone, contact.phone);
   const contactLine = [companyAddress, [companyEmail, companyPhone].filter(Boolean).join(' | ')].filter(Boolean).join('\n');
-  const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(order.notes) || hasValue(company.footer_logo_url);
+  const voucherNotes = firstFilled(order.notes, company.voucher_notes);
+  const footerHasContent = hasValue(voucher.emergency_contact) || hasValue(voucherNotes) || hasValue(company.footer_logo_url);
   const showInyiceWatermark = company && company.is_paid === false;
   const documentLabel = order.status === 'quote' ? 'Quotation' : 'Travel Voucher';
 
@@ -429,7 +431,7 @@ export default function VoucherPreview({ order, highlighted = true }) {
               { title: 'To', dataIndex: 'to', width: 115, render: formatAirport },
               { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '' },
               { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '' },
-              { title: 'Baggage', dataIndex: 'baggage', width: 80, render: (value) => value || '' },
+              { title: 'Baggage', dataIndex: 'baggage', width: 180, alwaysVisible: true, render: (_, row) => baggageSummary(row, voucher.passengers) },
             ]}
           />
         </Section>}
@@ -437,16 +439,16 @@ export default function VoucherPreview({ order, highlighted = true }) {
         {footerHasContent && (
           <section className="voucher-preview-footer">
             <div className="voucher-preview-footer-notes">
-              {voucher.emergency_contact && (
+              {hasValue(voucher.emergency_contact) && (
                 <div>
                   <Text className="voucher-preview-section-title">Emergency Contact(s)</Text>
                   <MultilineText>{voucher.emergency_contact}</MultilineText>
                 </div>
               )}
-              {order.notes && (
+              {voucherNotes && (
                 <div>
                   <Text className="voucher-preview-section-title">Notes</Text>
-                  <MultilineText>{order.notes}</MultilineText>
+                  <MultilineText>{voucherNotes}</MultilineText>
                 </div>
               )}
             </div>

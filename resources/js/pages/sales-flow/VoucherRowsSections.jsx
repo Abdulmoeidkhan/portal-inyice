@@ -1,3 +1,4 @@
+import { passengerBaggage, setPassengerBaggage } from '../../services/baggage';
 import React, { useEffect, useState } from 'react';
 import { Affix, Checkbox, Col, Grid, Input, InputNumber, Row, Select, Tabs, Typography } from 'antd';
 import { getAirportLabel } from './airportLookup';
@@ -39,11 +40,6 @@ const rbdOptions = Array.from({ length: 26 }, (_, index) => {
   const letter = String.fromCharCode(65 + index);
   return { value: letter, label: letter };
 });
-
-const baggageOptions = [
-  '0PC', '1PC', '2PC', '4PC',
-  '0KG', '10KG', '15KG', '20KG', '23KG', '25KG', '30KG', '35KG', '40KG',
-].map((value) => ({ value, label: value }));
 
 const roomTypeOptions = [
   {
@@ -469,10 +465,26 @@ export default function VoucherRowsSections({
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>Departure</Text><Input type="time" value={row.departure} onChange={(e) => setRowField('flights', idx, 'departure', e.target.value)} /></Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>Arrival</Text><Input type="time" value={row.arrival} onChange={(e) => setRowField('flights', idx, 'arrival', e.target.value)} /></Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>Cabin</Text><Select value={row.cabin} options={cabinOptions} onChange={(value) => setRowField('flights', idx, 'cabin', value)} style={{ width: '100%' }} /></Col>
-                <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>Bag</Text><Select value={row.baggage} options={baggageOptions} onChange={(value) => setRowField('flights', idx, 'baggage', value)} style={{ width: '100%' }} /></Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>RBD</Text><Select showSearch value={row.booking_class} options={rbdOptions} onChange={(value) => setRowField('flights', idx, 'booking_class', value)} style={{ width: '100%' }} /></Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>GDS PNR</Text><Input value={row.gds_pnr} onChange={(e) => setRowField('flights', idx, 'gds_pnr', e.target.value)} /></Col>
                 <Col xs={24} sm={12} md={8} lg={4} xl={2}><Text>Airline PNR</Text><Input value={row.pnr} onChange={(e) => setRowField('flights', idx, 'pnr', e.target.value)} /></Col>
+                <Col span={24}>
+                  <Text strong>Baggage per passenger: {row.from || 'From'} to {row.to || 'To'}</Text>
+                  <Row gutter={[8, 8]}>
+                    {voucher.passengers.map((passenger, passengerIndex) => (
+                      <Col xs={24} sm={12} md={8} key={passengerIndex}>
+                        <Text>PAX {passengerIndex + 1}{passenger.name ? ` - ${passenger.name}` : ''}</Text>
+                        <Input
+                          aria-label={`Flight ${idx + 1} PAX ${passengerIndex + 1} baggage`}
+                          placeholder="e.g. 30K, 45K, 2PC"
+                          maxLength={50}
+                          value={passengerBaggage(row, passengerIndex)}
+                          onChange={(e) => setRowField('flights', idx, 'passenger_baggage', setPassengerBaggage(row, voucher.passengers, passengerIndex, e.target.value))}
+                        />
+                      </Col>
+                    ))}
+                  </Row>
+                </Col>
               </Row>
             )}
           </RowGroupCard>

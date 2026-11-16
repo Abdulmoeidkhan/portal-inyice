@@ -1,3 +1,4 @@
+import { removePassengerBaggage } from '../services/baggage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Affix, Alert, Button, Card, Collapse, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, ExclamationCircleOutlined, FileTextOutlined, SaveOutlined } from '@ant-design/icons';
@@ -462,6 +463,10 @@ export default function OrderEdit() {
       if (prev[section].length <= 1) return prev;
 
       const nextVoucher = { ...prev, [section]: prev[section].filter((_, rowIdx) => rowIdx !== idx) };
+
+      if (section === 'passengers') {
+        nextVoucher.flights = removePassengerBaggage(prev.flights, idx);
+      }
 
       if (section === 'passengers' && prev.pricing.length > 1) {
         nextVoucher.pricing = prev.pricing.filter((_, rowIdx) => rowIdx !== idx);

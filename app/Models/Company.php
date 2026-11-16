@@ -25,6 +25,8 @@ class Company extends Model
         'email',
         'phone',
         'address',
+        'voucher_notes',
+        'itinerary_notes',
         'country_code',
         'base_currency_code',
         'default_timezone',

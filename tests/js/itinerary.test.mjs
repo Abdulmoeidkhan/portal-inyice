@@ -39,7 +39,7 @@ test('PDF includes all segments across pages, branding, and quote wording', asyn
   assert.ok(pdf.getNumberOfPages() > 1);
   const output = pdf.output();
   for (let i = 1; i <= 12; i++) assert.ok(output.includes(`TESTFLIGHT-${i}`));
-  for (const value of ['Example Travel', 'PROPOSED TRAVEL ITINERARY', 'EXAMPLE/TRAVELLER MR', '1234567890123', 'travel@example.test']) assert.ok(output.includes(value));
+  for (const value of ['Example Travel', 'PROPOSED ITINERARY', 'EXAMPLE/TRAVELLER MR', '1234567890123', 'travel@example.test']) assert.ok(output.includes(value));
   assert.ok(!output.includes('PRIVATE-PASSPORT'));
 });
 
@@ -141,7 +141,7 @@ test('share URL uses existing public token without posting or copying', async ()
   finally { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; }
 });
 
-test('airline images use flight code and PDF truncates long names with logo', async () => {
+test('airline images use flight code and PDF wraps long names with logo', async () => {
   const { airlineLogoUrl, airlineLogoFallback } = await import('../../resources/js/services/itinerary.js');
   assert.equal(airlineLogoUrl('qr-605'), '/images/airline-logos/QR.png');
   assert.equal(airlineLogoUrl(''), airlineLogoFallback);
@@ -150,7 +150,7 @@ test('airline images use flight code and PDF truncates long names with logo', as
   const logo = { width: 1, height: 1, data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4XmNgYGD4DwABBAEA43qFxAAAAABJRU5ErkJggg==' };
   const pdf = await itineraryPdf(data, logo, { airlines: { J2: logo } }, logo, logo);
   assert.ok(pdf.output().includes('/Subtype /Image'));
-  assert.ok(pdf.output().includes('...'));
+  assert.ok(pdf.output().includes('AN EXTREMELY'));
   assert.ok(!pdf.output().includes(data.flights[0].airline.toUpperCase()));
   assert.equal(Math.round(pdf.internal.pageSize.getWidth()), 210);
 });
@@ -222,4 +222,16 @@ test('duration fallback remains usable for incomplete schedules and unknown airp
   const fallback = itineraryData({ meta: { flights: [{ from: 'KHI', to: 'MED' }] } });
   assert.equal(fallback.flights[0].durationLabel, 'Estimated flight duration');
   assert.ok((await itineraryPdf(fallback)).output().includes('Estimated flight duration'));
+});
+
+test('company itinerary notes follow the last segment and remain selectable across PDF pages', async () => {
+  const data = itineraryData({ ...order, company: { ...order.company, itinerary_notes: 'NOTES START\n' + 'Please verify your documents.\n'.repeat(100) + 'NOTES END', voucher_notes: 'VOUCHER ONLY' } });
+  assert.ok(data.notes.startsWith('NOTES START'));
+  const pdf = await itineraryPdf(data);
+  const output = pdf.output();
+  assert.ok(pdf.getNumberOfPages() > 1);
+  assert.ok(output.indexOf('NOTES START') > output.indexOf('Baggage:'));
+  assert.ok(output.includes('NOTES END'));
+  assert.ok(!output.includes('VOUCHER ONLY'));
+  assert.equal(itineraryData({ ...order, company: { itinerary_notes: '  ' } }).notes, '');
 });
