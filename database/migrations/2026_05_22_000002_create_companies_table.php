@@ -20,6 +20,8 @@ return new class extends Migration
             $table->string('email', 200)->nullable();
             $table->string('phone', 50)->nullable();
             $table->text('address')->nullable();
+            $table->text('voucher_notes')->nullable();
+            $table->text('itinerary_notes')->nullable();
             $table->char('country_code', 2)->nullable();
             $table->char('base_currency_code', 3);
             $table->string('default_timezone', 80)->default('UTC');

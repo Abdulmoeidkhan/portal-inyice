@@ -2,7 +2,15 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 16, 2026 (production review)
+## Current Development Handoff - November 16, 2026 (consolidated company notes migration)
+
+- User confirmed notes columns have already been applied on hosting. Moved nullable voucher_notes and itinerary_notes definitions into the original `2026_05_22_000002_create_companies_table.php` and removed the separate add-company-document-notes migration.
+- Fresh installations create both columns with companies. Existing databases do not rerun the original migration; hosting is already updated per the user. No application database migration, rollback, column deletion, or migration-history edits were performed in this consolidation. Any other existing installation must have the columns provisioned before using notes.
+- An applied entry for the removed migration may remain in the migrations table; it does not rerun during normal migration, and rolling back that removed file is no longer available. Keep the applied columns and notes data.
+- Validation: all 9 focused company-profile/shared-document tests passed (102 assertions) using a fresh in-memory schema; PHP lint and whitespace checks passed. Graphify refreshed. No production frontend build.
+- Next step: deploy the consolidated source and built assets through the release process below; no notes migration is needed on the already-updated hosting database.
+
+## Previous Development Handoff - November 16, 2026 (production review)
 
 - Reviewed the complete pending diff (company notes, passenger baggage, itinerary preview/download changes). Fixed malformed question-mark separators in baggage labels. Image export now waits for stylesheet links even before their sheet object exists and rejects failed same-origin application CSS rather than downloading an unstyled image; unavailable external fonts retain fallback behavior.
 - Validation: complete backend suite passed (196 tests, 2,489 assertions); all 44 JavaScript tests passed; all 15 changed/new JS/JSX/MJS files parsed. Browser recheck passed desktop/mobile PNG and selectable PDF downloads, no page JS errors or leftover export frames. Earlier notes fallback/ordering and mobile button checks remain valid. Whitespace check passed. No production build, push, deployment, or production database access performed.
@@ -11,9 +19,9 @@ This guide describes the current Portal inYice codebase and the conventions to f
 
 ### Required production release steps
 
-1. Include every required new file in the commit: the company-notes migration, ItineraryDocument.jsx, itineraryPreviewImage.jsx, baggage.js, and the new tests; include package.json and package-lock.json. A tracked-files-only commit would omit required imports. Exclude .env, public/hot, local storage artifacts and node_modules.
+1. Include every required new file in the commit: ItineraryDocument.jsx, itineraryPreviewImage.jsx, baggage.js, and the new tests; include package.json and package-lock.json. A tracked-files-only commit would omit required imports. Exclude .env, public/hot, local storage artifacts and node_modules.
 2. Use the existing release pipeline and a database backup. Run `npm ci` and the approved production frontend build in CI/staging (not performed here); publish matching generated assets with the PHP/JS source. Existing public/build assets do not include this work.
-3. Before serving the new application version, run `php artisan migrate --force --path=database/migrations/2026_11_16_000001_add_company_document_notes.php` on the production database using the release process. Other pending migrations must be reviewed independently. Database-engine-specific locking and the production server's policies were not tested locally (tests use SQLite).
+3. Hosting already has both company notes columns per user confirmation. They are now defined in the original companies migration for fresh installations; there is no separate notes migration to run. Other existing installations must provision any missing columns separately. Review other pending migrations independently.
 4. Refresh application caches through the usual deployment process. Verify owner profile save/clear, an old voucher with no company notes, voucher-specific note precedence, public itinerary, PNG and selectable PDF exports, and mobile action controls on staging and after release. Browser/image export checks here used the dev server, not bundled production assets.
 5. For an application rollback, keep the additive columns in place so saved notes are retained; do not run the migration down merely to roll back code. Revert application and built assets together.
 
@@ -21,7 +29,7 @@ This guide describes the current Portal inYice codebase and the conventions to f
 
 ## Previous Development Handoff - November 16, 2026 (company document notes)
 
-- Company Profile has owner-editable Voucher notes and Itinerary notes sections (optional multiline plain text, max 10,000 characters). Added nullable company columns through `2026_11_16_000001_add_company_document_notes.php`; migration applied locally. Existing profile requests omitting these fields preserve saved values; empty values clear them. Deployments must apply this migration.
+- Company Profile has owner-editable Voucher notes and Itinerary notes sections (optional multiline plain text, max 10,000 characters). Initially added notes through a separate migration, applied locally and on hosting (subsequently consolidated into the original companies migration; see current handoff). Existing profile requests omitting these fields preserve saved values; empty values clear them. Fresh installations use the consolidated schema; existing installations must already have the columns.
 - VoucherPreview uses order.notes first, falling back to company.voucher_notes for empty/whitespace notes. Notes follow Emergency Contact(s), or print alone when that contact is empty. Existing voucher print/PDF shares this component.
 - Company itinerary notes appear immediately after flight details behind a separator in the shared preview, PNG image export and selectable PDF. Multiline formatting is retained and long PDF notes paginate. Empty notes omit the whole section. Shared voucher API company allowlist includes both fields. These are current company defaults, not per-order snapshots; changing them affects existing documents using the defaults.
 - Validation: 9 focused backend tests (102 assertions) pass, covering owner access, scoping, multipart save/read, omitted-field preservation, clearing, validation and shared notes. All 24 focused JS tests pass, including long selectable-PDF notes. Changed PHP lint and JSX parsing pass. Playwright verified itinerary separator/mobile overflow and voucher fallback, override and emergency ordering. Existing Google Fonts/Modal warnings persist. No production build; no booking records changed.
