@@ -6,6 +6,8 @@
 
 - MCP endpoint (Streamable HTTP): {{ $resource }}
 - Public connection guide: {{ $issuer }}/connect/ai
+- Public request/response examples: {{ $issuer }}/api-examples
+- Machine-readable example catalog: {{ $issuer }}/api/v1/api-examples
 - OAuth resource metadata: {{ $issuer }}/.well-known/oauth-protected-resource/mcp/agency
 - OAuth authorization server metadata: {{ $issuer }}/.well-known/oauth-authorization-server
 - Connection management: {{ $issuer }}/connect/chatgpt
@@ -27,6 +29,9 @@ If your host cannot add MCP connections, explain that limitation and provide the
 Requires a paid agency plan and a verified, active owner, admin or accounts user in an active company and tenant. Starter/free plans do not include MCP or external API integrations.
 
 - search_customers: Find customers in the authorized agency.
+- list_agency_resources: Discover all accessible record types, fields, scopes, REST paths and report parameters. Start here for broader retrieval.
+- read_agency_data: Paginated read access to orders/vouchers and travel details, invoices, vendors, payments, receipts, allocations, notes, company data, references and manual accounting. Filter child rows by their parent ID. Follow has_more. JSON columns are stored strings; bank account numbers and credentials are excluded.
+- get_agency_report: Portal tax, revenue, profit, performance, aging, balances, payments/receipts and other reports; customer/vendor statements; separate manual accounting statements. Available reports and allowed parameters come from list_agency_resources. Roles are checked on every call.
 - list_outstanding_invoices: List unpaid balances.
 - get_customer_statement: Read a customer statement for a date range.
 - get_account_balance: Read cash and bank balances.

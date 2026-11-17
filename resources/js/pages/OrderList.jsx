@@ -559,7 +559,7 @@ export default function OrderList() {
       key: 'order_number',
       width: compactActions ? 170 : 240,
       render: (value, record) => (
-        <a onClick={() => fetchOrderDetail(record)}>{value}</a>
+        <Button type="link" size="small" onClick={(event) => { event.stopPropagation(); fetchOrderDetail(record); }}>{value}</Button>
       ),
     },
     {

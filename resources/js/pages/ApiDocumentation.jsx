@@ -108,7 +108,8 @@ export default function ApiDocumentation() {
 
   return <Space orientation="vertical" size="large" style={{ width: '100%' }}>
     <div><Typography.Title level={2}>API documentation</Typography.Title>
-      <Typography.Paragraph>API v1 · Browse endpoints, inspect role restrictions and try read requests.</Typography.Paragraph></div>
+      <Typography.Paragraph>API v1 · Browse endpoints, inspect role restrictions and try read requests.</Typography.Paragraph>
+      <Typography.Paragraph><a href="/api-examples" target="_blank" rel="noreferrer">Public read API examples and mock responses</a> · <a href="/api/v1/api-examples" target="_blank" rel="noreferrer">JSON example catalog</a></Typography.Paragraph></div>
     <Card title="Authentication and scope">
       <Typography.Paragraph>All business requests use the signed-in user’s company. External API credentials require a paid agency plan. Portal sign-in uses a bearer token plus its browser cookie.</Typography.Paragraph>
       <Typography.Paragraph>For a dev API token, POST /api/v1/auth/login with the body below. The account must be active and email-verified. Store the returned token securely and send it in Authorization: Bearer YOUR_API_TOKEN. Tokens expire after 30 days. A 409 response means another session is active; force_logout: true revokes that session and existing connections.</Typography.Paragraph>

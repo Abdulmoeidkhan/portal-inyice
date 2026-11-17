@@ -6,7 +6,8 @@
     <p class="muted">Signed in as {{ $user->email }}. Return destination: {{ parse_url($request->input('redirect_uri'), PHP_URL_HOST) }}.</p>
     <div class="notice">
         <strong>This connection can read:</strong>
-        <ul><li>Customers and their contact details</li><li>Outstanding invoices and customer statements</li><li>Cash and bank balances</li><li>Profit reports</li></ul>
+        <ul><li>Customers, vendors, contact details, orders, passenger/travel details and internal notes</li><li>All invoices, payments, receipts, allocations and customer/vendor statements</li><li>Cash/bank balances, ledgers, tax and other business reports</li><li>Company settings, currencies and manual accounting records/reports</li><li>Company users and roles for owner/admin connections only</li></ul>
+        <p>Access follows your current role. Passwords, access/share tokens and bank account numbers are excluded.</p>
         <p>It cannot create or change invoices, record payments, or delete records.</p>
     </div>
     <p>The connected AI service receives the information you ask it to retrieve. You can remove access from your InYice connections page.</p>

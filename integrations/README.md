@@ -19,7 +19,7 @@ The intended owner experience is: find InYice in the client's directory, select 
 | Resource discovery | https://os.inyice.com/.well-known/oauth-protected-resource/mcp/agency |
 | Disconnect | https://os.inyice.com/connect/chatgpt |
 
-InYice currently requires a paid, active agency and a verified active owner, admin or accounts user. The five existing tools are read-only. No user should share a portal token, password or another agency's credentials with an assistant.
+InYice currently requires a paid, active agency and a verified active owner, admin or accounts user. The eight tools are read-only (server 1.1.0 adds resource discovery, business-record reads and report reads). See ../documentations/MCP_API_REFERENCE.md for coverage and public examples. No user should share a portal token, password or another agency's credentials with an assistant.
 
 ## ChatGPT
 
@@ -65,7 +65,7 @@ Source: [Google custom apps requirements and setup](https://support.google.com/g
 | Production unauthenticated initialize | HTTP 401 with `WWW-Authenticate` resource discovery, as expected |
 | Production API documentation URL | HTTP 200 HTML; protected API details not accessed |
 | Local `AgencyMcpTest` + `AgencyOAuthTest` | 28 tests passed, 411 assertions |
-| Local synthetic integration coverage | Initialization, five-tool discovery, read calls, login/consent/exchange, refresh, revocation and cross-agency isolation |
+| Local synthetic integration coverage | Initialization, eight-tool discovery, read calls, login/consent/exchange, refresh, revocation and cross-agency isolation |
 | Live authenticated ChatGPT / Claude / Gemini | Not executed; requires a designated synthetic agency and client-account login |
 | Public directory submission | Not performed |
 
@@ -73,7 +73,7 @@ Local tests use an isolated database and generated test users. No real customer 
 
 ## Live acceptance steps still required
 
-Use a dedicated agency containing only synthetic records. In each eligible client, connect through OAuth, confirm the server identity and five tools, search for a known demo customer and compare the result to the expected test fixture. Verify that a foreign agency's customer is inaccessible, then disconnect and confirm the grant is revoked. Record client/version, date, expected versus actual results and redacted screenshots. Never attach passwords, tokens or customer records to the package.
+Use a dedicated agency containing only synthetic records. In each eligible client, connect through OAuth, confirm the server identity and eight tools, search for a known demo customer and compare the result to the expected test fixture. Verify that a foreign agency's customer is inaccessible, then disconnect and confirm the grant is revoked. Record client/version, date, expected versus actual results and redacted screenshots. Never attach passwords, tokens or customer records to the package.
 
 ## Repackage
 

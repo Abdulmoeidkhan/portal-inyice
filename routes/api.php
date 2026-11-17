@@ -20,6 +20,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RegistrationController;
 
 // Public registration lookup endpoints. Account creation is web-only.
+Route::get('/api-examples', [\App\Http\Controllers\Api\ApiExampleController::class, 'index'])->middleware('throttle:public-api')->name('apiExamples.index');
+Route::get('/api-examples/{example}', [\App\Http\Controllers\Api\ApiExampleController::class, 'show'])->middleware('throttle:public-api')->name('apiExamples.show');
+Route::get('/api-mocks/{example}', [\App\Http\Controllers\Api\ApiExampleController::class, 'mock'])->middleware('throttle:public-api')->name('apiExamples.mock');
 Route::get('/registration/currencies', [RegistrationController::class, 'getCurrencies'])->middleware('throttle:public-api');
 Route::get('/registration/timezones', [RegistrationController::class, 'getTimezones'])->middleware('throttle:public-api');
 Route::get('/registration/check-code', [RegistrationController::class, 'checkAgencyCode'])->middleware('throttle:public-api');
@@ -37,6 +40,9 @@ Route::get('/shared-vouchers/{token}', [OrderController::class, 'shared'])
 
 
 Route::middleware(['auth:sanctum', \App\Http\Middleware\RejectAgencyMcpToken::class, 'active.user', \App\Http\Middleware\EnsureApiAccess::class, \App\Http\Middleware\ReadOnlyDeveloper::class])->group(function () {
+    Route::get('/data', [\App\Http\Controllers\Api\AgencyDataController::class, 'index'])->middleware('role:admin,accounts,dev')->name('agencyData.index');
+    Route::get('/data-reports/{report}', [\App\Http\Controllers\Api\AgencyDataController::class, 'report'])->middleware('role:admin,accounts,dev')->name('agencyData.report');
+    Route::get('/data/{resource}', [\App\Http\Controllers\Api\AgencyDataController::class, 'show'])->middleware('role:admin,accounts,dev')->name('agencyData.show');
     Route::prefix('accounting')->controller(\App\Http\Controllers\Api\AccountingController::class)->middleware([\App\Http\Middleware\RequirePaidFeature::class.':owner,admin,accounts', 'role:admin,accounts'])->group(function () {
         Route::get('/', 'overview')->name('accounting.overview');
         Route::get('/journals', 'index')->name('accounting.journals.index');

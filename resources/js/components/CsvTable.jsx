@@ -418,6 +418,7 @@ function CsvTable({
   exportAllDataSource,
   statementExport,
   pagination,
+  onRow,
   ...props
 }) {
   const [exportingAll, setExportingAll] = React.useState(false);
@@ -533,7 +534,25 @@ function CsvTable({
     }
     : undefined;
 
-  return <AntTable {...props} columns={enhancedColumns} dataSource={dataSource} pagination={tablePagination} title={renderTitle} />;
+  const accessibleRow = (record, index) => {
+    const rowProps = onRow?.(record, index) || {};
+    if (!rowProps.onClick) return rowProps;
+    return {
+      ...rowProps,
+      tabIndex: rowProps.tabIndex ?? 0,
+      onKeyDown: (event) => {
+        rowProps.onKeyDown?.(event);
+        if (event.defaultPrevented || event.target !== event.currentTarget || event.repeat
+          || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          rowProps.onClick(event);
+        }
+      },
+    };
+  };
+
+  return <AntTable {...props} onRow={accessibleRow} columns={enhancedColumns} dataSource={dataSource} pagination={tablePagination} title={renderTitle} />;
 }
 
 CsvTable.Summary = AntTable.Summary;

@@ -1,0 +1,851 @@
+{
+    "aging": {
+        "query": [],
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "buckets": {
+                "current": {
+                    "description": "Not yet due",
+                    "invoices": [],
+                    "total_outstanding": 0,
+                    "count": 0
+                },
+                "days_1_30": {
+                    "description": "1-30 days overdue",
+                    "invoices": [],
+                    "total_outstanding": 0,
+                    "count": 0
+                },
+                "days_31_60": {
+                    "description": "31-60 days overdue",
+                    "invoices": [],
+                    "total_outstanding": 0,
+                    "count": 0
+                },
+                "days_61_90": {
+                    "description": "61-90 days overdue",
+                    "invoices": [],
+                    "total_outstanding": 0,
+                    "count": 0
+                },
+                "days_over_90": {
+                    "description": "Over 90 days overdue",
+                    "invoices": [],
+                    "total_outstanding": 0,
+                    "count": 0
+                }
+            },
+            "summary": {
+                "total_outstanding": 0,
+                "total_invoices": 0
+            }
+        }
+    },
+    "party_balances": {
+        "query": [],
+        "response": {
+            "generated_at": "2026-01-15T00:00:00+00:00",
+            "base_currency": "PKR",
+            "rows": [],
+            "totals": []
+        }
+    },
+    "revenue": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "group_by": "month",
+            "data": [],
+            "summary": {
+                "total_revenue": 0,
+                "total_collected": 0,
+                "total_outstanding": 0,
+                "total_invoices": 0
+            }
+        }
+    },
+    "performance": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "data": [],
+            "summary": {
+                "total_sales": 0,
+                "total_purchase": 0,
+                "total_profit_loss": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "profit": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "filters": {
+                "date_by": "invoice",
+                "group_by": "customer",
+                "entity_id": null,
+                "search": null
+            },
+            "data": [],
+            "details": [],
+            "summary": {
+                "total_orders": 0,
+                "total_rows": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "tax": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "data": [],
+            "summary": {
+                "total_records": 0,
+                "invoice_count": 0,
+                "refund_count": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "discounts": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "filters": {
+                "discount_type": null,
+                "customer_id": null,
+                "search": null
+            },
+            "data": [],
+            "summary": {
+                "total_records": 0,
+                "total_discount": 0,
+                "by_currency": [],
+                "by_type": []
+            }
+        }
+    },
+    "payments": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "direction": "payment",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "data": [],
+            "summary": {
+                "total_records": 0,
+                "customer_records": 0,
+                "vendor_records": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "receipts": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "direction": "receipt",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "data": [],
+            "summary": {
+                "total_records": 0,
+                "customer_records": 0,
+                "vendor_records": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "customer_summary": {
+        "query": [],
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "customers": [],
+            "summary": {
+                "total_customers": 0,
+                "total_revenue": 0,
+                "total_outstanding": 0
+            }
+        }
+    },
+    "dashboard_upcoming": {
+        "query": [],
+        "response": {
+            "report_date": "2026-01-15",
+            "company_id": 1,
+            "period": {
+                "from": "2026-01-15",
+                "to": "2026-02-14",
+                "days": 30
+            },
+            "summary": {
+                "transfers": 0,
+                "departures": 0,
+                "checkins": 0,
+                "checkouts": 0,
+                "notifications": 0
+            },
+            "transfers": [],
+            "departures": [],
+            "checkins": [],
+            "checkouts": [],
+            "notifications": [],
+            "finance": {
+                "period": {
+                    "from": "2026-01-01",
+                    "to": "2026-01-31"
+                },
+                "summary": {
+                    "invoiced": 0,
+                    "refund": 0,
+                    "collected": 0,
+                    "customer_receipts": 0,
+                    "customer_payments": 0,
+                    "outstanding": 0,
+                    "purchase": 0,
+                    "paid": 0,
+                    "vendor_payments": 0,
+                    "vendor_receipts": 0,
+                    "cash_in": 0,
+                    "cash_out": 0,
+                    "profit": 0,
+                    "margin": 0
+                },
+                "mix": [
+                    {
+                        "type": "Collected",
+                        "value": 0
+                    },
+                    {
+                        "type": "Refund",
+                        "value": 0
+                    },
+                    {
+                        "type": "Outstanding",
+                        "value": 0
+                    },
+                    {
+                        "type": "Cash Out",
+                        "value": 0
+                    },
+                    {
+                        "type": "Profit",
+                        "value": 0
+                    }
+                ],
+                "expenses": [],
+                "flow": [
+                    {
+                        "type": "Cash In",
+                        "value": 0
+                    },
+                    {
+                        "type": "Cash Out",
+                        "value": 0
+                    }
+                ],
+                "performance": [
+                    {
+                        "period": "2025-04",
+                        "label": "Apr 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-05",
+                        "label": "May 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-06",
+                        "label": "Jun 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-07",
+                        "label": "Jul 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-08",
+                        "label": "Aug 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-09",
+                        "label": "Sep 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-10",
+                        "label": "Oct 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-11",
+                        "label": "Nov 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2025-12",
+                        "label": "Dec 25",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    },
+                    {
+                        "period": "2026-01",
+                        "label": "Jan 26",
+                        "sales": 0,
+                        "purchase": 0,
+                        "profit_loss": 0
+                    }
+                ],
+                "outstanding": {
+                    "customers": [],
+                    "vendors": [],
+                    "chart": [],
+                    "summary": {
+                        "customer_total": 0,
+                        "vendor_total": 0
+                    }
+                }
+            }
+        }
+    },
+    "cancelled": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "report_date": "2026-01-15",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "scope": "current_company",
+            "data": [],
+            "summary": {
+                "total_records": 0,
+                "by_currency": []
+            }
+        }
+    },
+    "customer_statement": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31",
+            "customer_id": 1
+        },
+        "response": {
+            "customer": {
+                "uid": "01M7N5JVVPZERYNPCZT3Y5D01H",
+                "name": "Example customer",
+                "email": null,
+                "phone": null,
+                "billing_address": null,
+                "is_all": false
+            },
+            "statement_date": "2026-01-15",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "base_currency": "PKR",
+            "customer_currency": "PKR",
+            "base_currency_invoices": [],
+            "customer_currency_invoices": [],
+            "transactions": [],
+            "summary": {
+                "total_invoices": 0,
+                "total_outstanding": 0,
+                "total_paid": 0,
+                "total_receipts": 0,
+                "total_payments": 0,
+                "total_amount": 0
+            }
+        }
+    },
+    "vendor_statement": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31",
+            "vendor_id": 1
+        },
+        "response": {
+            "vendor": {
+                "uid": "01M7N5JVVR4M1F0DV60XZJ6AQQ",
+                "name": "Example vendor",
+                "email": null,
+                "phone": null,
+                "billing_address": null
+            },
+            "statement_date": "2026-01-15",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "base_currency": "PKR",
+            "vendor_currency": "PKR",
+            "transactions": [],
+            "summary": {
+                "opening_balance": 0,
+                "period_payables": 0,
+                "period_refunds": 0,
+                "period_paid": 0,
+                "period_payments": 0,
+                "period_receipts": 0,
+                "outstanding_balance": 0
+            }
+        }
+    },
+    "all_customer_statements": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "customer": {
+                "uid": null,
+                "name": "All Customers",
+                "email": null,
+                "phone": null,
+                "billing_address": null,
+                "is_all": true
+            },
+            "statement_date": "2026-01-15",
+            "period": {
+                "from": "2026-01-01",
+                "to": "2026-01-31"
+            },
+            "base_currency": "PKR",
+            "customer_currency": "PKR",
+            "base_currency_invoices": [],
+            "customer_currency_invoices": [],
+            "transactions": [],
+            "summary": {
+                "total_invoices": 0,
+                "total_outstanding": 0,
+                "total_paid": 0,
+                "total_receipts": 0,
+                "total_payments": 0,
+                "total_amount": 0
+            }
+        }
+    },
+    "accounting_statements": {
+        "query": {
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31"
+        },
+        "response": {
+            "currency_code": "PKR",
+            "from_date": "2026-01-01",
+            "to_date": "2026-01-31",
+            "coverage": "Only posted journals in this accounting ledger. Existing operational transactions are not automatically included.",
+            "accounts": [
+                {
+                    "account_id": 1,
+                    "code": "1000",
+                    "name": "Cash",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 2,
+                    "code": "1010",
+                    "name": "Bank",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 3,
+                    "code": "1100",
+                    "name": "Trade receivables",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 4,
+                    "code": "1200",
+                    "name": "Supplier advances",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 5,
+                    "code": "1300",
+                    "name": "Prepayments",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 6,
+                    "code": "1500",
+                    "name": "Equipment",
+                    "type": "asset",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 7,
+                    "code": "2000",
+                    "name": "Trade payables",
+                    "type": "liability",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 8,
+                    "code": "2100",
+                    "name": "Customer deposits",
+                    "type": "liability",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 9,
+                    "code": "2200",
+                    "name": "Tax payable",
+                    "type": "liability",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 10,
+                    "code": "2300",
+                    "name": "Accrued expenses",
+                    "type": "liability",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 11,
+                    "code": "3000",
+                    "name": "Owner capital",
+                    "type": "equity",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 12,
+                    "code": "3100",
+                    "name": "Retained earnings",
+                    "type": "equity",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 13,
+                    "code": "3200",
+                    "name": "Owner drawings",
+                    "type": "equity",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 14,
+                    "code": "4000",
+                    "name": "Travel sales",
+                    "type": "income",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 15,
+                    "code": "4100",
+                    "name": "Commission income",
+                    "type": "income",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 16,
+                    "code": "4200",
+                    "name": "Other income",
+                    "type": "income",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 17,
+                    "code": "5000",
+                    "name": "Direct travel costs",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 18,
+                    "code": "6000",
+                    "name": "Rent",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 19,
+                    "code": "6100",
+                    "name": "Salaries",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 20,
+                    "code": "6200",
+                    "name": "Utilities",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 21,
+                    "code": "6300",
+                    "name": "Marketing",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 22,
+                    "code": "6400",
+                    "name": "Subscriptions",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 23,
+                    "code": "6500",
+                    "name": "Bank fees",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                },
+                {
+                    "account_id": 24,
+                    "code": "6600",
+                    "name": "Other operating expenses",
+                    "type": "expense",
+                    "opening": "0.0000",
+                    "period_debit": "0.0000",
+                    "period_credit": "0.0000",
+                    "debit": "0.0000",
+                    "credit": "0.0000",
+                    "balance": "0.0000",
+                    "period_balance": "0.0000"
+                }
+            ],
+            "trial_balance": {
+                "debit": "0.0000",
+                "credit": "0.0000",
+                "balanced": true
+            },
+            "profit_loss": {
+                "income": "0.0000",
+                "expenses": "0.0000",
+                "net_profit": "0.0000"
+            },
+            "balance_sheet": {
+                "assets": "0.0000",
+                "liabilities": "0.0000",
+                "equity": "0.0000",
+                "unclosed_earnings": "0.0000",
+                "liabilities_and_equity": "0.0000",
+                "balanced": true
+            }
+        }
+    }
+}

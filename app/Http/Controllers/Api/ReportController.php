@@ -36,8 +36,8 @@ class ReportController extends Controller
         ]);
 
         $report = $this->reportService->cashTransactionReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
             'payment',
@@ -59,7 +59,7 @@ class ReportController extends Controller
             'payment_method' => 'nullable|in:cash,bank_transfer,check,card', 'search' => 'nullable|string|max:100',
         ]);
         return response()->json($this->reportService->cashTransactionReport(
-            (int) auth()->user()->tenant_id, (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id, (int) $request->user()->company_id,
             $validated['from_date'], $validated['to_date'], 'receipt',
             $validated['counterparty_type'] ?? null,
             isset($validated['counterparty_id']) ? (int) $validated['counterparty_id'] : null,
@@ -101,8 +101,8 @@ class ReportController extends Controller
     public function agingReport(Request $request): JsonResponse
     {
         $report = $this->reportService->invoiceAgingReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id
         );
 
         return response()->json($report);
@@ -120,8 +120,8 @@ class ReportController extends Controller
         ]);
 
         $report = $this->reportService->revenueReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
             $validated['group_by'] ?? 'month'
@@ -154,8 +154,8 @@ class ReportController extends Controller
         ]);
 
         return response()->json($this->reportService->performanceReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
         ));
@@ -173,8 +173,8 @@ class ReportController extends Controller
         ]);
 
         $report = $this->reportService->profitReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
             $validated['date_by'] ?? 'invoice',
@@ -197,8 +197,8 @@ class ReportController extends Controller
         ]);
 
         $report = $this->reportService->discountReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id,
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id,
             $validated['from_date'],
             $validated['to_date'],
             $validated['discount_type'] ?? null,
@@ -215,8 +215,8 @@ class ReportController extends Controller
     public function customerSummaryReport(Request $request): JsonResponse
     {
         $report = $this->reportService->customerSummaryReport(
-            (int) auth()->user()->tenant_id,
-            (int) auth()->user()->company_id
+            (int) $request->user()->tenant_id,
+            (int) $request->user()->company_id
         );
 
         return response()->json($report);

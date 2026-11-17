@@ -2,6 +2,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import PageHelp from '../components/PageHelp';
 import AppCalculator from '../components/AppCalculator';
+import KeyboardNavigation from '../components/KeyboardNavigation';
 import TawkToWidget from '../components/TawkToWidget';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Spin, Menu, Button, Dropdown, Avatar, Space, Typography, FloatButton, Drawer, Alert } from 'antd';
@@ -335,6 +336,11 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
     },
   ];
 
+  const accessibleMenuItems = menuItems.filter((item) => {
+    if (item.key === 'accounting-menu') return canAccessAccounting;
+    if (item.key === '/api-documentation') return canAccessApiDocumentation;
+    return true;
+  });
   const navigation = (
     <>
       <div className="brand-block">
@@ -348,11 +354,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
         mode="inline"
         selectedKeys={[selectedKey]}
         defaultOpenKeys={location.pathname.startsWith('/accounting') ? ['accounting-menu'] : []}
-        items={menuItems.filter((item) => {
-          if (item.key === 'accounting-menu') return canAccessAccounting;
-          if (item.key === '/api-documentation') return canAccessApiDocumentation;
-          return true;
-        })}
+        items={accessibleMenuItems}
         onClick={() => setMobileNavOpen(false)}
       />
     </>
@@ -360,6 +362,10 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
 
   return (
     <Layout className="app-shell">
+      <a className="skip-to-content" href="#main-content" onClick={(event) => {
+        event.preventDefault();
+        document.getElementById('main-content')?.focus();
+      }}>Skip to main content</a>
       <Sider
         theme={themeMode === 'dark' ? 'dark' : 'light'}
         breakpoint="lg"
@@ -393,6 +399,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             onClick={() => setMobileNavOpen(true)}
           />
           <Space className="header-actions" size="small">
+            <KeyboardNavigation items={accessibleMenuItems} />
             <PageHelp />
             <ThemeMenuButton
               themeMode={themeMode}
@@ -411,7 +418,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
           </Space>
         </Header>
 
-        <Content className="app-content">
+        <Content className="app-content" id="main-content" role="main" tabIndex={-1}>
           {offline && (
             <Alert
               banner

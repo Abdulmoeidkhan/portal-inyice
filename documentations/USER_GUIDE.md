@@ -2,6 +2,20 @@
 
 This guide explains how an agency user should use the current Portal inYice workspace.
 
+## Using the keyboard
+
+- Press **Ctrl+K** (Windows/Linux) or **Cmd+K** (Mac), or activate **Go to page** in the header. Type a page name and press Enter to open the first match. Down/Up arrows browse matches; Enter opens the focused page. Only pages available in your navigation are listed.
+- Use **Tab** and **Shift+Tab** to move between controls. The first link skips navigation and focuses the page content. A visible outline shows keyboard focus.
+- Use **Enter** or **Space** to activate buttons and focused clickable table rows. Order numbers are keyboard-accessible detail buttons.
+- Use arrow keys in menus and selection controls. **Escape** closes the page menu and standard dismissible dialogs/drawers. The page shortcut stays inactive while a dialog or drawer is open.
+- Form fields keep their normal keyboard behavior: Tab moves onward and Enter in multiline notes starts a new line. Saving remains an explicit action through the form's Save/Create button.
+
+## Read data through MCP or API
+
+Authorized paid owner/admin/accounts users can connect an AI client at `/connect/ai`. Ask it to discover available resources, find orders or vendors, read invoices/payments, or retrieve tax and other reports. Access is read-only and follows your role. No passwords, tokens or bank account numbers are returned.
+
+Visit `/api-examples` without signing in for request/response examples. `/api/v1/api-examples` is the JSON catalog. For example, `/api/v1/api-examples/data.orders` describes the order read request and `/api/v1/api-mocks/data.orders` returns a synthetic response. These public examples contain no live company records. Live API reads require authentication. See [MCP and API reference](MCP_API_REFERENCE.md) for coverage and permissions.
+
 ## Main Purpose
 
 Portal inYice helps a travel agency move from booking data to financial records:

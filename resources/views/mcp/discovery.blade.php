@@ -4,7 +4,8 @@
 
 @section('content')
     <h1>Connect an AI assistant</h1>
-    <p>Ask about your agency's customers, outstanding invoices, statements, balances and profit using a secure, read-only MCP connection.</p>
+    <p>Read your agency's customers, vendors, orders, invoices, payments, receipts, statements, reports and manual accounting through an authenticated, read-only MCP connection.</p>
+    <p><a href="/api-examples">Browse API request/response examples and mock URLs</a></p>
     <p><strong>MCP server URL</strong><br><code>{{ $resource }}</code></p>
     <ol>
         <li>In your AI application's connection settings, add this remote MCP server and choose OAuth authentication.</li>

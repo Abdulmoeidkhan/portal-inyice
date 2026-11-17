@@ -81,6 +81,10 @@ class ApiDocumentationController extends Controller
     private function notes(?string $name): string
     {
         return match ($name) {
+            'agencyData.index' => 'Discover role-filtered business resources, safe fields, scopes and report parameters. Public request/response examples: /api-examples; JSON catalog: /api/v1/api-examples.',
+            'agencyData.show' => 'Read-only record pages: page, per_page (maximum 100), id, uid, search, filter_field and filter_value. The resource catalog lists fields and access restrictions. Child records can be filtered by parent ID. No credentials, share tokens or bank account numbers. Examples: /api/v1/api-examples/data.{resource}.',
+            'agencyData.report' => 'Use a report name and its parameters from GET /api/v1/data. Date periods cannot exceed 366 days. Report-specific role/plan rules apply. Examples: /api/v1/api-examples/report.{report}.',
+            'apiExamples.index', 'apiExamples.show', 'apiExamples.mock' => 'Public synthetic documentation only. No live agency records are queried. Mock URLs never execute the example request; X-InYice-Mock identifies fixture responses.',
             'orders.share' => 'Owner, admin or sales. No body required. Returns 200 with share_url and share_token for this company-owned order. Creates a random 64-character token or reuses the existing one. Dev cannot create share links.',
             'invoices.share' => 'Owner, admin, sales or accounts. No body required. Returns 200 with share_url and share_token for this company-owned invoice. Creates a random 64-character token or reuses the existing one. Dev cannot create share links.',
             'orders.share.revoke' => 'Owner, admin or sales. Returns 200 with success: true. Invalidates the voucher and quotation links for this order. Sharing again generates a new token.',

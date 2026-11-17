@@ -33,7 +33,7 @@ class AgencyMcpTest extends TestCase
         $this->configureOAuthKeys();
     }
 
-    public function test_endpoint_requires_dedicated_valid_token_and_discovers_only_five_read_tools(): void
+    public function test_endpoint_requires_dedicated_valid_token_and_discovers_only_read_tools(): void
     {
         $user = $this->agency();
         $this->rpc(null, 'tools/list')->assertUnauthorized();
@@ -50,6 +50,7 @@ class AgencyMcpTest extends TestCase
         $tools = $this->rpc($token, 'tools/list')->assertOk()->json('result.tools');
         $this->assertEqualsCanonicalizing([
             'search_customers', 'list_outstanding_invoices', 'get_customer_statement', 'get_account_balance', 'get_profit_report',
+            'list_agency_resources', 'read_agency_data', 'get_agency_report',
         ], array_column($tools, 'name'));
         foreach ($tools as $tool) {
             $this->assertTrue($tool['annotations']['readOnlyHint']);

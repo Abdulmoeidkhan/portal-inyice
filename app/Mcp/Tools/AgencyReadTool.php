@@ -41,6 +41,9 @@ abstract class AgencyReadTool extends Tool
             return Response::structured($this->read($user, $data));
         } catch (ModelNotFoundException) {
             return Response::error('Record not found in your agency.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
+            return Response::error($exception->getStatusCode() === 403
+                ? 'Your role or plan does not allow this resource.' : 'Resource not found or unavailable in your agency.');
         }
     }
 

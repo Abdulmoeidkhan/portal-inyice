@@ -14,6 +14,7 @@ Route::post('/registration/register', [RegistrationController::class, 'register'
 Route::get('/llms.txt', [Metadata::class, 'instructions']);
 Route::get('/.well-known/openai-apps-challenge', [Metadata::class, 'verifyDomain']);
 Route::get('/connect/ai', [Metadata::class, 'guide']);
+Route::get('/api-examples', [\App\Http\Controllers\Api\ApiExampleController::class, 'page'])->middleware('throttle:public-api');
 
 Route::get('/support', [SupportController::class, 'show'])->name('support.show');
 Route::post('/support', [SupportController::class, 'store'])
