@@ -12,8 +12,15 @@ class ScopeRepository extends \Laravel\Passport\Bridge\ScopeRepository
     public function finalizeScopes(array $scopes, string $grantType, ClientEntityInterface $clientEntity, ?string $userIdentifier = null, ?string $authCodeId = null): array
     {
         // Apply account status checks to refreshes as well as initial grants.
-        if (! AgencyAccess::eligible(User::find($userIdentifier))) {
+        $user = User::find($userIdentifier);
+        if (! AgencyAccess::eligible($user)) {
             throw OAuthServerException::invalidGrant('This agency account cannot connect.');
+        }
+
+        foreach ($scopes as $scope) {
+            if ($scope->getIdentifier() === 'orders:create' && ! AgencyAccess::canCreateOrders($user)) {
+                throw OAuthServerException::invalidGrant('This role cannot create orders.');
+            }
         }
 
         return parent::finalizeScopes($scopes, $grantType, $clientEntity, $userIdentifier, $authCodeId);

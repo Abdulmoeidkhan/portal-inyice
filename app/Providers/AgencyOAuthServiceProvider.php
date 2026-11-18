@@ -22,7 +22,10 @@ class AgencyOAuthServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Passport::tokensCan(['mcp:use' => 'Read your agency customers, invoices, statements, balances and profit reports']);
+        Passport::tokensCan([
+            'mcp:use' => 'Read your agency business data and reports',
+            'orders:create' => 'Create basic orders in your agency (owner/admin only)',
+        ]);
         Passport::defaultScopes(['mcp:use']);
         Passport::tokensExpireIn(now()->addHour());
         Passport::refreshTokensExpireIn(now()->addDays(30));

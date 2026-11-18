@@ -2,7 +2,51 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 17, 2026 (MCP retrieval and public examples)
+## Current Development Handoff - November 18, 2026 (conservative cleanup)
+
+- Removed the permanently disabled Dashboard demoReport/DEMO_MODE branch after checking its only references; live dashboard behavior remains unchanged. Normalized the loader indentation and App import placement.
+- Moved VAT calculator tests from resources/js/services into tests/js/vatCalculator.test.mjs and updated their import. Removed only the unit scaffolding test that asserted true; retained the feature test that actually checks the application response.
+- Parsed all JS/JSX modules and audited Babel import bindings: no unused imports found (React retained for JSX conventions). Source-reference audit found no unreferenced JS modules except the intended resources/js/app.jsx entry point. These checks do not establish that dynamically referenced PHP/CSS/integration files are unused; none were removed speculatively.
+- Validation: 207 backend tests passed (3,111 assertions), 51 JavaScript tests passed, JSX parsing and whitespace checks passed. Graphify refreshed with existing JSON/community warnings. Prior MCP/startup changes preserved. No production build, migration, deployment or database cleanup.
+- Compatibility question was submitted; pending an answer, public API/MCP interfaces, migrations and integration artifacts are preserved. Next step: review this conservative diff; any broader architecture or compatibility-breaking retirement requires identifying concrete consumers first. Previous release steps below remain outstanding.
+
+## Previous Development Handoff - November 18, 2026 (MCP order creation and portal startup)
+
+- MCP 1.2.0 adds `create_order` for the intersection of existing MCP eligibility and portal creation roles: paid active verified owner/admin only. Accounts remain read-only; sales/dev/provider remain MCP-ineligible. A new explicit `orders:create` OAuth scope is required in addition to `mcp:use`; old read-only grants are not upgraded. Consent, metadata, connection labels and discovery documentation reflect this. Role/scope checks apply to discovery, execution and token grants/refreshes.
+- Basic inputs: existing active customer, description, total selling amount, optional currency/date/passenger/reference/notes. Agency, creator and status are server-controlled. Reuses portal creation validation, numbering and totals; produces one other-service item and status `order`, without invoices/payments/vendor costs/external bookings. See MCP_API_REFERENCE.md.
+- New migration `2026_11_18_000001_create_mcp_order_requests_table.php` stores per-agency UUID request keys and payload hashes; company-row locking and a unique constraint prevent retry duplicates. Changed payload/user and deleted-order retries are rejected. Nullable user/order foreign keys preserve retry history across hard deletion. No application/hosted migration was run; only isolated SQLite test migrations.
+- Portal startup: route pages now load through React.lazy and Suspense instead of eagerly importing all screens. Google Fonts CSS moved from blocking app.css @import to a nonblocking stylesheet link in app.blade.php. Browser checks verified login excludes dashboard/sales/report/internal modules, authenticated navigation loads the requested page, and no page errors (storage/app/mcp-loading-review.mjs). Initial browser retries required correcting fixture cookie consent and company paid-status responses, not application fixes.
+- Validation: full backend suite passed (208 tests, 3,107 assertions); after refining retry-record deletion behavior, focused MCP/OAuth/discovery/company-user tests passed (39 tests, 573 assertions). All 11 touched PHP/test/migration files linted; App JSX parsed; whitespace checks passed. No production build, deployment, publication or live business write performed. Vite dev server started for browser validation.
+- Hosting read-only measurement: https://os.inyice.com/login returned HTML in 2.80s (TTFB 2.55s) in one sample. Hosted main JS app-CZGMRrmd.js advertises 3,665,614 bytes with no Content-Encoding or Cache-Control despite a compressed request; download timed out at 25s after 327,422 bytes. Browser load also timed out. This is evidence of large/uncompressed startup assets, not a controlled latency benchmark or proof of the sole cause.
+- Final browser rerun also passed with the Google Fonts request deliberately left pending, confirming login/navigation do not wait for it. Graphify refreshed successfully (2,507 nodes), with existing zero-node JSON/community-label warnings.
+- Next concrete step: release the PHP/Blade source and retry-table migration; run the approved frontend build/release separately, retain previous hashed chunks for already-open clients, then reconnect MCP with both scopes. Apply/review static-asset compression/cache settings below and measure login again. Hosting configuration and released asset performance remain unverified after fixes.
+
+### Hosting startup follow-up
+
+The public JS response identified Nginx. Merge this example into the existing static-asset location in the server that actually serves `public/build/assets`; preserve its root/proxy mapping. Do not create a conflicting location blindly. `expires` sets Cache-Control without replacing inherited security headers. Keep dynamic HTML, API/OAuth responses and service-worker.js outside this long-lived asset policy.
+
+```nginx
+location ^~ /build/assets/ {
+    # Assumes the existing server root already points to Laravel public/.
+    try_files $uri =404;
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types application/javascript text/javascript text/css application/json image/svg+xml;
+    expires 1y;
+}
+```
+
+Validate the effective config with `nginx -t` before the normal reload. Verify a real GET with Accept-Encoding returns `Content-Encoding: gzip`, `Vary: Accept-Encoding` and a long max-age for hashed assets. Do not cache missing assets or remove old chunks while existing sessions may request them. Configuration references: [Nginx gzip module](https://nginx.org/en/docs/http/ngx_http_gzip_module.html), [Nginx expires](https://nginx.org/en/docs/http/ngx_http_headers_module.html#expires). This snippet has not been applied or tested against the hosting configuration.
+
+## Previous Development Handoff - November 18, 2026 (MCP readiness review)
+
+- Reviewed Graphify context, MCP server registration, routes, reference documentation and connector tool availability. Local server 1.1.0 registers eight tools; this session's installed connector exposes only the original five. Hosting deployment status was not independently verified; the mismatch may require deployment and/or connector schema refresh.
+- Validation rerun: AgencyDataApiTest, AgencyMcpTest, AgencyOAuthTest and DeveloperAccessTest passed (48 tests, 1,105 assertions), using the configured in-memory SQLite test database. No application code changed, production build, migration, deployment or connector update performed.
+- Next concrete step: verify hosted tools/list against the eight local tools; deploy the documented PHP/Blade/JSON release if needed, refresh the connector schema, then verify authorized resource discovery, record reads and reports plus OAuth reconnect/disconnect. Release the API docs frontend link through the approved asset pipeline. Read-only scope remains intentional; write tools require separate requirements.
+
+## Previous Development Handoff - November 17, 2026 (MCP retrieval and public examples)
 
 - Audited the original five-tool MCP server and added list_agency_resources, read_agency_data and get_agency_report (server 1.1.0): 31 scoped business/reference/manual-accounting record types and 16 reports/statements. Existing tools remain compatible. Shared REST reads: GET /api/v1/data, /api/v1/data/{resource}, /api/v1/data-reports/{report}. No migrations or writes added.
 - AgencyDataService uses explicit safe fields, existing company/parent scopes plus book/user scopes for added resources, bounded pagination, approved exact-match fields and bound search values. Accounts users cannot retrieve company users/roles or the cancelled report; dev cannot retrieve manual accounting. MCP paid/OAuth eligibility is unchanged. ReportController now uses its supplied Request user, allowing the shared report service to preserve identity without subrequests or token/middleware bypasses.

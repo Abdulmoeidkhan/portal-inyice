@@ -5,6 +5,7 @@
 @section('content')
     <h1>Connect an AI assistant</h1>
     <p>Read your agency's customers, vendors, orders, invoices, payments, receipts, statements, reports and manual accounting through an authenticated, read-only MCP connection.</p>
+    <p>Owners and admins can also authorize basic order creation by requesting both <code>mcp:use</code> and <code>orders:create</code> during OAuth connection. Existing read-only connections need a new consent flow to enable this. Accounts connections remain read-only; sales and developer logins are not eligible for MCP.</p>
     <p><a href="/api-examples">Browse API request/response examples and mock URLs</a></p>
     <p><strong>MCP server URL</strong><br><code>{{ $resource }}</code></p>
     <ol>

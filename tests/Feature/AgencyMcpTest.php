@@ -254,6 +254,92 @@ class AgencyMcpTest extends TestCase
         $this->assertDatabaseMissing('customers', ['name' => 'Forbidden']);
     }
 
+    public function test_create_order_requires_explicit_scope_and_owner_admin_role(): void
+    {
+        $user = $this->agency();
+        $args = ['request_id' => (string) Str::uuid(), 'customer_id' => $this->customer($user)->id, 'description' => 'Travel service', 'amount' => 1250];
+        $this->callTool($this->token($user), 'create_order', $args)->assertJsonPath('error.code', -32602);
+        foreach (['owner', 'admin', 'accounts'] as $role) {
+            $user->role->update(['code' => $role]);
+            $user->refresh();
+            $token = $this->token($user, ['mcp:use', 'orders:create']);
+            $tools = $this->rpc($token, 'tools/list')->assertOk()->json('result.tools');
+            $create = collect($tools)->firstWhere('name', 'create_order');
+            if ($role === 'accounts') {
+                $this->assertNull($create);
+                $this->callTool($token, 'create_order', $args)->assertJsonPath('error.code', -32602);
+            } else {
+                $this->assertFalse($create['annotations']['readOnlyHint']);
+                $this->assertTrue($create['annotations']['idempotentHint']);
+                $this->assertSame(['mcp:use', 'orders:create'], $create['securitySchemes'][0]['scopes']);
+                $args['request_id'] = (string) Str::uuid();
+                $this->callTool($token, 'create_order', $args)->assertJsonPath('result.structuredContent.success', true);
+            }
+        }
+        $this->assertDatabaseCount('orders', 2);
+        foreach (['sales', 'dev', 'super-admin'] as $role) {
+            $user->role->update(['code' => $role, 'is_system' => $role === 'super-admin']);
+            $this->rpc($this->token($user, ['mcp:use', 'orders:create']), 'tools/list')->assertForbidden();
+        }
+    }
+
+    public function test_basic_mcp_order_is_scoped_attributed_and_retry_safe(): void
+    {
+        $user = $this->agency();
+        $token = $this->token($user, ['mcp:use', 'orders:create']);
+        $args = ['request_id' => (string) Str::uuid(), 'customer_id' => $this->customer($user)->id, 'description' => 'Airport transfer',
+            'amount' => 1250.50, 'currency_code' => 'PKR', 'passenger_name' => 'Test Passenger',
+            'booking_reference' => 'ABC123', 'issue_date' => '2026-11-18', 'notes' => 'Basic MCP order'];
+        $result = $this->callTool($token, 'create_order', $args)
+            ->assertJsonPath('result.structuredContent.replayed', false)->json('result.structuredContent');
+        $order = Order::where('uid', $result['order']['uid'])->firstOrFail();
+        $this->assertSame((int) $user->company_id, (int) $order->company_id);
+        $this->assertSame((int) $user->tenant_id, (int) $order->tenant_id);
+        $this->assertSame((int) $user->id, (int) $order->created_by_user_id);
+        $this->assertSame('order', $order->status);
+        $this->assertSame('1250.5000', $order->total_amount);
+        $this->assertSame('Test Passenger', $order->meta['passengers'][0]['name']);
+        $this->assertSame('Airport transfer', $order->items()->first()->description);
+        $this->assertSame(url('/orders/'.$order->uid.'/voucher'), $result['order_url']);
+        $this->callTool($token, 'create_order', $args)->assertJsonPath('result.structuredContent.replayed', true)
+            ->assertJsonPath('result.structuredContent.order.uid', $order->uid);
+        $this->callTool($token, 'create_order', array_replace($args, ['amount' => 999]))->assertJsonPath('result.isError', true);
+        $order->delete();
+        $this->callTool($token, 'create_order', $args)->assertJsonPath('result.isError', true);
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseCount('mcp_order_requests', 1);
+        $order->forceDelete();
+        $this->assertDatabaseHas('mcp_order_requests', ['request_id' => $args['request_id'], 'order_id' => null]);
+        $this->callTool($token, 'create_order', $args)->assertJsonPath('result.isError', true);
+        $user->delete();
+        $this->assertDatabaseHas('mcp_order_requests', ['request_id' => $args['request_id'], 'user_id' => null]);
+        $this->assertDatabaseCount('orders', 0);
+        foreach (['invoices', 'payments', 'receipts', 'order_vendor_costs'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
+    }
+
+    public function test_mcp_order_rejects_foreign_customers_overrides_and_invalid_details(): void
+    {
+        $user = $this->agency();
+        $customer = $this->customer($user);
+        $token = $this->token($user, ['mcp:use', 'orders:create']);
+        $args = ['request_id' => (string) Str::uuid(), 'customer_id' => $customer->id, 'description' => 'Service', 'amount' => 100];
+        foreach ([$this->agency($user->tenant), $this->agency()] as $other) {
+            $this->callTool($token, 'create_order', array_replace($args, ['customer_id' => $this->customer($other)->id]))
+                ->assertJsonPath('result.isError', true);
+        }
+        foreach ([['company_id' => $user->company_id], ['tenant_id' => $user->tenant_id], ['created_by_user_id' => $user->id],
+            ['status' => 'invoice'], ['voucher' => ['company_id' => 1]], ['amount' => -1], ['amount' => 1.12345],
+            ['description' => '   '], ['currency_code' => 'bad'], ['issue_date' => 'yesterday'], ['request_id' => 'bad']] as $invalid) {
+            $this->callTool($token, 'create_order', array_replace($args, $invalid))->assertJsonPath('result.isError', true);
+        }
+        $customer->update(['is_active' => false]);
+        $this->callTool($token, 'create_order', $args)->assertJsonPath('result.isError', true);
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('mcp_order_requests', 0);
+    }
+
     private function apiRequest(string $token, string $cookie = ''): TestResponse
     {
         $this->app['auth']->forgetGuards();

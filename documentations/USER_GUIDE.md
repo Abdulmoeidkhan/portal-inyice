@@ -2,6 +2,10 @@
 
 This guide explains how an agency user should use the current Portal inYice workspace.
 
+## Creating a basic order through an AI assistant
+
+A paid agency owner/admin must reconnect their MCP client with `mcp:use` and `orders:create` and approve the displayed order-creation permission. Ask the assistant to find an existing customer, then provide a service description and total selling amount. Passenger name, booking reference, currency, issue date and notes are optional. The assistant receives a link to the new order; finish detailed travel services in the portal. Creating an order does not issue an invoice, record payment or book travel. Accounts connections stay read-only; sales/developer users do not have MCP access. Existing read-only connections retain their permissions until explicitly reauthorized.
+
 ## Using the keyboard
 
 - Press **Ctrl+K** (Windows/Linux) or **Cmd+K** (Mac), or activate **Go to page** in the header. Type a page name and press Enter to open the first match. Down/Up arrows browse matches; Enter opens the focused page. Only pages available in your navigation are listed.

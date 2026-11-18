@@ -11,7 +11,7 @@
     @forelse($connections as $connection)
         <div class="connection">
             <strong>{{ $connection->client->name }}</strong>
-            <p class="muted">Read-only agency access · Connected {{ $connection->created_at->format('j M Y') }}</p>
+            <p class="muted">{{ in_array('orders:create', $connection->scopes ?? [], true) ? 'Agency read access and basic order creation (owner/admin only)' : 'Read-only agency access' }} · Connected {{ $connection->created_at->format('j M Y') }}</p>
             <form method="POST" action="{{ route('mcp.disconnect', $connection->client_id) }}">
                 @csrf
                 @method('DELETE')

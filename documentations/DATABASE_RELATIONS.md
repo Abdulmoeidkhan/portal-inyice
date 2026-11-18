@@ -4,6 +4,10 @@ This document describes the current database shape from the Laravel models and m
 
 ## Core Tenant Structure
 
+### mcp_order_requests
+
+Durable retry protection for MCP `create_order`. Stores `uid`, authenticated `tenant_id`, `company_id`, creator `user_id`, caller UUID `request_id`, SHA-256 `payload_hash`, resulting `order_id` and timestamps. Unique `(company_id, request_id)` plus a company-row transaction lock prevents concurrent duplicate creation. Reads constrain tenant and company. User/order foreign keys become null on hard deletion, retaining the used request ID; a retry cannot recreate a deleted order. Tenant/company deletion is restricted while these records exist. This internal table is excluded from data catalogs and exports. Migration: `2026_11_18_000001_create_mcp_order_requests_table.php`; retain retry history during application rollback.
+
 ### tenants
 
 Represents one agency workspace or the internal provider workspace.

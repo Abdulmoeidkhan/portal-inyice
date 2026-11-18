@@ -2,7 +2,7 @@
 
 For the current ChatGPT, Claude and Gemini connection package, compatibility findings and test results, see [the client integration guide](../integrations/README.md) (2026-10-13). The deployment section below is historical operator guidance, not a requirement to rebuild or redeploy an already working server.
 
-The project exposes a read-only HTTP MCP server at `/mcp/agency`. MCP lets a compatible AI client discover named tools, understand their inputs, and request live data. The model runs in your chosen AI application; Laravel authenticates each call and runs the accounting queries. No model API key is needed by this Laravel server.
+The project exposes an HTTP MCP server at `/mcp/agency` with eight read tools and optional basic order creation. MCP lets a compatible AI client discover named tools, understand their inputs, and request live data. The model runs in your chosen AI application; Laravel authenticates each call. No model API key is needed by this Laravel server. See [the current MCP reference](MCP_API_REFERENCE.md) for order arguments, role checks, retry protection and the required migration.
 
 Users can now connect through OAuth: ChatGPT opens InYice, the user signs in and approves read access, and ChatGPT receives a renewable access token. Users do not run terminal commands or paste passwords into chat. This repository does not include a published ChatGPT directory listing, an embedded chat interface, or financial writes.
 
@@ -72,7 +72,7 @@ Users manage and remove their own connections at `https://os.inyice.com/connect/
 
 OAuth access tokens expire after one hour. Refresh tokens rotate on use and expire after 30 days from issuance; ChatGPT can renew access without asking for the agency password again. Changing a user's password, role, company, tenant, verification or active status revokes that user's OAuth grants. A forced portal logout also revokes OAuth grants. Inactive agencies and tenants are checked on every MCP call and token refresh.
 
-OAuth tokens are signed, checked for issuer and MCP audience, and restricted to `mcp:use`. All five tools remain read-only and enforce the authenticated user's company and tenant. OAuth browser sign-in uses its own session guard, so connecting ChatGPT does not take over the portal's existing login session. The standard portal APIs continue using Sanctum and do not accept these OAuth credentials.
+OAuth tokens are signed and checked for issuer and MCP audience. `mcp:use` grants the eight read tools. Owners/admins may explicitly authorize the additional `orders:create` scope to use `create_order`; accounts remain read-only. Existing connections cannot gain write access through refresh alone. Every tool enforces the authenticated user's company and tenant. OAuth browser sign-in uses its own session guard, so connecting ChatGPT does not take over the portal's existing login session. The standard portal APIs continue using Sanctum and do not accept these OAuth credentials.
 
 ## Plan eligibility and portal access
 

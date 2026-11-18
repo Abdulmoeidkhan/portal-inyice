@@ -22,9 +22,25 @@ class AgencyAccess
         $token = $user?->currentAccessToken();
 
         if (! self::eligible($user) || ! $token instanceof AccessToken
-            || $token->oauth_scopes !== ['mcp:use'] || $token->revoked
+            || ! in_array('mcp:use', $token->oauth_scopes, true)
+            || array_diff($token->oauth_scopes, ['mcp:use', 'orders:create']) || $token->revoked
             || ! $token->expires_at?->isFuture()) {
             throw new AuthorizationException('MCP access requires a paid agency plan, an active owner, admin or accounts user, and an authorized OAuth connection.');
+        }
+
+        return $user;
+    }
+
+    public static function canCreateOrders(?User $user): bool
+    {
+        return self::eligible($user) && $user->hasAnyRole(['admin']);
+    }
+
+    public static function authorizeOrderCreation(?User $user): User
+    {
+        $user = self::authorize($user);
+        if (! self::canCreateOrders($user) || ! $user->tokenCan('orders:create')) {
+            throw new AuthorizationException('Order creation requires an owner/admin and a connection authorized for orders:create.');
         }
 
         return $user;

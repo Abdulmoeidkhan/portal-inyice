@@ -39,50 +39,59 @@ import {
 } from '../services/offlineCache';
 import ThemeMenuButton from '../components/ThemeMenuButton';
 
-// Components
-import InvoiceList from './InvoiceList';
-import ApiDocumentation from './ApiDocumentation';
-import DeveloperData from './DeveloperData';
 import { accountingSections } from './accounting/sections';
 
-import OrderList from './OrderList';
-import OrderEdit from './OrderEdit';
-import AgingReport from './AgingReport';
-import PartyBalances from './PartyBalances';
-import RevenueReport from './RevenueReport';
-import PerformanceReport from './PerformanceReport';
-import ProfitReport from './ProfitReport';
-import DiscountReport from './DiscountReport';
-import TaxReport from './TaxReport';
-import VatCalculator from './VatCalculator';
-import ProfitShares from './ProfitShares';
-import PaymentReport from './PaymentReport';
-import InvoiceDetail from './InvoiceDetail';
-import VoucherDetail from './VoucherDetail';
-import ItineraryDetail from './ItineraryDetail';
-import QuotationDetail from './QuotationDetail';
-import CounterpartyTransaction from './CounterpartyTransaction';
-import Login from './Login';
-import Register from './Register';
-import ForgotPassword from './ForgotPassword';
-import ResetPassword from './ResetPassword';
-import Dashboard from './Dashboard';
-import CompanyProfile from './CompanyProfile';
-import CompanyUsers from './CompanyUsers';
-import InternalPortal from './InternalPortal';
-import UserProfile from './UserProfile';
-import SalesFlow from './SalesFlow';
-import Payments from './Payments';
-import PaymentHistory from './PaymentHistory';
-import Receivings from './Receivings';
-import CustomerList from './CustomerList';
-import VendorList from './VendorList';
-import CustomerStatement from './CustomerStatement';
-import VendorStatement from './VendorStatement';
-import VendorPayments from './VendorPayments';
-import CancelledReport from './CancelledReport';
-import ReferenceSearch from './ReferenceSearch';
-import CustomerRefundAllocation from './CustomerRefundAllocation';
+// Components
+const InvoiceList = lazy(() => import('./InvoiceList'));
+const ApiDocumentation = lazy(() => import('./ApiDocumentation'));
+const DeveloperData = lazy(() => import('./DeveloperData'));
+
+const OrderList = lazy(() => import('./OrderList'));
+const OrderEdit = lazy(() => import('./OrderEdit'));
+const AgingReport = lazy(() => import('./AgingReport'));
+const PartyBalances = lazy(() => import('./PartyBalances'));
+const RevenueReport = lazy(() => import('./RevenueReport'));
+const PerformanceReport = lazy(() => import('./PerformanceReport'));
+const ProfitReport = lazy(() => import('./ProfitReport'));
+const DiscountReport = lazy(() => import('./DiscountReport'));
+const TaxReport = lazy(() => import('./TaxReport'));
+const VatCalculator = lazy(() => import('./VatCalculator'));
+const ProfitShares = lazy(() => import('./ProfitShares'));
+const PaymentReport = lazy(() => import('./PaymentReport'));
+const InvoiceDetail = lazy(() => import('./InvoiceDetail'));
+const VoucherDetail = lazy(() => import('./VoucherDetail'));
+const ItineraryDetail = lazy(() => import('./ItineraryDetail'));
+const QuotationDetail = lazy(() => import('./QuotationDetail'));
+const CounterpartyTransaction = lazy(() => import('./CounterpartyTransaction'));
+const Login = lazy(() => import('./Login'));
+const Register = lazy(() => import('./Register'));
+const ForgotPassword = lazy(() => import('./ForgotPassword'));
+const ResetPassword = lazy(() => import('./ResetPassword'));
+const Dashboard = lazy(() => import('./Dashboard'));
+const CompanyProfile = lazy(() => import('./CompanyProfile'));
+const CompanyUsers = lazy(() => import('./CompanyUsers'));
+const InternalPortal = lazy(() => import('./InternalPortal'));
+const UserProfile = lazy(() => import('./UserProfile'));
+const SalesFlow = lazy(() => import('./SalesFlow'));
+const Payments = lazy(() => import('./Payments'));
+const PaymentHistory = lazy(() => import('./PaymentHistory'));
+const Receivings = lazy(() => import('./Receivings'));
+const CustomerList = lazy(() => import('./CustomerList'));
+const VendorList = lazy(() => import('./VendorList'));
+const CustomerStatement = lazy(() => import('./CustomerStatement'));
+const VendorStatement = lazy(() => import('./VendorStatement'));
+const VendorPayments = lazy(() => import('./VendorPayments'));
+const CancelledReport = lazy(() => import('./CancelledReport'));
+const ReferenceSearch = lazy(() => import('./ReferenceSearch'));
+const CustomerRefundAllocation = lazy(() => import('./CustomerRefundAllocation'));
+
+function PageRoutes({ children }) {
+  return (
+    <Suspense fallback={<div className="center-screen" role="status" aria-label="Loading page"><Spin /></div>}>
+      <Routes>{children}</Routes>
+    </Suspense>
+  );
+}
 
 const accountingPages = {
   accounts: lazy(() => import('./accounting/ChartOfAccounts')),
@@ -429,13 +438,13 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
             />
           )}
           <div key={location.pathname} className="route-transition">
-            {user?.role === 'dev' ? <Routes>
+            {user?.role === 'dev' ? <PageRoutes>
               {accountingRoutes}
               <Route path="/" element={<DeveloperData />} />
               <Route path="/profile/user" element={<UserProfile />} />
               <Route path="/api-documentation" element={canAccessApiDocumentation ? <ApiDocumentation /> : <Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes> : <Routes>
+            </PageRoutes> : <PageRoutes>
               {accountingRoutes}
               <Route path="/api-documentation" element={canAccessApiDocumentation ? <ApiDocumentation /> : <Navigate to="/" replace />} />
               <Route path="/" element={<Dashboard />} />
@@ -474,7 +483,7 @@ function AuthenticatedLayout({ menuItems, onLogout, themeMode, themeStyle, compa
               <Route path="/statements/customers" element={canAccessReports ? <CustomerStatement /> : <Navigate to="/" replace />} />
               <Route path="/statements/vendors" element={canAccessReports ? <VendorStatement /> : <Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />
-            </Routes>}
+            </PageRoutes>}
           </div>
           <footer className="app-connection-footer">
             <a href="/connect/ai">Connect an AI assistant via MCP</a> · <a href="/llms.txt">AI connection instructions</a>
@@ -896,7 +905,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
 
   if (!isAuthenticated) {
     return (
-      <Routes>
+      <PageRoutes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
@@ -906,7 +915,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      </PageRoutes>
     );
   }
 
@@ -922,7 +931,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
     );
 
     return (
-      <Routes>
+      <PageRoutes>
         <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
@@ -934,12 +943,12 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         <Route path="/" element={<Navigate to="/internal" replace />} />
         <Route path="/internal/*" element={internalPortal} />
         <Route path="*" element={<Navigate to="/internal" replace />} />
-      </Routes>
+      </PageRoutes>
     );
   }
 
   return (
-    <Routes>
+    <PageRoutes>
       <Route path="/shared/invoices/:token" element={<InvoiceDetail shared />} />
       <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
       <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
@@ -964,6 +973,6 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
           />
         }
       />
-    </Routes>
+    </PageRoutes>
   );
 }

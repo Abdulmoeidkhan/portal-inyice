@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateVat, formatVatMoney } from './vatCalculator.js';
+import { calculateVat, formatVatMoney } from '../../resources/js/services/vatCalculator.js';
 
 test('adds mixed rates and groups equivalent decimal rates', () => {
   const result = calculateVat([{ amount: '100', rate: '5' }, { amount: '200', rate: '5.00' }, { amount: '80', rate: '12.5' }, { amount: '20', rate: '0' }]);

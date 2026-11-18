@@ -49,14 +49,18 @@ class AgencyOAuthController extends Controller
             'redirect_uri' => 'required|url', 'code_challenge' => 'required|regex:/^[A-Za-z0-9_-]{43}$/',
             'code_challenge_method' => 'required|in:S256',
             'resource' => ['required', 'string', Rule::in([Metadata::resource()])],
-            'scope' => 'sometimes|in:mcp:use', 'state' => 'required|string|max:2048',
+            'scope' => ['sometimes', 'string', Rule::in(['mcp:use', 'mcp:use orders:create', 'orders:create mcp:use'])], 'state' => 'required|string|max:2048',
         ]);
         if ($validator->fails()) {
             return response()->json(['error' => 'invalid_request', 'error_description' => $validator->errors()->first()], 400);
         }
 
-        // Show the agency and read permissions on every new linking request.
-        $request->merge(['prompt' => 'consent', 'scope' => 'mcp:use']);
+        $scope = $request->input('scope', 'mcp:use');
+        if (in_array('orders:create', explode(' ', $scope), true)) {
+            abort_unless(AgencyAccess::canCreateOrders($request->user()), 403, 'Only owners and admins can authorize order creation.');
+        }
+        // Always show the agency and the exact requested permissions.
+        $request->merge(['prompt' => 'consent', 'scope' => $scope]);
         $request->session()->put('mcp_authorizing_user', $request->user()->id);
         $request->session()->put('mcp_authorization_url', '/oauth/authorize?'.http_build_query($request->query()));
 

@@ -1,4 +1,22 @@
-# Read-only MCP and API reference
+# MCP and retrieval API reference
+
+## Basic order creation (server 1.2.0)
+
+`create_order` is the only write tool. It requires a paid, active, verified owner/admin and an OAuth connection granted **both** `mcp:use` and `orders:create`. Existing `mcp:use` connections stay read-only; reconnect requesting both scopes and approve the order-creation consent. Accounts users cannot authorize or execute it. Sales/dev/provider users remain ineligible for MCP (sales can still create orders through the portal).
+
+Required arguments: `request_id` (new UUID for each intended order), `customer_id` (existing active customer found with `search_customers`), `description` (up to 255 characters), `amount` (total selling amount, 0–999999999, up to four decimal places). Optional: `currency_code` (three uppercase letters, default agency base currency), `issue_date` (YYYY-MM-DD, default agency-local today), `passenger_name`, `booking_reference`, `notes` (up to 5000 characters).
+
+The tool creates a normal `order` with one other-service item at quantity 1 through the portal creation flow. It returns the order UID, number, customer, status, currency, total, issue date, booking reference, voucher URL and `replayed` flag. It does not create customers, issue invoices, record payments, assign suppliers/costs or book travel. Agency, tenant, creator and status cannot be supplied or overridden. Complete detailed travel/services in the portal afterwards.
+
+Retry with the same request ID **and identical arguments**. A durable per-company request record and company-row transaction lock prevent duplicate creation. Changed arguments or another user reusing that key are rejected. Deleted orders are not recreated by retries. Apply `2026_11_18_000001_create_mcp_order_requests_table.php` before enabling this tool; no existing business data is rewritten. Keep this table when rolling back application code so retry history is retained.
+
+Example MCP arguments (replace the illustrative customer ID and generate a fresh request UUID):
+
+```json
+{"request_id":"76ce0e8c-c7dc-4fd4-8e61-c215df7cf001","customer_id":123,"description":"Airport transfer","amount":1250.50,"currency_code":"PKR","passenger_name":"Example Passenger","issue_date":"2026-11-18"}
+```
+
+OAuth clients must request `scope=mcp:use orders:create`; tool discovery exposes the write tool only after this consent. This does not grant access to portal write APIs. The public examples/mocks below remain retrieval examples only.
 
 ## Coverage audit
 
@@ -71,4 +89,4 @@ Record samples are synthetic illustrations, not valid create-request templates. 
 
 Validation: `php artisan test --filter="AgencyDataApiTest|AgencyMcpTest|AgencyOAuthTest|DeveloperAccessTest"`. To intentionally regenerate report fixtures, set `UPDATE_API_EXAMPLES=1` for `php artisan test --filter=test_every_report_executes_and_public_report_examples_are_synthetic`, then clear the environment variable and review the JSON diff. The generator asserts the SQLite database is `:memory:`. Normal tests do not rewrite fixtures.
 
-Deploy all new PHP, Blade and fixture files together and refresh route/application caches using the normal release process. No migration is added. The API documentation UI link needs the normal approved frontend asset release; no production build was run during implementation. Refresh/reconnect the MCP client after deployment if it caches the previous five-tool schema. Local verification does not publish new tools to the hosted server or installed connector automatically.
+Deploy all PHP, Blade and fixture files together and refresh route/application caches using the normal release process. The retrieval release added no migration; order creation in 1.2.0 requires the retry-table migration documented above. Frontend page splitting and the API documentation link need the normal approved frontend asset release. Refresh/reconnect the MCP client after deployment if it caches older schemas, requesting both scopes when order creation is wanted. Local verification does not publish tools or assets to hosting automatically.

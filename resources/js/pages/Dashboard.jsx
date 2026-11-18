@@ -18,175 +18,7 @@ import { openRoute } from '../services/navigation';
 
 const { Text, Title } = Typography;
 
-const DEMO_MODE = false;
 const SERVICE_COLORS = ['#ffc233', '#ff7a1a', '#8a4df6', '#d899f9', '#5cc8ff', '#c4c9d4'];
-
-const demoReport = {
-  finance: {
-    summary: {
-      invoiced: 2487500,
-      collected: 1935000,
-      purchase: 1718000,
-      refund: 126500,
-      paid: 1492000,
-    },
-
-    outstanding: {
-      summary: {
-        customer_total: 782500,
-        vendor_total: 516250,
-      },
-
-      customers: [
-        { name: 'Horizon Travel', amount: 245000 },
-        { name: 'Blue Sky Holidays', amount: 184500 },
-        { name: 'Al Noor Tours', amount: 151000 },
-        { name: 'Citywide Travels', amount: 112000 },
-        { name: 'Walk-in Customers', amount: 90000 },
-      ],
-
-      vendors: [
-        { name: 'Airline Supplier', amount: 168000 },
-        { name: 'Hotel Partner', amount: 132500 },
-        { name: 'Visa Vendor', amount: 87500 },
-        { name: 'Transport Partner', amount: 74250 },
-        { name: 'Other Services', amount: 54000 },
-      ],
-    },
-
-    expenses: [
-      { type: 'Flights', value: 1160000 },
-      { type: 'Hotels', value: 435000 },
-      { type: 'Visas', value: 187500 },
-      { type: 'Transfers', value: 94500 },
-      { type: 'Activities', value: 62500 },
-      { type: 'Other', value: 38500 },
-    ],
-
-    performance: [
-      { period: '2026-03', label: 'Mar 26', sales: 2140000, purchase: 1575000, profit_loss: 565000 },
-      { period: '2026-04', label: 'Apr 26', sales: 2350000, purchase: 1690000, profit_loss: 660000 },
-      { period: '2026-05', label: 'May 26', sales: 1960000, purchase: 1510000, profit_loss: 450000 },
-      { period: '2026-06', label: 'Jun 26', sales: 2865000, purchase: 1940000, profit_loss: 925000 },
-      { period: '2026-07', label: 'Jul 26', sales: 2470000, purchase: 1710000, profit_loss: 760000 },
-      { period: '2026-08', label: 'Aug 26', sales: 3120000, purchase: 2180000, profit_loss: 940000 },
-      { period: '2026-09', label: 'Sep 26', sales: 2487500, purchase: 1718000, profit_loss: 769500 },
-    ],
-  },
-
-  checkins: [
-    {
-      key: 'demo-checkin-1',
-      title: 'Makkah Hotel Check-in',
-      date: '27 Aug 2026',
-      time: '14:00',
-      relative_label: 'Tomorrow',
-      days_until: 1,
-      customer_name: 'Ahmed Khan',
-      order_number: 'ORD-1048',
-      booking_reference: 'HTL8X2',
-      description: '3 nights · Double room · Breakfast included',
-      order_uid: null,
-    },
-    {
-      key: 'demo-checkin-2',
-      title: 'Madinah Hotel Check-in',
-      date: '29 Aug 2026',
-      time: '15:00',
-      relative_label: 'In 3 days',
-      days_until: 3,
-      customer_name: 'Fatima Ali',
-      order_number: 'ORD-1053',
-      booking_reference: 'MDN4Q7',
-      description: '4 nights · Triple room',
-      order_uid: null,
-    },
-    {
-      key: 'demo-checkin-3',
-      title: 'Dubai Hotel Check-in',
-      date: '01 Sep 2026',
-      time: '14:00',
-      relative_label: 'In 6 days',
-      days_until: 6,
-      customer_name: 'Usman Raza',
-      order_number: 'ORD-1061',
-      booking_reference: 'DXB7P9',
-      description: '2 rooms · 5 nights',
-      order_uid: null,
-    },
-  ],
-
-  checkouts: [
-    {
-      key: 'demo-checkout-1',
-      title: 'Makkah Hotel Check-out',
-      date: '28 Aug 2026',
-      time: '12:00',
-      relative_label: 'In 2 days',
-      days_until: 2,
-      customer_name: 'Sara Malik',
-      order_number: 'ORD-1039',
-      booking_reference: 'MKK2J6',
-      description: 'Airport transfer scheduled after check-out',
-      order_uid: null,
-    },
-    {
-      key: 'demo-checkout-2',
-      title: 'Madinah Hotel Check-out',
-      date: '31 Aug 2026',
-      time: '12:00',
-      relative_label: 'In 5 days',
-      days_until: 5,
-      customer_name: 'Imran Siddiqui',
-      order_number: 'ORD-1044',
-      booking_reference: 'MED5A3',
-      description: 'Late check-out requested',
-      order_uid: null,
-    },
-  ],
-
-  departures: [
-    {
-      key: 'demo-departure-1',
-      title: 'Karachi → Jeddah',
-      date: '27 Aug 2026',
-      time: '08:35',
-      relative_label: 'Tomorrow',
-      days_until: 1,
-      customer_name: 'Ahmed Khan',
-      order_number: 'ORD-1048',
-      booking_reference: 'PNR7KQ',
-      description: 'SV 701 · Economy · 30kg baggage',
-      order_uid: null,
-    },
-    {
-      key: 'demo-departure-2',
-      title: 'Lahore → Dubai',
-      date: '30 Aug 2026',
-      time: '21:10',
-      relative_label: 'In 4 days',
-      days_until: 4,
-      customer_name: 'Usman Raza',
-      order_number: 'ORD-1061',
-      booking_reference: 'PNR3DX',
-      description: 'EK 623 · Economy · 25kg baggage',
-      order_uid: null,
-    },
-    {
-      key: 'demo-departure-3',
-      title: 'Islamabad → Doha',
-      date: '02 Sep 2026',
-      time: '03:40',
-      relative_label: 'In 7 days',
-      days_until: 7,
-      customer_name: 'Fatima Ali',
-      order_number: 'ORD-1053',
-      booking_reference: 'PNR9QA',
-      description: 'QR 633 · Economy · 30kg baggage',
-      order_uid: null,
-    },
-  ],
-};
 
 
 const money = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -321,39 +153,33 @@ export default function Dashboard() {
   const [report, setReport] = useState(null);
 
   const loadDashboard = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  if (DEMO_MODE) {
-    setReport(demoReport);
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      '/api/v1/reports/dashboard-upcoming?days=7',
-      {
-        headers: authHeaders(),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.message || 'Could not load dashboard updates'
+    try {
+      const response = await fetch(
+        '/api/v1/reports/dashboard-upcoming?days=7',
+        {
+          headers: authHeaders(),
+        }
       );
-    }
 
-    setReport(data);
-  } catch (error) {
-    message.error(
-      error.message || 'Could not load dashboard updates'
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'Could not load dashboard updates'
+        );
+      }
+
+      setReport(data);
+    } catch (error) {
+      message.error(
+        error.message || 'Could not load dashboard updates'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadDashboard();

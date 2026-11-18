@@ -37,4 +37,6 @@ Requires a paid agency plan and a verified, active owner, admin or accounts user
 - get_account_balance: Read cash and bank balances.
 - get_profit_report: Read a profit report for a date range.
 
-Discover tool schemas through MCP tools/list after authorization. All tools are read-only and restricted to the user's agency. No private accounting data is available through this public guide. An unauthenticated MCP request returns 401 with OAuth discovery information; this is expected.
+- create_order: Optional basic order creation for owner/admin connections explicitly authorized with both mcp:use and orders:create. Find an existing active customer first. Supply request_id (UUID), customer_id, description and amount; optional currency_code, issue_date, passenger_name, booking_reference and notes. Reuse the same request ID and arguments on retry. Creates one order with one service item; no invoice, payment, supplier cost or external booking. Agency and creator come from the authenticated user, never arguments.
+
+Discover tool schemas through MCP tools/list after authorization. The eight read tools remain read-only. create_order is listed only for owners/admins with orders:create consent; existing read-only connections must reauthorize with both scopes. Accounts users cannot create orders, and sales/dev users remain ineligible for MCP. Every tool is restricted to the user's agency. No private accounting data is available through this public guide. An unauthenticated MCP request returns 401 with OAuth discovery information; this is expected.

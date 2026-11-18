@@ -272,15 +272,49 @@ class AgencyOAuthTest extends TestCase
         $this->get('/oauth/authorize?'.http_build_query($this->params($grant['client_id'], Str::random(64))))->assertForbidden();
     }
 
-    private function grant(User $user, bool $approve = true, string $callback = self::CALLBACK): array
+    public function test_order_scope_requires_owner_admin_consent_and_survives_refresh(): void
+    {
+        $user = $this->agency();
+        $grant = $this->grant($user, scope: 'mcp:use orders:create');
+        $tokens = $this->exchange($grant)->assertOk()->json();
+        $claims = (new Parser(new JoseEncoder))->parse($tokens['access_token'])->claims();
+        $this->assertEqualsCanonicalizing(['mcp:use', 'orders:create'], $claims->get('scopes'));
+        $this->resetAuth();
+        $this->postJson('/mcp/agency', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'],
+            ['Authorization' => 'Bearer '.$tokens['access_token']])->assertOk()->assertJsonFragment(['name' => 'create_order']);
+        $this->resetAuth();
+        $fresh = $this->postJson('/oauth/token', ['grant_type' => 'refresh_token', 'client_id' => $grant['client_id'],
+            'refresh_token' => $tokens['refresh_token']])->assertOk()->json();
+        $claims = (new Parser(new JoseEncoder))->parse($fresh['access_token'])->claims();
+        $this->assertEqualsCanonicalizing(['mcp:use', 'orders:create'], $claims->get('scopes'));
+        $user->role->update(['code' => 'accounts']);
+        $this->resetAuth();
+        $params = array_replace($this->params($grant['client_id'], Str::random(64)), ['scope' => 'mcp:use orders:create']);
+        $this->get('/oauth/authorize?'.http_build_query($params))->assertForbidden();
+        $this->resetAuth();
+        $this->postJson('/oauth/token', ['grant_type' => 'refresh_token', 'client_id' => $grant['client_id'],
+            'refresh_token' => $fresh['refresh_token']])->assertStatus(400);
+    }
+
+    public function test_read_connection_cannot_upgrade_order_scope_on_refresh(): void
+    {
+        $grant = $this->grant($this->agency());
+        $tokens = $this->exchange($grant)->assertOk()->json();
+        $this->resetAuth();
+        $this->postJson('/oauth/token', ['grant_type' => 'refresh_token', 'client_id' => $grant['client_id'],
+            'refresh_token' => $tokens['refresh_token'], 'scope' => 'mcp:use orders:create'])->assertStatus(400);
+    }
+
+    private function grant(User $user, bool $approve = true, string $callback = self::CALLBACK, string $scope = 'mcp:use'): array
     {
         $clientId = $this->registerClient($callback);
         $verifier = Str::random(64);
-        $params = array_replace($this->params($clientId, $verifier), ['redirect_uri' => $callback]);
+        $params = array_replace($this->params($clientId, $verifier), ['redirect_uri' => $callback, 'scope' => $scope]);
         $this->resetAuth();
         $this->get('/oauth/authorize?'.http_build_query($params));
         $this->signIn($user);
-        $this->get('/oauth/authorize?'.http_build_query($params))->assertOk()->assertSee('Allow read access')->assertSee($user->company->display_name);
+        $this->get('/oauth/authorize?'.http_build_query($params))->assertOk()
+            ->assertSee($scope === 'mcp:use' ? 'Allow read access' : 'Allow read access and order creation')->assertSee($user->company->display_name);
         $response = $approve
             ? $this->post('/oauth/authorize', ['auth_token' => session('authToken')])
             : $this->delete('/oauth/authorize', ['auth_token' => session('authToken')]);
