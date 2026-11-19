@@ -14,5 +14,5 @@ export const removePassengerBaggage = (flights, index) => flights.map((flight) =
 
 export const baggageSummary = (flight, passengers = []) => {
   if (!Array.isArray(flight?.passenger_baggage)) return flight?.baggage || '';
-  return passengers.map((p, i) => `PAX ${i + 1}${p.name ? ` (${p.name})` : ''}: ${passengerBaggage(flight, i) || 'Not provided'}`).join('; ');
+  return passengers.map((_, i) => `PAX ${i + 1}: ${passengerBaggage(flight, i) || 'Not provided'}`).join('; ');
 };

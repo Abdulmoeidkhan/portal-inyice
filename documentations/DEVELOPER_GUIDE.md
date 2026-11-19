@@ -2,7 +2,13 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 19, 2026 (unified reference search)
+## Current Development Handoff - November 19, 2026 (voucher baggage labels)
+
+- Removed passenger names from the baggage summary formatter used by the voucher. Labels retain passenger numbers and allowances, for example `PAX 1: 1PC; PAX 2: 1PC`. Legacy allowances and missing-value handling are preserved.
+- Validation: all three existing baggage tests and a direct name-free summary check passed; whitespace check passed. No production build. Graphify refreshed (existing zero-node JSON warnings). Browser visual review remains outstanding.
+- Next step: refresh the voucher and check its Baggage column and print preview.
+
+## Previous Development Handoff - November 19, 2026 (unified reference search)
 
 - Single existing Orders/Invoices search now matches customer/document identifiers plus booking_reference, flights.gds_pnr/pnr, pricing.flight_ticket_no, passengers.ticket_no, visa.visa_no, hotels.hcn and transfers.tn. Shared Order query scope supports nested SQLite/MySQL JSON fields, including regular invoices and virtual refund orders. Existing tenant/company/status filters remain in place.
 - Validation: focused regression passed with 32 assertions covering all seven nested reference fields across both endpoints, lowercase/partial airline PNR and missing references. SQLite exercised; MySQL branch requires staging verification. JSX parsing and PHP lint passed. No build or migration.
