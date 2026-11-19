@@ -108,7 +108,8 @@ class InvoiceController extends Controller
                         $customerQuery->where('name', 'like', "%{$search}%");
                     })
                     ->orWhereHas('order', function ($orderQuery) use ($search) {
-                        $orderQuery->where('order_number', 'like', "%{$search}%");
+                        $orderQuery->where('order_number', 'like', "%{$search}%")
+                            ->orWhere(fn ($referenceQuery) => $referenceQuery->voucherReference($search));
                     });
             });
         }
@@ -150,7 +151,7 @@ class InvoiceController extends Controller
                 ->when($search !== '', function ($orderQuery) use ($search): void {
                     $orderQuery->where(function ($searchQuery) use ($search): void {
                         $searchQuery->where('order_number', 'like', "%{$search}%")
-                            ->orWhere('booking_reference', 'like', "%{$search}%")
+                            ->orWhere(fn ($referenceQuery) => $referenceQuery->voucherReference($search))
                             ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"));
                     });
                 });

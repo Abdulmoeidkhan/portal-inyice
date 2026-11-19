@@ -33,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->throttleApi(limiter: 'api', redis: false);
 
         $middleware->append(SecurityHeaders::class);
+        $middleware->append(\App\Http\Middleware\ConditionalApiResponse::class);
 
         // Resolve tenant context for all requests
         $middleware->web(ResolveTenant::class);

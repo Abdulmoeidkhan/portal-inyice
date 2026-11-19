@@ -73,7 +73,8 @@ class InvoiceTaxReportService
 
         return [
             'period' => ['from' => $filters['from_date'], 'to' => $filters['to_date']],
-            'data' => $rows->all(),
+            'data' => isset($filters['page']) ? $rows->forPage($filters['page'], $filters['per_page'] ?? 25)->values()->all() : $rows->all(),
+            'total' => $rows->count(),
             'summary' => [
                 'total_records' => $rows->count(),
                 'invoice_count' => $rows->where('type', 'invoice')->count(),

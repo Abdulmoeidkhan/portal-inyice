@@ -718,7 +718,7 @@ export default function InvoiceList() {
             className="responsive-search"
             allowClear
             enterButton="Search"
-            placeholder="Search invoice, order, or customer"
+            placeholder="Search customer, invoice/order, reservation / airline PNR, ticket, visa, HCN or TN"
             onSearch={handleSearch}
             style={{ width: 380 }}
           />

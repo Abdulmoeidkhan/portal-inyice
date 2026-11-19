@@ -143,7 +143,6 @@ function hasAuthIdleExpired() {
 }
 
 function clearAuthStorage() {
-  clearDeveloperCache();
   localStorage.removeItem('auth_token');
   localStorage.removeItem('token');
   localStorage.removeItem('user');
@@ -576,7 +575,8 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
   useEffect(() => {
     const originalFetch = window.fetch;
 
-    window.fetch = async (...args) => {
+    const pendingGets = new Map();
+    const fetchWithCache = async (...args) => {
       const [input, init = {}] = args;
       const method = requestMethod(input, init);
       const protectedRequest = isProtectedApiRequest(input);
@@ -595,7 +595,13 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       let response;
 
       try {
-        response = await originalFetch(...args);
+        const saved = protectedRequest && method === 'GET' && !requiresLiveRequest ? await readCachedApiResponse(input, init) : null;
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        if (saved?.etag) headers.set('If-None-Match', saved.etag);
+        response = await originalFetch(input, { ...init, headers });
+        if (response.status === 304 && saved) {
+          return new Response(JSON.stringify(saved.body), { status: 200, headers: { 'Content-Type': 'application/json', 'ETag': saved.etag } });
+        }
       } catch (error) {
         if (protectedRequest && method === 'GET' && !requiresLiveRequest) {
           const cached = await readCachedApiResponse(input, init);
@@ -619,6 +625,18 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
       }
 
       return response;
+    };
+
+    window.fetch = (...args) => {
+      const [input, init = {}] = args;
+      if (requestMethod(input, init) !== 'GET' || init.signal || input instanceof Request || !isProtectedApiRequest(input)) return fetchWithCache(...args);
+      const key = JSON.stringify([String(input), getAuthToken(), init.cache, [...new Headers(init.headers).entries()]]);
+      if (!pendingGets.has(key)) {
+        const pending = fetchWithCache(...args);
+        pendingGets.set(key, pending);
+        pending.finally(() => { if (pendingGets.get(key) === pending) pendingGets.delete(key); }).catch(() => {});
+      }
+      return pendingGets.get(key).then(response => response.clone());
     };
 
     return () => {
@@ -910,7 +928,7 @@ export default function App({ themeMode, themeStyle, compactTheme, onChangeTheme
         <Route path="/shared/vouchers/:token" element={<VoucherDetail shared />} />
         <Route path="/shared/itineraries/:token" element={<ItineraryDetail shared />} />
         <Route path="/shared/quotations/:token" element={<QuotationDetail shared />} />
-        <Route path="/login" element={<Login onLoginSuccess={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
+        <Route path="/login" element={<Login onLoginSuccess={() => { clearDeveloperCache(); markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/register" element={<Register onRegistered={() => { markAuthActivity(true); setIsAuthenticated(true); }} />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

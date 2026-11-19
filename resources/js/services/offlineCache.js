@@ -101,6 +101,7 @@ export const writeCachedApiResponse = async (input, init = {}, response) => {
       status: response.status,
       statusText: response.statusText,
       body,
+      etag: response.headers.get('ETag'),
       cachedAt: new Date().toISOString(),
     }));
   } catch {

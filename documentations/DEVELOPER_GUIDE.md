@@ -2,7 +2,40 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 18, 2026 (conservative cleanup)
+## Current Development Handoff - November 19, 2026 (unified reference search)
+
+- Single existing Orders/Invoices search now matches customer/document identifiers plus booking_reference, flights.gds_pnr/pnr, pricing.flight_ticket_no, passengers.ticket_no, visa.visa_no, hotels.hcn and transfers.tn. Shared Order query scope supports nested SQLite/MySQL JSON fields, including regular invoices and virtual refund orders. Existing tenant/company/status filters remain in place.
+- Validation: focused regression passed with 32 assertions covering all seven nested reference fields across both endpoints, lowercase/partial airline PNR and missing references. SQLite exercised; MySQL branch requires staging verification. JSX parsing and PHP lint passed. No build or migration.
+- Next step: staging smoke-check HC0DRX, F5P7X9 and real ticket/visa/HCN/TN references in both search boxes. Graphify refreshed.
+
+## Previous Development Handoff - November 19, 2026 (API transfer reduction and search)
+
+- Invoice search now includes linked order booking_reference (PNR); customer-name search and order booking-reference search retained. Search hints explicitly mention PNR. Order customer autocomplete debounces 300ms and cancels obsolete requests.
+- Order UI requests view=list, trimming voucher metadata to fields used by passenger/item displays; full detail and default API representations remain available. Tax UI requests pages (maximum 100), preserves full-period totals and previous results on error; Export All retrieves the unpaged report only on demand.
+- Authenticated order/invoice/customer/vendor/tax GET responses support private ETag validation after authorization. Portal IndexedDB stores ETags and reuses the saved body on 304. Identical concurrent ordinary GETs share one request; requests with abort signals remain independent. These reduce transfer, not database computation; tax reports still calculate their full summary server-side.
+- Validation: 80 backend tests passed (1,275 assertions), including PNR, report pagination and 304 regression; nine developer cache tests passed; four changed JSX pages parsed; whitespace checks passed. No production build or deployment. Browser throttling and measured production byte savings remain unverified.
+- Next step: browser smoke-check customer search, invoice PNR search, tax paging/Export All and repeated-page 304 responses on staging. Graphify refreshed with existing JSON/community warnings.
+
+## Previous Development Handoff - November 19, 2026 (localStorage refresh resilience)
+
+- Developer API localStorage reads now reuse expired saved data on network failure, server errors, or refreshes taking over three seconds. Slow refreshes continue and replace storage only after successful valid JSON retrieval. Saved developer data now remains through logout and is cleared on the next successful sign-in; authentication credentials are still removed on logout. Failed/offline/slow refreshes show an error with the saved data, including malformed JSON responses. Authorization failures remain live errors. Identity checks and live-only requests remain intact.
+- Validation: all nine developerApi JS tests pass, including failed refresh, slow refresh and successful replacement. No production build. Graphify refresh requested.
+- Scope: dedicated developer localStorage cache; generic portal offline data uses IndexedDB. Next step: verify expired developer data on a throttled browser connection; successful background refresh is visible on the next read.
+
+## Previous Development Handoff - November 19, 2026 (MCP discovery follow-up)
+
+- Rechecked Graphify, Laravel Boost application information, AgencyServer 1.2.0 registration and CreateOrder discovery guard. Local source registers nine tools; create_order requires eligible owner/admin plus orders:create consent.
+- This session still exposes only five read-only InYice tools. Both hosted OAuth metadata requests failed to connect; the web-tool fallback also failed. This does not establish that hosting is down or outdated. Hosted release, retry-table migration and authenticated tools/list remain unverified.
+- Next concrete step: from a network-enabled environment inspect hosted OAuth metadata and authenticated tools/list; verify release 1.2.0 and retry-table migration, then refresh connector discovery and reauthorize mcp:use plus orders:create as an eligible owner/admin. No deployment, build, migration or business write performed.
+
+## Previous Development Handoff - November 18, 2026 (ChatGPT tool availability diagnosis)
+
+- Confirmed local AgencyServer 1.2.0 registers create_order; discovery requires an eligible owner/admin and orders:create OAuth consent. The connector exposed in this session still contains only the original five read-only tools, matching the user's reported ChatGPT response.
+- Inspected Graphify context, Laravel Boost application information, server registration and CreateOrder scope checks. No application code changes or tests needed for this inspection; no build, migration, deployment or business write performed.
+- Hosted deployment and the user's ChatGPT grant were not inspected. integrations/README.md still describes server 1.1.0 and read-only scope; this is stale relative to local implementation.
+- Next concrete step: verify hosted release includes MCP 1.2.0 and its retry-table migration, then refresh connector discovery and authorize both mcp:use and orders:create with an eligible owner/admin. Confirm authenticated tools/list includes create_order before attempting an order.
+
+## Previous Development Handoff - November 18, 2026 (conservative cleanup)
 
 - Removed the permanently disabled Dashboard demoReport/DEMO_MODE branch after checking its only references; live dashboard behavior remains unchanged. Normalized the loader indentation and App import placement.
 - Moved VAT calculator tests from resources/js/services into tests/js/vatCalculator.test.mjs and updated their import. Removed only the unit scaffolding test that asserted true; retained the feature test that actually checks the application response.
@@ -585,7 +618,7 @@ Dev-only endpoints: `/api/v1/dev/data` lists resources, `/api/v1/dev/data/{resou
 
 Regression checks: `php artisan test --filter="DeveloperAccessTest|CompanyUserApiTest|AuthSecurityApiTest"`. Use JSX parsing for the frontend; do not run a production build without task-specific approval.
 
-Developer panel GET responses use a dedicated 24-hour localStorage cache, scoped by tenant, company, user, role, URL and query parameters. The next online read after expiry renews the entry; offline reads can reuse older saved data. Repeated concurrent requests are combined, errors are not cached, and logout clears the dev cache. This explicit application cache bypasses the generic offline cache described above. JSON exports remain live and on demand. Cache checks: `node --test tests/js/developerApi.test.mjs`.
+Developer panel GET responses use a dedicated 24-hour localStorage cache, scoped by tenant, company, user, role, URL and query parameters. The next online read after expiry renews the entry; offline reads can reuse older saved data. Repeated concurrent requests are combined, errors are not cached, and the next successful sign-in clears the dev cache. This explicit application cache bypasses the generic offline cache described above. JSON exports remain live and on demand. Cache checks: `node --test tests/js/developerApi.test.mjs`.
 
 Current root docs:
 
@@ -623,3 +656,5 @@ Focused regression tests: `php artisan test --filter="CompanyInvoiceTaxTest|Invo
 - Response: `period`, `data`, and `summary` with record counts and `by_currency` (tax_charged, positive tax_reversed, signed net_tax and signed taxable_amount). There is no combined monetary total across currencies. Tax-enabled zero-amount records remain visible.
 - Existing tax migration is sufficient; no extra schema migration or payment changes. Standard CsvTable export behavior and client pagination are reused.
 - Regression coverage in `CompanyInvoiceTaxTest`: saved settings and discounts, currency separation, confirmation and physical/virtual refund de-duplication, excluded records, date validation, tenant/company isolation and role permissions.
+
+MCP follow-up validation (November 19): focused AgencyMcpTest/AgencyOAuthTest run produced no output during observation and interruption was requested; no passing result established. git diff --check passed. No application code changed.

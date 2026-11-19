@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { dateOnly, localDateString as dateString } from '../services/dateFormat';
 import { openRoute } from '../services/navigation';
 import Table from '../components/CsvTable';
-import useReportTablePagination from '../hooks/useReportTablePagination';
+
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -17,12 +17,20 @@ export default function TaxReport() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ from_date: firstOfMonth(), to_date: dateString(new Date()), currency_code: '', type: undefined, pricing: undefined, search: '' });
-  const [pagination, resetPagination] = useReportTablePagination();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 25 });
+  const appliedFilters = useRef(filters);
   const pending = useRef(null);
   const navigate = useNavigate();
   const change = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
 
-  const fetchReport = async () => {
+  const fetchReport = async (page = 1, pageSize = pagination.pageSize, selectedFilters = filters, exporting = false) => {
+    if (exporting) {
+      const params = new URLSearchParams();
+      Object.entries(appliedFilters.current).forEach(([key, value]) => { if (value) params.set(key, value); });
+      const response = await fetch(`/api/v1/reports/tax?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || localStorage.getItem('token')}`, Accept: 'application/json' } });
+      if (!response.ok) throw new Error('Could not export tax report');
+      return (await response.json()).data;
+    }
     pending.current?.abort();
     const controller = new AbortController();
     pending.current = controller;
@@ -30,7 +38,9 @@ export default function TaxReport() {
     setError('');
     try {
       const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+      Object.entries(selectedFilters).forEach(([key, value]) => { if (value) params.set(key, value); });
+      params.set('page', page);
+      params.set('per_page', pageSize);
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       const response = await fetch(`/api/v1/reports/tax?${params}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: controller.signal,
@@ -39,10 +49,10 @@ export default function TaxReport() {
       if (!response.ok) throw new Error(Object.values(data.errors || {}).flat()[0] || data.message || 'Could not load tax report');
       if (controller.signal.aborted) return;
       setReport(data);
-      resetPagination();
+      appliedFilters.current = { ...selectedFilters };
+      setPagination({ current: page, pageSize, total: data.total });
     } catch (failure) {
       if (controller.signal.aborted) return;
-      setReport(null);
       setError(failure.message);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
@@ -80,8 +90,8 @@ export default function TaxReport() {
           <Col xs={12} md={4}><label htmlFor="tax-currency">Currency</label><Input id="tax-currency" placeholder="All currencies" maxLength={3} value={filters.currency_code} onChange={(e) => change('currency_code', e.target.value.toUpperCase())} /></Col>
           <Col xs={12} md={4}><label htmlFor="tax-type">Type</label><Select id="tax-type" style={{ width: '100%' }} allowClear placeholder="Invoices and refunds" value={filters.type} onChange={(value) => change('type', value)} options={[{ value: 'invoice', label: 'Invoices' }, { value: 'refund', label: 'Refunds' }]} /></Col>
           <Col xs={12} md={4}><label htmlFor="tax-pricing">Pricing</label><Select id="tax-pricing" style={{ width: '100%' }} allowClear placeholder="All pricing" value={filters.pricing} onChange={(value) => change('pricing', value)} options={[{ value: 'inclusive', label: 'Inclusive' }, { value: 'exclusive', label: 'Exclusive' }]} /></Col>
-          <Col xs={12} md={4}><Button block type="primary" icon={<ReloadOutlined />} loading={loading} onClick={fetchReport}>Run report</Button></Col>
-          <Col span={24}><Input aria-label="Search tax report" allowClear placeholder="Search invoice, order, customer, tax label or registration number" value={filters.search} onChange={(e) => change('search', e.target.value)} onPressEnter={fetchReport} /></Col>
+          <Col xs={12} md={4}><Button block type="primary" icon={<ReloadOutlined />} loading={loading} onClick={() => fetchReport()}>Run report</Button></Col>
+          <Col span={24}><Input aria-label="Search tax report" allowClear placeholder="Search invoice, order, customer, tax label or registration number" value={filters.search} onChange={(e) => change('search', e.target.value)} onPressEnter={() => fetchReport()} /></Col>
         </Row>
       </div>
       {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />}
@@ -100,7 +110,7 @@ export default function TaxReport() {
       </>}
       <Card title="Tax records">
         <Text type="secondary">Refund amounts are negative. Cancelled/void invoices, unconfirmed refund requests and invoices without saved tax settings are excluded.</Text>
-        <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} pagination={pagination} scroll={{ x: 2200 }} csvFileName={`tax-report-${report?.period.from || 'records'}.csv`} locale={{ emptyText: 'No matching tax records' }} />
+        <Table rowKey="key" loading={loading} columns={columns} dataSource={report?.data || []} pagination={{ ...pagination, onChange: (page, size) => fetchReport(page, Math.min(size, 100), appliedFilters.current) }} exportAllDataSource={() => fetchReport(1, 25, appliedFilters.current, true)} scroll={{ x: 2200 }} csvFileName={`tax-report-${report?.period.from || 'records'}.csv`} locale={{ emptyText: 'No matching tax records' }} />
       </Card>
     </div>
   );

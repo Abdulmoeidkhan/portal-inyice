@@ -285,6 +285,42 @@ class CompanyInvoiceTaxTest extends TestCase
         $this->getJson($url)->assertOk()->assertJsonPath('summary.total_records', 2)->assertJsonPath('summary.refund_count', 1);
     }
 
+    public function test_shared_reference_search_finds_nested_voucher_identifiers(): void
+    {
+        $ctx = $this->taxableContext();
+        $ctx['order']->update(['status' => 'order', 'meta' => [
+            'flights' => [['gds_pnr' => 'HC0DRX', 'pnr' => 'F5P7X9 (TK)']],
+            'pricing' => [['flight_ticket_no' => '2351234567890']],
+            'passengers' => [['ticket_no' => '2359876543210']],
+            'visa' => [['visa_no' => 'VISA-763']],
+            'hotels' => [['hcn' => 'HCN-854']],
+            'transfers' => [['tn' => 'TN-925']],
+        ]]);
+        app(InvoiceService::class)->createFromOrder($ctx['order']);
+        $ctx['order']->update(['status' => 'order']);
+        foreach (['hc0drx', 'F5P7X9', '2351234567890', '2359876543210', 'VISA-763', 'HCN-854', 'TN-925'] as $reference) {
+            foreach (['orders', 'invoices'] as $resource) {
+                $this->getJson('/api/v1/'.$resource.'?search='.urlencode($reference))->assertOk()->assertJsonPath('total', 1);
+            }
+        }
+        $this->getJson('/api/v1/orders?search=NOT-A-REFERENCE')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/invoices?search=NOT-A-REFERENCE')->assertOk()->assertJsonPath('total', 0);
+    }
+
+    public function test_paged_tax_report_keeps_totals_and_validates_unchanged_response(): void
+    {
+        $ctx = $this->taxableContext();
+        $ctx['order']->update(['booking_reference' => 'PNR-TEST-42', 'status' => 'order']);
+        $this->getJson('/api/v1/orders?search=PNR-TEST-42')->assertOk()->assertJsonPath('total', 1);
+        app(InvoiceService::class)->createFromOrder($ctx['order']);
+        $this->getJson('/api/v1/invoices?search=PNR-TEST-42')->assertOk()->assertJsonPath('total', 1);
+        $url = '/api/v1/reports/tax?from_date='.now()->toDateString().'&to_date='.now()->toDateString().'&page=2&per_page=1';
+        $response = $this->getJson($url)->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('summary.total_records', 1);
+        $etag = $response->headers->get('ETag');
+        $this->assertNotEmpty($etag);
+        $this->getJson($url, ['If-None-Match' => $etag])->assertStatus(304)->assertContent('');
+    }
+
     public function test_tax_report_excludes_external_cancelled_and_out_of_period_invoices(): void
     {
         $ctx = $this->taxableContext();

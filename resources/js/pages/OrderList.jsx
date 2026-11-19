@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatMoney as money } from '../services/numberFormat';
 import { Button, Card, DatePicker, Descriptions, Drawer, Form, Grid, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowsAltOutlined, CopyOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined } from '@ant-design/icons';
@@ -162,10 +162,20 @@ export default function OrderList() {
     label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ''}`,
   }));
 
+  const customerSearch = useRef({ timer: null, controller: null });
+  useEffect(() => () => { clearTimeout(customerSearch.current.timer); customerSearch.current.controller?.abort(); }, []);
+  const searchCustomers = (search) => {
+    clearTimeout(customerSearch.current.timer);
+    customerSearch.current.controller?.abort();
+    customerSearch.current.timer = setTimeout(() => loadCustomers(search), 300);
+  };
   const loadCustomers = async (search = '') => {
+    customerSearch.current.controller?.abort();
+    const controller = new AbortController();
+    customerSearch.current.controller = controller;
     try {
       const response = await fetch(`/api/v1/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`, {
-        headers: authHeaders(),
+        headers: authHeaders(), signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -174,7 +184,7 @@ export default function OrderList() {
 
       setCustomers(await response.json());
     } catch (error) {
-      message.error(error.message || 'Unable to load customers');
+      if (error.name !== 'AbortError') message.error(error.message || 'Unable to load customers');
     }
   };
 
@@ -182,6 +192,7 @@ export default function OrderList() {
     const params = new URLSearchParams({
       page,
       per_page: pageSize,
+      view: 'list',
     });
 
     if (search) {
@@ -639,7 +650,7 @@ export default function OrderList() {
             className="responsive-search"
             allowClear
             enterButton="Search"
-            placeholder="Search voucher, booking reference, type, GDS, service, or customer"
+            placeholder="Search customer, invoice/order, reservation / airline PNR, ticket, visa, HCN or TN"
             onSearch={handleSearch}
             style={{ width: 420 }}
           />
@@ -754,7 +765,7 @@ export default function OrderList() {
                   <Select
                     showSearch
                     filterOption={false}
-                    onSearch={loadCustomers}
+                    onSearch={searchCustomers}
                     options={customerOptions}
                   />
                 </Form.Item>

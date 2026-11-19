@@ -86,7 +86,7 @@ test('does not cache errors or export downloads', async () => {
   assert.equal(calls, 4);
 });
 
-test('logout clears only dev cache and stops an in-flight response from restoring it', async () => {
+test('sign-in reset clears only dev cache and stops an in-flight response from restoring it', async () => {
   localStorage.setItem('theme', 'dark');
   await readApi('/api/v1/dev/data');
   let finish;
@@ -105,4 +105,20 @@ test('corrupt cache and quota failures do not break live reads', async () => {
   localStorage.setItem(key, 'invalid-json');
   Object.defineProperty(localStorage, 'setItem', { value: () => { throw new Error('Quota exceeded'); } });
   assert.deepEqual(await readApi('/api/v1/dev/data'), { version: 2 });
+});
+
+test('expired data survives failed refresh and is replaced after a slow successful refresh', async () => {
+  const path = '/api/v1/dev/data/orders';
+  await readApi(path);
+  clock += DEV_CACHE_TTL;
+  globalThis.fetch = async () => { throw new TypeError('Network failed'); };
+  assert.deepEqual(await readApi(path), { version: 1 });
+  globalThis.fetch = async () => Response.json({ error: 'Unavailable' }, { status: 503 });
+  assert.deepEqual(await readApi(path), { version: 1 });
+  let finish;
+  globalThis.fetch = () => new Promise(resolve => { finish = resolve; });
+  assert.deepEqual(await readApi(path), { version: 1 });
+  finish(Response.json({ version: 2 }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(await readApi(path), { version: 2 });
 });

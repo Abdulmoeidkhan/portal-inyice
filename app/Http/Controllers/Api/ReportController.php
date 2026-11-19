@@ -133,6 +133,8 @@ class ReportController extends Controller
     public function taxReport(Request $request): JsonResponse
     {
         $filters = $request->validate([
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
             'from_date' => 'required|date',
             'to_date' => 'required|date|after_or_equal:from_date',
             'currency_code' => 'nullable|string|size:3|exists:currencies,code',

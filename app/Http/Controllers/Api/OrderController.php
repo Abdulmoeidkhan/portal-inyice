@@ -440,7 +440,7 @@ class OrderController extends Controller
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery->where('order_number', 'like', "%{$search}%")
-                        ->orWhere('booking_reference', 'like', "%{$search}%")
+                        ->orWhere(fn ($referenceQuery) => $referenceQuery->voucherReference($search))
                         ->orWhere('gds_source', 'like', "%{$search}%")
                         ->orWhere('voucher_no', 'like', "%{$search}%")
                         ->orWhere('issue_date', 'like', "%{$search}%")
@@ -457,6 +457,27 @@ class OrderController extends Controller
 
         if ($this->shouldHideCostProfit($user)) {
             $orders->getCollection()->transform(fn (Order $order) => $this->orderForUser($order, $user));
+        }
+
+        if ($request->query('view') === 'list') {
+            $orders->getCollection()->transform(function ($order) {
+                $row = is_array($order) ? $order : $order->toArray();
+                $keys = [
+                    'flights' => ['gds_pnr', 'pnr', 'flight_no', 'from', 'to', 'date'],
+                    'visa' => ['passenger_name', 'visa_type', 'visa_no', 'cost', 'profit', 'sales', 'amount'],
+                    'hotels' => ['hcn', 'city', 'hotel_name', 'check_in', 'check_out', 'cost', 'profit', 'sales', 'amount'],
+                    'transfers' => ['tn', 'service', 'from_city', 'to_city', 'cost', 'profit', 'sales', 'amount'],
+                    'city_tours' => ['city', 'title', 'date', 'cost', 'profit', 'sales', 'amount'],
+                    'other_services' => ['description', 'cost', 'profit', 'sales', 'amount'],
+                    'passengers' => ['name'],
+                ];
+                $meta = $row['meta'] ?? [];
+                $row['meta'] = [];
+                foreach ($keys as $section => $fields) {
+                    $row['meta'][$section] = array_map(fn ($item) => is_array($item) ? array_intersect_key($item, array_flip($fields)) : [], is_array($meta[$section] ?? null) ? $meta[$section] : []);
+                }
+                return $row;
+            });
         }
 
         return response()->json($orders);

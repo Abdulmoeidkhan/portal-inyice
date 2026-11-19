@@ -48,6 +48,31 @@ class Order extends Model
         'updated_at' => 'datetime',
     ];
 
+    public function scopeVoucherReference($query, string $search)
+    {
+        $fields = [
+            'flights' => ['gds_pnr', 'pnr'],
+            'pricing' => ['flight_ticket_no'],
+            'passengers' => ['ticket_no'],
+            'visa' => ['visa_no'],
+            'hotels' => ['hcn'],
+            'transfers' => ['tn'],
+        ];
+        $pattern = '%'.strtolower(trim($search)).'%';
+        return $query->where(function ($references) use ($fields, $pattern) {
+            $references->whereRaw('LOWER(orders.booking_reference) LIKE ?', [$pattern]);
+            foreach ($fields as $section => $keys) {
+                foreach ($keys as $key) {
+                    if ($references->getConnection()->getDriverName() === 'sqlite') {
+                        $references->orWhereRaw("EXISTS (SELECT 1 FROM json_each(orders.meta, '$.$section') AS reference_row WHERE LOWER(json_extract(reference_row.value, '$.$key')) LIKE ?)", [$pattern]);
+                    } else {
+                        $references->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(orders.meta, '$.{$section}[*].{$key}'))) LIKE ?", [$pattern]);
+                    }
+                }
+            }
+        });
+    }
+
     public function getActiveSectionsAttribute(mixed $value): array
     {
         return self::decodeMeta($value);

@@ -1,3 +1,5 @@
+import { message } from './feedback.js';
+
 export const apiHeaders = () => ({
   Accept: 'application/json',
   Authorization: `Bearer ${localStorage.getItem('auth_token') || localStorage.getItem('token') || ''}`,
@@ -64,7 +66,10 @@ export async function readApiResponse(path, signal) {
   const cached = cachedRecord(key);
   if (cached && Date.now() - cached.storedAt < DEV_CACHE_TTL) return responseFrom(cached, true);
   if (navigator.onLine === false) {
-    if (cached) return responseFrom(cached, true);
+    if (cached) {
+      message.error('Unable to refresh data. Showing previously saved data.');
+      return responseFrom(cached, true);
+    }
     throw new Error('This data has not been saved yet. Connect to the internet to load it.');
   }
   if (!pendingReads.has(key)) {
@@ -83,7 +88,39 @@ export async function readApiResponse(path, signal) {
     pendingReads.set(key, pending);
     pending.finally(() => { if (pendingReads.get(key) === pending) pendingReads.delete(key); }).catch(() => {});
   }
-  return responseFrom(await subscribed(pendingReads.get(key), signal));
+  const pending = pendingReads.get(key);
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const generation = cacheGeneration;
+  const canReuse = () => cached && generation === cacheGeneration && cacheKey(path) === key
+    && token === (localStorage.getItem('auth_token') || localStorage.getItem('token'));
+  let timer;
+  let notified = false;
+  const savedResponse = () => {
+    if (!notified) {
+      notified = true;
+      message.error('Unable to refresh data. Showing previously saved data.');
+    }
+    return responseFrom(cached, true);
+  };
+  const live = pending.then((record) => {
+    let validJson = false;
+    try { JSON.parse(record.body); validJson = record.contentType.includes('application/json'); } catch { /* Keep saved data. */ }
+    if (canReuse() && ![401, 403, 419].includes(record.status)
+      && (record.status >= 400 || !validJson)) return savedResponse();
+    return responseFrom(record);
+  }, (error) => {
+    if (canReuse()) return savedResponse();
+    throw error;
+  });
+  try {
+    // Keep the refresh running so a successful response replaces the saved data.
+    const result = cached ? Promise.race([live, new Promise((resolve) => {
+      timer = setTimeout(() => resolve(canReuse() ? savedResponse() : live), 3000);
+    })]) : live;
+    return await subscribed(result, signal);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function readApi(path, signal) {
