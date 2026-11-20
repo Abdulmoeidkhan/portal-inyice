@@ -5,6 +5,7 @@ import { Button, Card, Col, Input, InputNumber, Popconfirm, Row, Select, Space, 
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import AddBankAccount from '../components/AddBankAccount';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -81,7 +82,7 @@ export default function CounterpartyTransaction({ direction, partyType }) {
   };
   return <div className="page-shell page-fade-up financial-entry-page">
     <div className="elevated-card financial-entry-hero"><div><Title level={2}>{partyLabel} {transactionLabel}s</Title><Paragraph>{isReceipt ? `Money received from a ${partyLabel.toLowerCase()}.` : `Money paid to a ${partyLabel.toLowerCase()}.`}</Paragraph></div></div>
-    <Card className="border-beam-aurora financial-entry-card"><Row gutter={[16, 14]} align="bottom">
+    <Card className="border-beam-aurora financial-entry-card" extra={<AddBankAccount currency={party?.currency_code} onCreated={account => setAccounts(current => ({ ...current, bank: [...current.bank, account] }))} />}><Row gutter={[16, 14]} align="bottom">
       <Col xs={24} md={7}><Text strong>{partyLabel}</Text><Select showSearch allowClear optionFilterProp="label" value={form.party_id} onChange={(value) => { setForm((current) => ({ ...current, party_id: value, account_id: null })); loadRecords(value); }} options={parties.map((item) => ({ value: item.id, label: item.name }))} /></Col>
       <Col xs={12} md={4}><Text strong>{transactionLabel} date</Text><Input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></Col>
       <Col xs={12} md={4}><Text strong>Amount</Text><InputNumber min={0.01} precision={2} value={form.amount} onChange={(value) => setForm((current) => ({ ...current, amount: value }))} /></Col>

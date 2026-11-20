@@ -1,4 +1,3 @@
-import { baggageSummary } from '../../services/baggage';
 import React from 'react';
 import { Typography, Watermark } from 'antd';
 import { buildVoucherSummaryRows } from './VoucherSummaryCard';
@@ -431,7 +430,6 @@ export default function VoucherPreview({ order, highlighted = true }) {
               { title: 'To', dataIndex: 'to', width: 115, render: formatAirport },
               { title: 'Dep', dataIndex: 'departure', width: 70, render: (value) => value || '' },
               { title: 'Arr', dataIndex: 'arrival', width: 70, render: (value) => value || '' },
-              { title: 'Baggage', dataIndex: 'baggage', width: 180, alwaysVisible: true, render: (_, row) => baggageSummary(row, voucher.passengers) },
             ]}
           />
         </Section>}

@@ -2,7 +2,26 @@
 
 This guide describes the current Portal inYice codebase and the conventions to follow when changing it.
 
-## Current Development Handoff - November 19, 2026 (voucher baggage labels)
+## Current Development Handoff - November 20, 2026 (add bank account UI)
+
+- Local connection-refused follow-up: HTTPS port 443 had no listener and Herd/Nginx were stopped while Vite remained on 5174. Started installed Herd with ELECTRON_RUN_AS_NODE removed from the child launch environment (inherited value 1 prevented normal Electron startup). Login page and currencies API now return HTTP 200. Vite serves CookieConsent with mask.closable and no deprecated prop. User should hard-refresh the restored page; real credential login and browser-console verification remain manual. No application code/config changes were needed for this outage.
+
+- Modal warning follow-up: replaced all three frontend `maskClosable` props (bank creation, cookie consent and journal editor) with `mask.closable`, preserving their existing dismissal conditions. Confirmed against installed Ant Design types because MCP Modal metadata still lists the deprecated API. All three JSX files parsed; no production build. Next check: reopen these dialogs and verify the warning is gone in the browser.
+
+- Added shared AddBankAccount modal to Vendor Payments, Customer Receipts, Customer Payments and Vendor Receipts. Collects bank name, account number/holder, active currency and optional nonnegative opening balance through the existing agency-scoped POST /api/v1/accounts/bank endpoint. Existing route permissions restrict these entry screens to owner/admin/accounts.
+- Currency options load on demand; selected party currency is the default when available. Save errors retain the form, API field errors appear inline, and a submission guard prevents duplicate clicks. Successful creation updates the local bank list without clearing payment allocations; the user selects the account explicitly. Existing currency filters remain in place.
+- Validation: all four changed JSX files parsed; existing payment/account endpoint test passed (31 assertions). No production build or live bank-account creation. Browser verification remains pending. Graphify refreshed with existing zero-node JSON/community warnings.
+- Next step: browser-check creation, duplicate account-number validation, cancellation/reopening, and selection of a matching-currency bank on the four entry screens. Receivable/Payable investigation remains deferred at the user's request.
+
+## Previous Development Handoff - November 20, 2026 (minimal voucher branding and balance review)
+
+- Removed the voucher flight-table baggage column; itinerary baggage and stored allowances remain intact. Simplified voucher branding with a white header, thin navy divider, smaller title and compact unframed logo on desktop, mobile and print, referencing the itinerary.
+- Reviewed Receivable/Payable report vendor calculation: vendor costs count for non-void/non-cancel invoiced orders or confirmed refunds; payments reduce the vendor balance and vendor receipts increase it. Negative net vendor balances appear as receivable, including advances. No financial logic changed.
+- Validation: five existing financial tests passed (61 assertions) covering party balances, currency separation, advances, statement receipts/payments and vendor list balances; four baggage/itinerary JS tests passed; voucher JSX parsed and diff whitespace check passed. Graphify updated with existing zero-node JSON/community-label warnings. No production build. Visual browser/print review remains outstanding.
+- User confirmed the affected screen is Receivable/Payable reports, then explicitly deferred the issue; leave financial logic unchanged. If resumed, obtain vendor name, currency, displayed/expected amounts and recognition policy before reconciling; passing tests do not validate the reported live discrepancy.
+- Follow-up bank-account capability inspection: multiple agency bank accounts are supported through POST /api/v1/accounts/bank and selectable in payment/receipt forms by currency. No bank-account creation form was found in the current frontend; Accounting's Add account creates a chart-of-accounts entry, not a payment bank account. Read-only source inspection only, no bank records created. Next step if requested: add a dedicated bank-account management UI using the existing endpoint.
+
+## Previous Development Handoff - November 19, 2026 (voucher baggage labels)
 
 - Removed passenger names from the baggage summary formatter used by the voucher. Labels retain passenger numbers and allowances, for example `PAX 1: 1PC; PAX 2: 1PC`. Legacy allowances and missing-value handling are preserved.
 - Validation: all three existing baggage tests and a direct name-free summary check passed; whitespace check passed. No production build. Graphify refreshed (existing zero-node JSON warnings). Browser visual review remains outstanding.

@@ -33,7 +33,7 @@ export default function CookieConsent() {
       centered
       closable={false}
       keyboard={false}
-      maskClosable={false}
+      mask={{ closable: false }}
       width={480}
       footer={<Button type="primary" onClick={accept}>Accept necessary cookies</Button>}
     >

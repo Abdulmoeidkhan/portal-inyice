@@ -20,6 +20,7 @@ import { createCustomerApi } from '../services/salesFlowApi';
 import { dateOnly } from '../services/dateFormat';
 import { printDocument } from '../services/printDocument';
 import Table from '../components/CsvTable';
+import AddBankAccount from '../components/AddBankAccount';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -400,7 +401,7 @@ export default function Payments() {
         </Space>
       </div>
 
-      <Card className="border-beam-aurora financial-entry-card">
+      <Card className="border-beam-aurora financial-entry-card" extra={<AddBankAccount currency={customer?.currency_code} onCreated={account => setAccounts(current => ({ ...current, bank: [...current.bank, account] }))} />}>
         <Row gutter={[16, 14]} align="bottom">
           <Col xs={24} md={10} lg={7}>
             <Text strong>Customer</Text>

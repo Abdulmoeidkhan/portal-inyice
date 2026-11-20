@@ -16,7 +16,7 @@ function JournalEditor({ journal, accounts, book, onClose, onSaved }) {
   const totals = lineTotals(Form.useWatch('lines', form) || []);
   const options = accounts.filter((account) => account.is_active).map((account) => ({ value: account.id, label: `${account.code} · ${account.name}` }));
   return <Modal open title={journal?.uid ? 'Edit draft journal' : 'New draft journal'} width={1000}
-    onCancel={onClose} footer={null} maskClosable={!saving} closable={!saving}>
+    onCancel={onClose} footer={null} mask={{ closable: !saving }} closable={!saving}>
     <Form form={form} layout="vertical" initialValues={journal || {
       entry_date: localDate() < book.start_date ? book.start_date : localDate(), kind: 'general', lines: [blankLine(), blankLine()],
     }} onFinish={async (values) => {

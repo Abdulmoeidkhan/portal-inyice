@@ -5,6 +5,7 @@ import { Button, Card, Col, Input, InputNumber, Modal, Popconfirm, Radio, Row, S
 import { message } from '../services/feedback';
 import { dateOnly } from '../services/dateFormat';
 import Table from '../components/CsvTable';
+import AddBankAccount from '../components/AddBankAccount';
 
 const { Title, Paragraph, Text } = Typography;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -245,7 +246,7 @@ export default function VendorPayments() {
         <Space size="large" wrap><Statistic title="Open payables" value={payables.length} prefix={<DollarOutlined />} /><Statistic title="Outstanding" value={outstandingTotal} precision={2} prefix={vendor?.currency_code} /></Space>
       </div>
 
-      <Card className="border-beam-aurora financial-entry-card">
+      <Card className="border-beam-aurora financial-entry-card" extra={<AddBankAccount currency={vendor?.currency_code} onCreated={account => setAccounts(current => ({ ...current, bank: [...current.bank, account] }))} />}>
         <Row gutter={[16, 14]} align="bottom">
           <Col xs={24} md={10} lg={7}><Text strong>Vendor</Text><Select showSearch allowClear optionFilterProp="label" placeholder="Select vendor" value={vendorId} onChange={selectVendor} options={vendors.map((item) => ({ value: item.id, label: item.name }))} /></Col>
           <Col xs={12} md={7} lg={4}><Text strong>Payment date</Text><Input type="date" value={form.date} onChange={(event) => setForm((previous) => ({ ...previous, date: event.target.value }))} /></Col>

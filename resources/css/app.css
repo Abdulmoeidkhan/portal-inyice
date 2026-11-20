@@ -1889,24 +1889,24 @@ body {
   gap: 18px;
   align-items: center;
   padding: 18px 18px 16px;
-  border-bottom: 2px solid color-mix(in srgb, var(--app-primary) 24%, #d9e5f2);
-  background: linear-gradient(180deg, #f2f7ff 0%, #eaf2fd 100%);
+  border-bottom: 1px solid #203e57;
+  background: #ffffff;
 }
 
 .voucher-preview-header h3 {
   margin: 0 0 7px;
   color: #102033;
-  font-size: 30px;
+  font-size: 24px;
   line-height: 1.2;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .voucher-preview-document-title {
   display: block;
   margin-bottom: 7px;
-  color: #a46f15 !important;
-  font-size: 18px;
-  font-weight: 800;
+  color: #52657c !important;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -1920,12 +1920,13 @@ body {
 
 .voucher-preview-logo {
   justify-self: end;
-  width: 280px;
-  height: 220px;
+  width: 150px;
+  max-width: 100%;
+  height: 85px;
   object-fit: contain;
-  padding: 4px;
-  border: 1px solid rgba(15, 27, 45, 0.14);
-  border-radius: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
 }
 
@@ -2111,10 +2112,10 @@ body {
   }
 
   .voucher-preview .voucher-preview-logo {
-    justify-self: center;
-    width: 220px;
+    justify-self: start;
+    width: 120px;
     max-width: 100%;
-    height: 180px;
+    height: 68px;
   }
 
   .voucher-preview .voucher-preview-footer-logo {
@@ -3538,8 +3539,8 @@ body {
 
   .voucher-preview-logo {
     justify-self: start;
-    width: 132px;
-    height: 96px;
+    width: 120px;
+    height: 68px;
   }
 
   .voucher-reference-table-primary,
@@ -3847,7 +3848,7 @@ body {
   }
 
   .voucher-preview-header {
-    grid-template-columns: minmax(0, 1fr) 180px !important;
+    grid-template-columns: minmax(0, 1fr) 120px !important;
     gap: 16px !important;
     padding: 10px 12px !important;
   }
@@ -3863,8 +3864,8 @@ body {
   }
 
   .voucher-preview-logo {
-    width: 180px !important;
-    height: 160px !important;
+    width: 120px !important;
+    height: 68px !important;
     object-fit: contain !important;
     padding: 0 !important;
   }
